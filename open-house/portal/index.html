@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Open House Requests | Synergy Realty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
+  --accent:#1E5B4F; --accent-ink:#FFFFFF; --accent-soft:#E3EEEA; --brass:#9A7A3A; --taken:#EEF0F1;
+  --photo:#2B3A45;
+  --serif:"Newsreader", Georgia, "Times New Roman", serif;
+  --sans:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
+    --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --taken:#1F2830; --photo:#24313B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
+  --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --taken:#1F2830; --photo:#24313B;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+header.top{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-size:1.25rem;font-weight:600;letter-spacing:.01em}
+.brand small{display:block;font-family:var(--sans);font-size:.78rem;font-weight:500;color:var(--muted);letter-spacing:0}
+.who{font-size:.85rem;color:var(--muted);text-align:right}
+.who strong{color:var(--ink);font-weight:600}
+
+.intro{padding:40px 0 28px;display:grid;grid-template-columns:1.4fr 1fr;gap:32px;align-items:end}
+.intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(2rem,4.6vw,3.4rem);line-height:1.04;margin:0;letter-spacing:-.01em}
+.intro p{margin:0;color:var(--muted);max-width:42ch}
+.cal{display:flex;gap:10px;margin-top:14px}
+.cal div{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;text-align:center;min-width:76px}
+.cal b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:500;line-height:1}
+.cal span{font-size:.78rem;color:var(--muted)}
+.deadline{margin-top:14px;font-size:.88rem;color:var(--ink)}
+.deadline em{font-style:normal;color:var(--brass);font-weight:600}
+
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;padding-bottom:64px}
+.card{position:relative;border:0;padding:0;background:var(--photo);border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:4/3;width:100%}
+.card img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
+.card:hover img{transform:scale(1.03)}
+.card .fallback{position:absolute;inset:0;display:none;background:
+  linear-gradient(160deg,rgba(255,255,255,.06),rgba(0,0,0,.25)),var(--photo)}
+.card.noimg .fallback{display:block}
+.card.noimg img{display:none}
+.card .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(8,12,16,.82) 100%)}
+.card .meta{position:absolute;left:0;right:0;bottom:0;padding:20px 22px;color:#fff;display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:end}
+.card .addr{font-family:var(--serif);font-size:1.55rem;font-weight:500;line-height:1.15}
+.card .city{font-size:.92rem;opacity:.85}
+.card .price{font-family:var(--serif);font-size:1.55rem;font-weight:500;text-align:right;grid-row:1;grid-column:2}
+.card .facts{font-size:.85rem;opacity:.85;text-align:right;grid-column:2}
+.dom{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.92);color:#16202A;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:999px}
+.dom.fresh{background:#F3E7C9}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(6,10,14,.5);opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet.on{transform:none}
+.sheet .hero{position:relative;aspect-ratio:16/10;background:var(--photo)}
+.sheet .hero img{width:100%;height:100%;object-fit:cover}
+.sheet .hero.noimg img{display:none}
+.close{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#16202A;font-size:1.3rem;cursor:pointer}
+.body{padding:22px 24px 28px}
+.body h2{font-family:var(--serif);font-weight:500;font-size:1.9rem;line-height:1.1;margin:0}
+.sub{color:var(--muted);margin:4px 0 16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
+.stats div{padding:12px 0}
+.stats b{display:block;font-family:var(--serif);font-size:1.25rem;font-weight:500}
+.stats span{font-size:.8rem;color:var(--muted)}
+h3{font-size:1rem;margin:0 0 10px;font-weight:600}
+.days{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.day{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;cursor:pointer;text-align:left}
+.day b{display:block;font-family:var(--serif);font-size:1.15rem;font-weight:500}
+.day span{font-size:.82rem;color:var(--muted)}
+.day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.day:disabled{opacity:.45;cursor:not-allowed}
+.slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}
+.hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
+.slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;cursor:pointer;font-weight:500;font-size:.88rem}
+.slot[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.slot:disabled{background:var(--taken);color:var(--muted);cursor:not-allowed}
+.slot small{display:block;font-weight:400;font-size:.75rem;text-decoration:none}
+.empty{color:var(--muted);font-size:.9rem;margin:0 0 20px}
+label.note{display:block;font-size:.9rem;font-weight:600;margin-bottom:6px}
+textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
+.primary{margin-top:18px;width:100%;border:0;border-radius:12px;padding:15px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:1rem;cursor:pointer}
+.primary:disabled{opacity:.4;cursor:not-allowed}
+.fine{font-size:.8rem;color:var(--muted);margin-top:10px}
+
+/* Status */
+.status{display:none}
+.status.on{display:block}
+.track{list-style:none;padding:0;margin:18px 0;border-left:2px solid var(--line)}
+.track li{position:relative;padding:0 0 18px 20px}
+.track li::before{content:"";position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--line)}
+.track li.done::before{background:var(--accent);border-color:var(--accent)}
+.track li b{display:block;font-size:.95rem}
+.track li span{font-size:.85rem;color:var(--muted)}
+.ghost{width:100%;border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:12px;cursor:pointer;color:var(--muted);font-size:.9rem}
+.email{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:16px;display:none}
+.email.on{display:block}
+.email .eh{background:var(--bg);padding:12px 16px;font-size:.84rem;color:var(--muted);border-bottom:1px solid var(--line)}
+.email .eh b{color:var(--ink);font-weight:600}
+.email .eb{padding:16px;font-size:.92rem}
+.email .eb ul{padding-left:18px;margin:8px 0}
+.email .ics{display:inline-block;margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:.82rem}
+
+.disclose{border:0;background:none;padding:0;margin:0 0 14px;color:var(--accent);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.disclose::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .2s}
+.disclose[aria-expanded="true"]::before{transform:rotate(45deg)}
+.mapbox{margin:0 0 22px}
+.mapbox iframe{width:100%;height:240px;border:1px solid var(--line);border-radius:12px;background:var(--taken);display:block}
+.mapbox a{display:inline-block;margin-top:8px;font-size:.85rem;color:var(--accent)}
+.instr{background:var(--accent-soft);border-radius:12px;padding:16px 18px;margin-bottom:24px}
+.instr ul{margin:0;padding-left:18px}
+.instr li{margin-bottom:4px;font-size:.93rem}
+.instr .fine{margin-top:10px}
+.mine{list-style:none;padding:0;margin:0 0 6px}
+.mine li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:.93rem}
+.mine .tag{font-size:.8rem;font-weight:600;color:var(--brass)}
+.mine .tag.ok{color:var(--accent)}
+.secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
+footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+
+@media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:760px){
+  .intro{grid-template-columns:1fr;gap:18px;padding-top:28px}
+  .grid{grid-template-columns:1fr}
+  .card .addr,.card .price{font-size:1.3rem}
+  .sheet{top:auto;bottom:0;height:92%;width:100%;border-radius:18px 18px 0 0;transform:translateY(100%)}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Synergy Realty<small>Open house requests for George &amp; Noonan listings</small></div>
+    <div class="who">Signed in as<br><strong>Sample Agent</strong></div>
+  </header>
+
+  <section class="intro">
+    <div>
+      <h1>Host one of our homes this weekend</h1>
+    </div>
+    <div>
+      <p>Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+      <div class="cal" aria-label="Weekend dates">
+        <div><b>10</b><span>Sat, Oct</span></div>
+        <div><b>11</b><span>Sun, Oct</span></div>
+      </div>
+      <div class="deadline">Requests close <em>Friday, Oct 9 at 5:00 PM</em>.</div>
+    </div>
+  </section>
+
+  <section class="grid" id="grid" aria-label="Available homes"></section>
+
+  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers. Example page: times, claimed slots and the sign-in are sample data.</footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle" aria-hidden="true">
+  <div class="hero" id="sHero"><img id="sImg" alt=""><button class="close" id="close" aria-label="Close">×</button></div>
+  <div class="body">
+    <h2 id="sTitle"></h2>
+    <div class="sub" id="sSub"></div>
+    <div class="stats" id="sStats"></div>
+    <button class="disclose" id="mapBtn" aria-expanded="false" aria-controls="mapBox">View location</button>
+    <div class="mapbox" id="mapBox" hidden>
+      <iframe id="mapFrame" title="Map of the property location" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <a id="mapLink" target="_blank" rel="noopener">Open in Google Maps</a>
+    </div>
+    <section class="instr">
+      <h3>Open house instructions</h3>
+      <ul id="instrList"></ul>
+      <p class="fine">Gate, lockbox and alarm codes are sent in your confirmation email after approval.</p>
+    </section>
+
+    <div id="form">
+      <h3>Choose a day</h3>
+      <div class="days" id="days"></div>
+      <h3>Choose a time</h3>
+      <div class="slots" id="slots"></div>
+      <p class="hint" id="hint"></p>
+      <label class="note" for="notes">Notes for the listing team (optional)</label>
+      <textarea id="notes" placeholder="Anything they should know, like a co-host or signage plans"></textarea>
+      <button class="primary" id="submit" disabled>Request open house</button>
+      <p class="fine">This is a request, not a booking. Nothing goes on the MLS until a George &amp; Noonan team member approves it.</p>
+    </div>
+
+    <div class="status" id="status">
+      <h3>Your requests for this home</h3>
+      <ul class="mine" id="mine"></ul>
+      <ol class="track" id="track"></ol>
+      <button class="secondary" id="another">Request another day or time</button>
+      <button class="ghost" id="simulate">Preview: show what happens when the team approves</button>
+      <div class="email" id="email"></div>
+    </div>
+  </div>
+</aside>
+
+<script>
+const CDN = "https://cdn.repliers.io/";
+const homes = [
+  {mls:"21297798", lat:32.978088, lng:-97.18720096, instr:["Gated community. Check in with the guard and give the property address.", "The sellers' dog will be off site during open house hours.", "Shoe covers are in the front hall closet. Ask visitors to use them."], access:"Guard gate: show your license. Lockbox: Supra on the front door.", addr:"2006 Nighthawk Court", city:"Westlake", zip:"76262", price:5950000, dom:50, bd:4, ba:6, sf:6331,
+   img:"ntreismls/IMG-21297798_0.jpg", days:["sat","sun"], taken:{sun:[[13,15]]}},
+  {mls:"21372196", lat:32.908375, lng:-97.157547, instr:["Park on Rockingham Court, not in the motor court.", "Pool and courtyard lights are on the panel by the back door.", "The wine room stays locked. Do not show it."], access:"Lockbox: Supra on the side gate. Alarm code: 4417 (sample).", addr:"6900 Rockingham Court", city:"Colleyville", zip:"76034", price:4350000, dom:13, bd:6, ba:9, sf:10026,
+   img:"ntreismls/IMG-21372196_4446441738281566696.jpg", days:["sat","sun"], taken:{}},
+  {mls:"21332907", lat:32.983337, lng:-97.18004802, instr:["Park in the visitor spaces along Cortes Drive.", "Start visitors on the third floor and work down."], access:"Entrada gate code: 2417# (sample). Lockbox on the front door.", addr:"69 Cortes Drive", city:"Westlake", zip:"76262", price:1297000, dom:32, bd:3, ba:4, sf:2038,
+   img:"ntreismls/IMG-21332907_4446676996495488826.jpg", days:["sun"], taken:{sun:[[15,17]]}},
+  {mls:"21346883", lat:32.929991, lng:-97.193693, instr:["Check in at the front desk in the main lobby.", "Use guest parking. The unit is on the second floor."], access:"Front desk will release the key on your ID. No lockbox.", addr:"441 Watermere Drive", city:"Southlake", zip:"76092", price:629000, dom:28, bd:2, ba:3, sf:2109,
+   img:"ntreismls/IMG-21346883_4444455829925220134.jpg", days:["sat","sun"], taken:{sat:[[11,13]]}}
+];
+const FIRST=9, LAST=19; // 9:00 AM to 7:00 PM
+const DAYS = {sat:{label:"Saturday", date:"Oct 10"}, sun:{label:"Sunday", date:"Oct 11"}};
+const $ = id => document.getElementById(id);
+const money = n => "$" + n.toLocaleString("en-US");
+const fmt = h => { const ap=h>=12?"PM":"AM"; const x=h%12||12; return x+":00 "+ap; };
+const myReqs = {}; // mls -> [{day,from,to,approved}]
+const mine = () => (myReqs[cur.mls] ||= []);
+const isTaken = (d,h) => (cur.taken[d]||[]).some(([a,b]) => h>=a && h<b);
+const isMine = (d,h) => mine().some(r => r.day===d && h>=r.from && h<r.to);
+const blocked = (d,h) => isTaken(d,h) || isMine(d,h);
+
+function imgEl(h, el, wrap){
+  el.src = CDN + h.img + "?class=medium";
+  el.alt = "Front of " + h.addr + ", " + h.city;
+  el.onerror = () => wrap.classList.add("noimg");
+}
+
+// Cards
+const grid = $("grid");
+homes.forEach((h,i) => {
+  const b = document.createElement("button");
+  b.className = "card";
+  b.setAttribute("aria-label", `${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
+  b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
+    <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>
+    <div class="meta">
+      <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
+      <div class="price">${money(h.price)}</div>
+      <div></div><div class="facts">${h.bd} bd, ${h.ba} ba, ${h.sf.toLocaleString()} sq ft</div>
+    </div>`;
+  imgEl(h, b.querySelector("img"), b);
+  b.onclick = () => openSheet(i, b);
+  grid.appendChild(b);
+});
+
+// Sheet
+let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to} hour blocks, to exclusive
+function openSheet(i, trigger){
+  cur = homes[i]; day=null; sel=null; lastFocus=trigger;
+  $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
+  $("sTitle").textContent = cur.addr;
+  $("sSub").textContent = `${cur.city}, TX ${cur.zip}  |  MLS# ${cur.mls}`;
+  $("sStats").innerHTML = `<div><b>${money(cur.price)}</b><span>List price</span></div>
+    <div><b>${cur.dom}</b><span>Days on market</span></div>
+    <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
+    <div><b>${cur.sf.toLocaleString()}</b><span>Sq ft</span></div>`;
+  $("instrList").innerHTML = cur.instr.map(t=>`<li>${t}</li>`).join("");
+  $("mapBox").hidden=true; $("mapBtn").setAttribute("aria-expanded","false"); $("mapBtn").textContent="View location";
+  $("mapFrame").removeAttribute("src");
+  $("mapLink").href = `https://www.google.com/maps/search/?api=1&query=${cur.lat},${cur.lng}`;
+  if(mine().length){ showStatus(); } else { showForm(); }
+  $("sheet").classList.add("on"); $("scrim").classList.add("on"); $("sheet").setAttribute("aria-hidden","false");
+  setTimeout(()=>$("close").focus(),50);
+}
+function closeSheet(){
+  $("sheet").classList.remove("on"); $("scrim").classList.remove("on"); $("sheet").setAttribute("aria-hidden","true");
+  if(lastFocus) lastFocus.focus();
+}
+$("close").onclick=closeSheet; $("scrim").onclick=closeSheet;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("sheet").classList.contains("on")) closeSheet(); });
+
+function renderDays(){
+  const d = $("days"); d.innerHTML="";
+  Object.keys(DAYS).forEach(k=>{
+    const offered = cur.days.includes(k);
+    const b = document.createElement("button");
+    b.className="day"; b.setAttribute("aria-pressed", day===k); b.disabled=!offered;
+    b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${offered ? "9:00 AM to 7:00 PM" : "Not offered by the seller"}</span>`;
+    b.onclick=()=>{day=k; sel=null; renderDays(); renderSlots();};
+    d.appendChild(b);
+  });
+}
+function pick(h){
+  if(!sel || sel.to-sel.from>1 || h<sel.from){ sel={from:h,to:h+1}; }
+  else if(h===sel.from){ sel=null; }
+  else {
+    for(let x=sel.from;x<=h;x++){ if(blocked(day,x)){ sel={from:h,to:h+1}; renderSlots(); return; } }
+    sel={from:sel.from,to:h+1};
+  }
+  renderSlots();
+}
+function renderSlots(){
+  const s=$("slots"); s.innerHTML="";
+  if(!day){ s.innerHTML=`<p class="empty">Pick a day to see open times.</p>`; $("hint").textContent=""; update(); return; }
+  for(let h=FIRST; h<LAST; h++){
+    const taken=blocked(day,h), own=isMine(day,h), on=sel && h>=sel.from && h<sel.to;
+    const b=document.createElement("button");
+    b.className="slot"; b.disabled=taken; b.setAttribute("aria-pressed", !!on);
+    b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Requested"}</small>`:"");
+    b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already requested"):""}`);
+    b.onclick=()=>pick(h);
+    s.appendChild(b);
+  }
+  $("hint").textContent = sel ? `${fmt(sel.from)} to ${fmt(sel.to)} (${sel.to-sel.from} ${sel.to-sel.from===1?"hour":"hours"}). Tap a later time to extend.` : "Tap a start time, then tap the last hour you'll host.";
+  update();
+}
+const range = (r=sel) => `${fmt(r.from)} to ${fmt(r.to)}`;
+function update(){
+  $("submit").disabled = !(day && sel);
+  $("submit").textContent = day&&sel ? `Request ${DAYS[day].label}, ${range()}` : "Request open house";
+}
+
+$("mapBtn").onclick=()=>{
+  const open = $("mapBox").hidden;
+  if(open && !$("mapFrame").src) $("mapFrame").src = `https://maps.google.com/maps?q=${cur.lat},${cur.lng}&z=15&output=embed`;
+  $("mapBox").hidden = !open;
+  $("mapBtn").setAttribute("aria-expanded", open);
+  $("mapBtn").textContent = open ? "Hide map" : "View location";
+};
+function showForm(){
+  day=null; sel=null; $("notes").value="";
+  $("form").style.display=""; $("status").classList.remove("on");
+  renderDays(); renderSlots();
+}
+function showStatus(){
+  $("form").style.display="none"; $("status").classList.add("on");
+  const list = mine();
+  $("mine").innerHTML = list.map(r=>`<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="tag ${r.approved?'ok':''}">${r.approved?'Approved':'Waiting for approval'}</span></li>`).join("");
+  const last = list[list.length-1];
+  $("simulate").style.display = last.approved ? "none" : "";
+  $("email").classList.toggle("on", !!last.approved);
+  if(last.approved) renderEmail(last);
+  $("track").innerHTML = trackHTML(last);
+}
+$("another").onclick=()=>{ showForm(); $("sheet").scrollTo({top:0,behavior:"smooth"}); };
+function trackHTML(r){
+  const a=r.approved?"done":"";
+  return `
+    <li class="done"><b>Latest request sent</b><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span></li>
+    <li class="done"><b>George &amp; Noonan team notified</b><span>Anyone on the team can approve it</span></li>
+    <li class="${a}"><b>${r.approved?"Approved by the George &amp; Noonan team":"Waiting for approval"}</b><span>Unanswered requests close Friday at 5:00 PM</span></li>
+    <li class="${a}"><b>Entered on the MLS</b><span>Added and checked automatically after approval</span></li>
+    <li class="${a}"><b>Confirmation email</b><span>Instructions and a calendar invite</span></li>`;
+}
+$("submit").onclick=()=>{
+  mine().push({day, from:sel.from, to:sel.to, approved:false});
+  showStatus();
+  $("sheet").scrollTo({top:0,behavior:"smooth"});
+};
+
+$("simulate").onclick=()=>{ const l=mine(); l[l.length-1].approved=true; showStatus(); };
+function renderEmail(r){
+  const e=$("email");
+  e.innerHTML = `<div class="eh"><b>From:</b> openhouse@synergyrealtors.com<br><b>Subject:</b> Approved: open house at ${cur.addr}, ${DAYS[r.day].label} ${DAYS[r.day].date}</div>
+    <div class="eb">
+      <p>You're confirmed to host <strong>${cur.addr}, ${cur.city}</strong> on ${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}. It's on the MLS and will show on the portals.</p>
+      <b>Before you go</b>
+      <ul>
+        <li>Pick up the sign kit and sign-in sheet from the Synergy office before your open house.</li>
+        <li>Arrive 30 minutes early to turn on lights and open blinds.</li>
+      </ul>
+      <b>Open house instructions from the listing team</b>
+      <ul>${cur.instr.map(t=>`<li>${t}</li>`).join("")}<li><strong>Access:</strong> ${cur.access}</li></ul>
+      <b>When you finish</b>
+      <ul>
+        <li>Lock up, return the house to how you found it, and text the listing team.</li>
+        <li>Send visitor feedback to the George &amp; Noonan team by Monday.</li>
+      </ul>
+      <span class="ics">Calendar invite attached: open-house.ics</span>
+    </div>`;
+}
+</script>
+</body>
+</html>
