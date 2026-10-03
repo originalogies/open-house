@@ -2,7 +2,15 @@
   "name": "open-house",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node --test test/access.test.mjs" },
-  "dependencies": { "@netlify/blobs": "^8.1.0" }
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/access.test.mjs",
+    "build:templates": "node scripts/build-templates.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "handlebars": "^4.7.9"
+  }
 }

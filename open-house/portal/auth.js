@@ -21,6 +21,7 @@
     };
     row.append(out);
     who.append(row);
+    document.dispatchEvent(new CustomEvent("signedin", { detail: u }));
   }
 
   async function onCredential(resp) {

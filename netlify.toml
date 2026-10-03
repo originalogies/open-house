@@ -1,5 +1,6 @@
 [build]
   publish = "open-house/portal"
+  command = "node scripts/build-templates.mjs"
 
 [functions]
   directory = "netlify/functions"

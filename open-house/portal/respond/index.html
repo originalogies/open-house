@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Respond to open house request</title>
+<style>
+:root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--danger:#A12B2B}
+@media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--danger:#E58A8A}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:520px;margin:0 auto;padding:32px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
+h1{font-size:1.35rem;margin:0 0 12px}
+dl{margin:0 0 16px}dt{color:var(--muted);font-size:.85rem;margin-top:10px}dd{margin:0;word-break:break-word}
+label.check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:.95rem}
+label.check input{margin-top:4px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+button{padding:12px 20px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;border:2px solid var(--accent)}
+button.go{background:var(--accent);color:var(--accent-ink)}
+button.no{background:none;color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+#msg{margin-top:14px}#msg.err{color:var(--danger)}
+#gbtn{display:flex;justify-content:center;margin-top:12px}
+</style>
+</head>
+<body>
+<main><div class="card" id="card"><p>Loading…</p></div></main>
+<script>
+const $ = (id) => document.getElementById(id), card = $("card");
+const params = new URLSearchParams(location.search);
+const id = params.get("id") || "", preset = params.get("action");
+const el = (html) => { card.innerHTML = html; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function signIn() {
+  el('<h1>Sign in to respond</h1><p>Use your George &amp; Noonan team Google account.</p><div id="gbtn"></div><p id="msg" class="err" role="alert"></p>');
+  const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({}));
+  const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+  s.onload = () => {
+    google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: async (resp) => {
+      const r = await fetch("/api/auth/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credential: resp.credential }) });
+      if (r.ok) return location.reload();
+      $("msg").textContent = r.status === 403 ? "That account isn't authorized for this site." : "Sign-in failed. Try again.";
+    } });
+    google.accounts.id.renderButton($("gbtn"), { theme: "outline", size: "large", shape: "pill", width: 280 });
+  };
+  document.head.append(s);
+}
+
+async function load() {
+  const r = await fetch("/api/respond?id=" + encodeURIComponent(id)).catch(() => null);
+  if (!r) return el("<p>Could not reach the server.</p>");
+  if (r.status === 401) return signIn();
+  if (r.status === 403) return el("<h1>Team members only</h1><p>Your account can't approve open house requests. Ask an administrator to add you.</p>");
+  if (r.status === 404) return el("<h1>Request not found</h1><p>This link may be wrong or out of date.</p>");
+  const d = await r.json();
+  const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (MLS# ${esc(d.mls)})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
+    <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+  if (d.status !== "pending") {
+    return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
+  }
+  el(`<h1>Open house request</h1>${details}
+    <label class="check"><input type="checkbox" id="mls"> <span>I have entered this open house on the MLS (NTREIS). Required to approve.</span></label>
+    <div class="row"><button class="go" id="approve" disabled>Approve</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
+  const approve = $("approve"), mls = $("mls");
+  mls.onchange = () => (approve.disabled = !mls.checked);
+  if (preset === "approve") mls.focus();
+  const act = async (action) => {
+    approve.disabled = true; $("decline").disabled = true;
+    const r = await fetch("/api/respond", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, action, mlsEntered: mls.checked }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return el(`<h1>${action === "approve" ? "Approved" : "Declined"}</h1><p>${action === "approve" ? "The confirmation email and calendar invite are on their way to the agent and the team." : "The agent has been notified."}</p>`);
+    $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
+    $("decline").disabled = false; approve.disabled = !mls.checked;
+  };
+  approve.onclick = () => act("approve"); $("decline").onclick = () => act("decline");
+}
+load();
+</script>
+</body>
+</html>

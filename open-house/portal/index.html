@@ -176,6 +176,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 #gBtn{display:flex;justify-content:center;min-height:44px}
 .gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
 @media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
+input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
 </style>
 </head>
 <body class="signed-out">
@@ -239,8 +240,11 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
       <h3>Choose a time</h3>
       <div class="slots" id="slots"></div>
       <p class="hint" id="hint"></p>
-      <label class="note" for="notes">Notes for the listing team (optional)</label>
+      <label class="note" for="phone">Your phone number (shared with the team)</label>
+      <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 555-5555" maxlength="30">
+      <label class="note" for="notes" style="margin-top:12px">Notes for the listing team (optional)</label>
       <textarea id="notes" placeholder="Anything they should know, like a co-host or signage plans"></textarea>
+      <p class="fine" id="formErr" role="alert" hidden style="color:#A12B2B"></p>
       <button class="primary" id="submit" disabled>Request open house</button>
       <p class="fine">This is a request, not a booking. Nothing goes on the MLS until a George &amp; Noonan team member approves it.</p>
     </div>
@@ -250,8 +254,6 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
       <ul class="mine" id="mine"></ul>
       <ol class="track" id="track"></ol>
       <button class="secondary" id="another">Request another day or time</button>
-      <button class="ghost" id="simulate">Preview: show what happens when the team approves</button>
-      <div class="email" id="email"></div>
     </div>
   </div>
 </aside>
@@ -259,24 +261,13 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 <script src="auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
-const homes = [
-  {mls:"21297798", lat:32.978088, lng:-97.18720096, instr:["Gated community. Check in with the guard and give the property address.", "The sellers' dog will be off site during open house hours.", "Shoe covers are in the front hall closet. Ask visitors to use them."], access:"Guard gate: show your license. Lockbox: Supra on the front door.", addr:"2006 Nighthawk Court", city:"Westlake", zip:"76262", price:5950000, dom:50, bd:4, ba:6, sf:6331,
-   img:"ntreismls/IMG-21297798_0.jpg", days:["sat","sun"], taken:{sun:[[13,15]]}},
-  {mls:"21372196", lat:32.908375, lng:-97.157547, instr:["Park on Rockingham Court, not in the motor court.", "Pool and courtyard lights are on the panel by the back door.", "The wine room stays locked. Do not show it."], access:"Lockbox: Supra on the side gate. Alarm code: 4417 (sample).", addr:"6900 Rockingham Court", city:"Colleyville", zip:"76034", price:4350000, dom:13, bd:6, ba:9, sf:10026,
-   img:"ntreismls/IMG-21372196_4446441738281566696.jpg", days:["sat","sun"], taken:{}},
-  {mls:"21332907", lat:32.983337, lng:-97.18004802, instr:["Park in the visitor spaces along Cortes Drive.", "Start visitors on the third floor and work down."], access:"Entrada gate code: 2417# (sample). Lockbox on the front door.", addr:"69 Cortes Drive", city:"Westlake", zip:"76262", price:1297000, dom:32, bd:3, ba:4, sf:2038,
-   img:"ntreismls/IMG-21332907_4446676996495488826.jpg", days:["sun"], taken:{sun:[[15,17]]}},
-  {mls:"21346883", lat:32.929991, lng:-97.193693, instr:["Check in at the front desk in the main lobby.", "Use guest parking. The unit is on the second floor."], access:"Front desk will release the key on your ID. No lockbox.", addr:"441 Watermere Drive", city:"Southlake", zip:"76092", price:629000, dom:28, bd:2, ba:3, sf:2109,
-   img:"ntreismls/IMG-21346883_4444455829925220134.jpg", days:["sat","sun"], taken:{sat:[[11,13]]}}
-];
-const FIRST=9, LAST=19; // 9:00 AM to 7:00 PM
-const DAYS = {sat:{label:"Saturday", date:"Oct 10"}, sun:{label:"Sunday", date:"Oct 11"}};
+let homes = [], DAYS = {}, FIRST = 9, LAST = 19; // loaded from /api/listings after sign-in
 const $ = id => document.getElementById(id);
 const money = n => "$" + n.toLocaleString("en-US");
 const fmt = h => { const ap=h>=12?"PM":"AM"; const x=h%12||12; return x+":00 "+ap; };
-const myReqs = {}; // mls -> [{day,from,to,approved}]
-const mine = () => (myReqs[cur.mls] ||= []);
-const isTaken = (d,h) => (cur.taken[d]||[]).some(([a,b]) => h>=a && h<b);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const mine = () => cur.mine;
+const isTaken = (d,h) => cur.taken.some(t => t.day===d && h>=t.from && h<t.to);
 const isMine = (d,h) => mine().some(r => r.day===d && h>=r.from && h<r.to);
 const blocked = (d,h) => isTaken(d,h) || isMine(d,h);
 
@@ -288,20 +279,35 @@ function imgEl(h, el, wrap){
 
 // Cards
 const grid = $("grid");
-homes.forEach((h,i) => {
-  const b = document.createElement("button");
-  b.className = "card";
-  b.setAttribute("aria-label", `${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
-  b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-    <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>
-    <div class="meta">
-      <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
-      <div class="price">${money(h.price)}</div>
-      <div></div><div class="facts">${h.bd} bd, ${h.ba} ba, ${h.sf.toLocaleString()} sq ft</div>
-    </div>`;
-  imgEl(h, b.querySelector("img"), b);
-  b.onclick = () => openSheet(i, b);
-  grid.appendChild(b);
+function renderGrid(){
+  grid.innerHTML = "";
+  homes.forEach((h,i) => {
+    const b = document.createElement("button");
+    b.className = "card";
+    b.setAttribute("aria-label", `${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
+    b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
+      <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>
+      <div class="meta">
+        <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
+        <div class="price">${money(h.price)}</div>
+        <div></div><div class="facts">${h.bd} bd, ${h.ba} ba, ${h.sf.toLocaleString()} sq ft</div>
+      </div>`;
+    imgEl(h, b.querySelector("img"), b);
+    b.onclick = () => openSheet(i, b);
+    grid.appendChild(b);
+  });
+}
+
+async function loadListings(){
+  const r = await fetch("/api/listings").catch(() => null);
+  if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
+  const d = await r.json();
+  window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; FIRST = d.firstHour; LAST = d.lastHour;
+  return d;
+}
+document.addEventListener("signedin", async () => {
+  const d = await loadListings();
+  if(d){ renderGrid(); if(d.closed) document.querySelector(".deadline").textContent = "Requests for this weekend are closed."; }
 });
 
 // Sheet
@@ -315,7 +321,7 @@ function openSheet(i, trigger){
     <div><b>${cur.dom}</b><span>Days on market</span></div>
     <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
     <div><b>${cur.sf.toLocaleString()}</b><span>Sq ft</span></div>`;
-  $("instrList").innerHTML = cur.instr.map(t=>`<li>${t}</li>`).join("");
+  $("instrList").innerHTML = cur.instr.map(t=>`<li>${esc(t)}</li>`).join("");
   $("mapBox").hidden=true; $("mapBtn").setAttribute("aria-expanded","false"); $("mapBtn").textContent="View location";
   $("mapFrame").removeAttribute("src");
   $("mapLink").href = `https://www.google.com/maps/search/?api=1&query=${cur.lat},${cur.lng}`;
@@ -336,7 +342,7 @@ function renderDays(){
     const offered = cur.days.includes(k);
     const b = document.createElement("button");
     b.className="day"; b.setAttribute("aria-pressed", day===k); b.disabled=!offered;
-    b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${offered ? "9:00 AM to 7:00 PM" : "Not offered by the seller"}</span>`;
+    b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${offered ? fmt(FIRST)+" to "+fmt(LAST) : "Not offered by the seller"}</span>`;
     b.onclick=()=>{day=k; sel=null; renderDays(); renderSlots();};
     d.appendChild(b);
   });
@@ -357,8 +363,8 @@ function renderSlots(){
     const taken=blocked(day,h), own=isMine(day,h), on=sel && h>=sel.from && h<sel.to;
     const b=document.createElement("button");
     b.className="slot"; b.disabled=taken; b.setAttribute("aria-pressed", !!on);
-    b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Requested"}</small>`:"");
-    b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already requested"):""}`);
+    b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
+    b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already booked"):""}`);
     b.onclick=()=>pick(h);
     s.appendChild(b);
   }
@@ -380,56 +386,41 @@ $("mapBtn").onclick=()=>{
 };
 function showForm(){
   day=null; sel=null; $("notes").value="";
+  try{ $("phone").value = localStorage.getItem("oh_phone") || ""; }catch(e){}
+  $("formErr").hidden = true;
   $("form").style.display=""; $("status").classList.remove("on");
   renderDays(); renderSlots();
 }
 function showStatus(){
   $("form").style.display="none"; $("status").classList.add("on");
   const list = mine();
-  $("mine").innerHTML = list.map(r=>`<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="tag ${r.approved?'ok':''}">${r.approved?'Approved':'Waiting for approval'}</span></li>`).join("");
-  const last = list[list.length-1];
-  $("simulate").style.display = last.approved ? "none" : "";
-  $("email").classList.toggle("on", !!last.approved);
-  if(last.approved) renderEmail(last);
-  $("track").innerHTML = trackHTML(last);
+  const tag = r => r.status==="approved" ? ["ok","Approved"] : ["","Waiting for approval"];
+  $("mine").innerHTML = list.map(r=>{ const [c,t]=tag(r); return `<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="tag ${c}">${t}</span></li>`; }).join("");
+  $("track").innerHTML = trackHTML(list[list.length-1]);
 }
 $("another").onclick=()=>{ showForm(); $("sheet").scrollTo({top:0,behavior:"smooth"}); };
 function trackHTML(r){
-  const a=r.approved?"done":"";
+  const ok=r.status==="approved", a=ok?"done":"";
   return `
     <li class="done"><b>Latest request sent</b><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span></li>
     <li class="done"><b>George &amp; Noonan team notified</b><span>Anyone on the team can approve it</span></li>
-    <li class="${a}"><b>${r.approved?"Approved by the George &amp; Noonan team":"Waiting for approval"}</b><span>Unanswered requests close Friday at 5:00 PM</span></li>
-    <li class="${a}"><b>Entered on the MLS</b><span>Added and checked automatically after approval</span></li>
-    <li class="${a}"><b>Confirmation email</b><span>Instructions and a calendar invite</span></li>`;
+    <li class="${a}"><b>${ok?"Approved by the George &amp; Noonan team":"Waiting for approval"}</b><span>Unanswered requests close ${esc(window.CLOSES||"Friday at 5:00 PM")}</span></li>
+    <li class="${a}"><b>Confirmation email</b><span>Access details and a calendar invite</span></li>`;
 }
-$("submit").onclick=()=>{
-  mine().push({day, from:sel.from, to:sel.to, approved:false});
+$("submit").onclick=async ()=>{
+  const btn=$("submit"), err=$("formErr"); btn.disabled=true; err.hidden=true;
+  const phone=$("phone").value.trim();
+  try{ localStorage.setItem("oh_phone", phone); }catch(e){}
+  const r = await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({mls:cur.mls,day,from:sel.from,to:sel.to,notes:$("notes").value,phone})}).catch(()=>null);
+  const d = r ? await r.json().catch(()=>({})) : {};
+  if(!r || (!r.ok && r.status!==502)){ err.textContent = d.message || "Could not send the request. Try again."; err.hidden=false; update(); return; }
+  const idx = homes.indexOf(cur);
+  await loadListings(); cur = homes[idx];
+  if(r.status===502){ err.textContent = d.message; }
   showStatus();
   $("sheet").scrollTo({top:0,behavior:"smooth"});
 };
-
-$("simulate").onclick=()=>{ const l=mine(); l[l.length-1].approved=true; showStatus(); };
-function renderEmail(r){
-  const e=$("email");
-  e.innerHTML = `<div class="eh"><b>From:</b> openhouse@synergyrealtors.com<br><b>Subject:</b> Approved: open house at ${cur.addr}, ${DAYS[r.day].label} ${DAYS[r.day].date}</div>
-    <div class="eb">
-      <p>You're confirmed to host <strong>${cur.addr}, ${cur.city}</strong> on ${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}. It's on the MLS and will show on the portals.</p>
-      <b>Before you go</b>
-      <ul>
-        <li>Pick up the sign kit and sign-in sheet from the Synergy office before your open house.</li>
-        <li>Arrive 30 minutes early to turn on lights and open blinds.</li>
-      </ul>
-      <b>Open house instructions from the listing team</b>
-      <ul>${cur.instr.map(t=>`<li>${t}</li>`).join("")}<li><strong>Access:</strong> ${cur.access}</li></ul>
-      <b>When you finish</b>
-      <ul>
-        <li>Lock up, return the house to how you found it, and text the listing team.</li>
-        <li>Send visitor feedback to the George &amp; Noonan team by Monday.</li>
-      </ul>
-      <span class="ics">Calendar invite attached: open-house.ics</span>
-    </div>`;
-}
 </script>
 </body>
 </html>

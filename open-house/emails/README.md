@@ -29,4 +29,4 @@ Instructions: `instructions` (list of general notes), `access_details` (gate, lo
 
 ## Logo
 
-All four templates use the George & Noonan logo (`gn-logo.png`, included here). The templates load it from https://synergyrealtors.com/email/open-house/gn-logo.png, so copy it to `email/open-house/` in the synergy-realtors repo as well. If you host it elsewhere, update the `src` in each template.
+All four templates use the George & Noonan logo (`gn-logo.png`, included here). The templates load it from https://open-house.synergyrealtors.com/gn-logo.png (the copy in `portal/`). If you host it elsewhere, update the `src` in each template and rerun `npm run build:templates`.

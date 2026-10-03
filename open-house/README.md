@@ -43,3 +43,15 @@ Agents sign in with Google. The server checks every sign-in against an allowlist
 | `ALLOWED_EMAILS`, `ALLOWED_DOMAINS` | Optional starting lists. Admins manage the live list at `/admin/` |
 
 Nothing is allowed by default: with no admins and no allowed entries, no one can sign in. Removing someone at `/admin/` ends their access right away.
+
+## Requests and email (Resend)
+
+`POST /api/requests` saves a request (Netlify Blobs) and sends templates 1 and 2. The team opens the Approve or Decline link, which goes to `/respond/`, signs in with Google, and confirms. Approving requires ticking "entered on the MLS" and then sends template 3 with the calendar invite. `netlify/functions/reminders.mjs` runs hourly, sends template 4 at 9:00 AM Central the day before, and expires unanswered requests after the Friday cutoff.
+
+| Variable | Purpose |
+|----------|---------|
+| `RESEND_API_KEY` | Resend API key (sends from openhouse@synergyrealtors.com) |
+| `TEAM_EMAIL` | Optional. Team inbox(es), comma-separated. Defaults to team@georgeandnoonan.com |
+| `TEAM_EMAILS` | Optional. Extra people who may approve. Admins (`ADMIN_EMAILS`) can always approve |
+
+Listings and the weekend dates are sample data in `netlify/lib/listings.mjs` (access codes live only there). After editing a template in `emails/`, run `npm run build:templates` (Netlify also runs it on each build).

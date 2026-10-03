@@ -30,3 +30,24 @@ test("session cookie signing", () => {
   assert.equal(readSession(req(v.slice(0, -2) + "xx")), null);       // tampered
   assert.equal(readSession(req("e30." + v.split(".")[1])), null);    // body swapped
 });
+
+import { overlaps } from "../netlify/lib/requests.mjs";
+import { fmtArrival, fmtRange, addDays, chicagoToUtc, fmtReceived } from "../netlify/lib/time.mjs";
+
+test("overlap rules", () => {
+  const a = { mls: "1", day: "sat", from: 10, to: 12 };
+  assert.ok(overlaps(a, { mls: "1", day: "sat", from: 11, to: 13 }));
+  assert.ok(!overlaps(a, { mls: "1", day: "sat", from: 12, to: 14 }));   // back to back is fine
+  assert.ok(!overlaps(a, { mls: "1", day: "sun", from: 10, to: 12 }));
+  assert.ok(!overlaps(a, { mls: "2", day: "sat", from: 10, to: 12 }));
+});
+
+test("time helpers", () => {
+  assert.equal(fmtRange(10, 12), "10:00 AM to 12:00 PM");
+  assert.equal(fmtArrival(10), "9:30 AM");
+  assert.equal(fmtArrival(13), "12:30 PM");
+  assert.equal(addDays("2026-10-09", 1), "2026-10-10");
+  assert.equal(chicagoToUtc("2026-10-10", 10).toISOString(), "2026-10-10T15:00:00.000Z"); // CDT
+  assert.equal(chicagoToUtc("2026-11-07", 10).toISOString(), "2026-11-07T16:00:00.000Z"); // CST
+  assert.match(fmtReceived(Date.UTC(2026, 9, 3, 19, 15)), /^Oct 3, 2026 at 2:15 PM CT$/);
+});
