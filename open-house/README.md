@@ -55,4 +55,4 @@ Nothing is allowed by default: with no admins and no allowed entries, no one can
 | `TEAM_EMAIL` | Optional. Team inbox(es), comma-separated. Defaults to team@georgeandnoonan.com |
 | `TEAM_EMAILS` | Optional. Extra people who may approve. Admins (`ADMIN_EMAILS`) can always approve |
 
-The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/team/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.
+The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/inventory/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.

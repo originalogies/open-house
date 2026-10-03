@@ -95,7 +95,7 @@ export function openHouseBlocks(raw, week) {
 
 // ---- Team-managed details (not in MLS data) ------------------------------
 const infoStore = () => getStore("open-house-listing-info");
-const blank = { offeredWeek: null, days: ["sat", "sun"], instr: [], access: "" };
+const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "" };
 
 export const getInfo = async (mls) => ({ ...blank, ...((await infoStore().get(`mls/${mls}`, { type: "json" }).catch(() => null)) || {}) });
 export const saveInfo = (mls, info) => infoStore().setJSON(`mls/${mls}`, info);
@@ -126,7 +126,8 @@ export async function offeredListings(week = getWeek()) {
   const { list } = await catalog(week);
   const info = await allInfo(list.map((x) => x.n.mls));
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
-    .map((x) => ({ ...x.n, days: info[x.n.mls].days, instr: info[x.n.mls].instr, external: x.openHouses }));
+    .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, external: x.openHouses }))
+    .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
 }
 
 export async function teamListings(week = getWeek()) {
@@ -134,7 +135,8 @@ export async function teamListings(week = getWeek()) {
   const info = await allInfo(list.map((x) => x.n.mls));
   return {
     warning,
-    listings: list.map((x) => { const i = info[x.n.mls]; return { ...x.n, offered: i.offeredWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: x.openHouses }; }),
+    listings: list.map((x) => { const i = info[x.n.mls]; return { ...x.n, offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: x.openHouses }; })
+      .sort((a, b) => Number(b.priority) - Number(a.priority)),
   };
 }
 
@@ -159,7 +161,7 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
-export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr });
+export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
 export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img });

@@ -64,6 +64,8 @@ header.top{display:flex;justify-content:space-between;align-items:center;padding
 .card{position:relative;border:0;padding:0;background:var(--photo);border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:4/3;width:100%}
 .card img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
 .card:hover img{transform:scale(1.03)}
+.card.priority{box-shadow:0 0 0 3px var(--brass),0 10px 28px rgba(205,170,98,.35)}
+.card .pri-badge{position:absolute;top:14px;right:14px;z-index:2;background:var(--brass);color:#16202A;font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 11px;border-radius:99px}
 .card .fallback{position:absolute;inset:0;display:none;background:
   linear-gradient(160deg,rgba(255,255,255,.06),rgba(0,0,0,.25)),var(--photo)}
 .card.noimg .fallback{display:block}
@@ -283,10 +285,10 @@ function renderGrid(){
   grid.innerHTML = "";
   homes.forEach((h,i) => {
     const b = document.createElement("button");
-    b.className = "card";
-    b.setAttribute("aria-label", `${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
+    b.className = "card" + (h.priority ? " priority" : "");
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
     b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-      <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>
+      <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
       <div class="meta">
         <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
         <div class="price">${money(h.price)}</div>

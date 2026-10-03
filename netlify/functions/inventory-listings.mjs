@@ -2,7 +2,7 @@ import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { teamListings, getInfo, saveInfo, rawSample, probe } from "../lib/listings.mjs";
 import { getWeek } from "../lib/week.mjs";
 
-// Team page API. GET lists every active listing for the two agents with the team's settings.
+// Inventory page API. GET lists every active listing for the two agents with the team's settings.
 // PUT { mls, offered, days, instr[], access } saves one listing. GET ?raw=1 shows one raw Repliers
 // listing (no description) for checking field mapping.
 export default async (req) => {
@@ -26,11 +26,12 @@ export default async (req) => {
     const days = (Array.isArray(b.days) ? b.days : cur.days).filter((d) => d === "sat" || d === "sun");
     const instr = (Array.isArray(b.instr) ? b.instr : cur.instr).map((s) => String(s).trim().slice(0, 300)).filter(Boolean).slice(0, 15);
     const access = String(b.access ?? cur.access).slice(0, 500);
+    const priorityWeek = b.priority === true ? week.satIso : b.priority === false ? null : cur.priorityWeek;
     const offeredWeek = b.offered === true ? week.satIso : b.offered === false ? null : cur.offeredWeek;
     if (offeredWeek && !days.length) return json(400, { error: "no_days", message: "Pick at least one day to offer." });
-    await saveInfo(b.mls, { offeredWeek, days, instr, access });
+    await saveInfo(b.mls, { offeredWeek, priorityWeek, days, instr, access });
     return json(200, { ok: true });
   }
   return json(405, { error: "method_not_allowed" });
 };
-export const config = { path: "/api/team/listings" };
+export const config = { path: "/api/inventory/listings" };

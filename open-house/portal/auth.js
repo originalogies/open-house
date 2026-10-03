@@ -13,7 +13,7 @@
     const name = document.createElement("strong"); name.textContent = u.name || u.email;
     who.append(l1, document.createElement("br"), name);
     const row = document.createElement("div"); row.className = "who-links";
-    if (u.team) { const a = document.createElement("a"); a.href = "/team/"; a.textContent = "Manage open houses"; row.append(a); }
+    if (u.team) { const a = document.createElement("a"); a.href = "/inventory/"; a.textContent = "Open house inventory"; row.append(a); }
     if (u.admin) { const a = document.createElement("a"); a.href = "/admin/"; a.textContent = "Manage access"; row.append(a); }
     const out = document.createElement("button"); out.type = "button"; out.textContent = "Sign out";
     out.onclick = async () => {

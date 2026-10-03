@@ -2,5 +2,15 @@
   publish = "open-house/portal"
   command = "node scripts/build-templates.mjs"
 
+[[redirects]]
+  from = "/team"
+  to = "/inventory/"
+  status = 301
+
+[[redirects]]
+  from = "/team/*"
+  to = "/inventory/"
+  status = 301
+
 [functions]
   directory = "netlify/functions"
