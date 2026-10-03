@@ -31,18 +31,24 @@ input[type=checkbox]{flex:none;min-width:0;width:auto}
 .switch input:focus-visible + .track{outline:3px solid var(--accent);outline-offset:2px}
 .switch-text{display:flex;flex-direction:column}
 .switch-text small{color:var(--muted);font-size:.85rem}
-.cut{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.cut.off{opacity:.45;pointer-events:none}
-.cut .tz{color:var(--muted);font-size:.9rem}
 select{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
 input.time{flex:none;width:auto}
+[hidden]{display:none!important}
+.cut{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 14px}
+.cut .tz{color:var(--muted);font-size:.9rem}
+.switch{min-height:44px;margin:0}
+#cDetails{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+#cDetails .summary{margin-bottom:0}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:440px;margin:0 auto;padding:12px 16px;border-radius:10px;background:var(--ink);color:var(--bg);box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:.95rem;opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .2s,transform .2s;z-index:50}
+#toast.show{opacity:1;transform:none}
+#toast.err{background:var(--danger);color:#fff}
+@media (max-width:480px){.cut select,.cut input.time{flex:1 1 130px}main{padding-top:16px}}
+@media (prefers-reduced-motion:reduce){#toast,.switch .track,.switch .track::after{transition:none}}
 .summary{background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:14px}
 ul{list-style:none;margin:0;padding:0}
 li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);word-break:break-all}
 li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
 .empty{color:var(--muted);padding:8px 0}
-#status{min-height:1.4em;margin:8px 0;font-size:.95rem}
-#status.err{color:var(--danger)}
 </style>
 </head>
 <body>
@@ -50,25 +56,24 @@ li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
   <a href="/">← Back to open house requests</a>
   <h1>Admin settings</h1>
   <p class="lead">Only people on this list can sign in with Google. A person can sign in if their email address is listed, or if their email domain is listed. Changes apply right away.</p>
-  <div id="status" role="status"></div>
 
   <section>
     <h2>Request cutoff</h2>
-    <p class="hint">Choose when agents can no longer send requests for the coming weekend. Once it passes, they see the next weekend.</p>
     <label class="switch" for="cEnabled">
-      <input type="checkbox" id="cEnabled" role="switch">
+      <input type="checkbox" id="cEnabled" role="switch" aria-controls="cDetails" aria-expanded="false">
       <span class="track" aria-hidden="true"></span>
-      <span class="switch-text"><b>Close requests each week</b><small id="cState"></small></span>
+      <span class="switch-text"><b>Close requests each week</b><small id="cState">Loading…</small></span>
     </label>
-    <div class="cut" id="cFields">
-      <span>Close every</span>
-      <select id="cDay" aria-label="Day of the week"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select>
-      <span>at</span>
-      <input id="cTime" type="time" step="900" aria-label="Time" class="time">
-      <span class="tz">Central time</span>
+    <div id="cDetails" hidden>
+      <div class="cut">
+        <span>Close every</span>
+        <select id="cDay" aria-label="Day of the week"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select>
+        <span>at</span>
+        <input id="cTime" type="time" step="900" aria-label="Time" class="time">
+        <span class="tz">Central time</span>
+      </div>
+      <div class="summary" id="cSummary"></div>
     </div>
-    <div class="summary" id="cSummary" aria-live="polite"></div>
-    <button id="cSave" type="button">Save cutoff</button>
   </section>
 
   <section>
@@ -91,11 +96,18 @@ li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
     <ul id="lAdmins"></ul>
   </section>
 </main>
+<div id="toast" role="status" aria-live="polite"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 let state = { emails: [], domains: [], env: { emails: [], domains: [] }, admins: [] };
 
-function status(t, err) { const s = $("status"); s.textContent = t || ""; s.className = err ? "err" : ""; }
+let toastTimer;
+function status(t, err) {
+  const el = $("toast"); clearTimeout(toastTimer);
+  if (!t) { el.classList.remove("show"); return; }
+  el.textContent = t; el.className = "show" + (err ? " err" : "");
+  toastTimer = setTimeout(() => el.classList.remove("show"), err ? 5000 : 2600);
+}
 
 function render() {
   const fill = (ul, items, fixed, remove) => {
@@ -124,7 +136,6 @@ function render() {
 function remove(v) { save({ emails: state.emails.filter((x) => x !== v), domains: state.domains.filter((x) => x !== v) }); }
 
 async function save(next) {
-  status("Saving…");
   const r = await fetch("/api/admin/access", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(next) }).catch(() => null);
   if (!r || !r.ok) { const d = r ? await r.json().catch(() => ({})) : {}; return status(d.error === "invalid_entry" ? "That doesn't look like a valid entry." : "Could not save. Try again.", true); }
   state.emails = next.emails; state.domains = next.domains; render(); status("Saved.");
@@ -133,26 +144,32 @@ async function save(next) {
 $("fDomain").onsubmit = (e) => { e.preventDefault(); const v = $("iDomain").value.trim().toLowerCase().replace(/^@/, ""); if (!v) return; $("iDomain").value = ""; save({ emails: state.emails, domains: [...new Set([...state.domains, v])] }); };
 $("fEmail").onsubmit = (e) => { e.preventDefault(); const v = $("iEmail").value.trim().toLowerCase(); if (!v) return; $("iEmail").value = ""; save({ emails: [...new Set([...state.emails, v])], domains: state.domains }); };
 
-const cutoffUI = (d) => {
-  $("cEnabled").checked = d.cutoff.enabled; $("cDay").value = String(d.cutoff.day); $("cTime").value = d.cutoff.time;
-  setState();
+// Cutoff: every change saves immediately and confirms with a toast.
+let lastGood = null, saveSeq = 0;
+function showCutoff(d) {
+  lastGood = d;
+  const on = d.cutoff.enabled;
+  $("cEnabled").checked = on; $("cEnabled").setAttribute("aria-expanded", on);
+  $("cDay").value = String(d.cutoff.day); $("cTime").value = d.cutoff.time;
+  $("cDetails").hidden = !on;
+  $("cState").textContent = on ? "Requests stop at the day and time you choose." : "Off. Requests for " + d.weekend + " stay open until " + d.closesLabel + ".";
   $("cSummary").innerHTML = "Requests for the weekend of <b>" + d.weekend + "</b> close <b>" + d.closesLabel + "</b>.";
-};
-const setState = () => {
-  const on = $("cEnabled").checked;
-  $("cFields").classList.toggle("off", !on);
-  $("cState").textContent = on ? "On: requests stop at the day and time below." : "Off: requests stay open until the end of the weekend.";
-};
-$("cEnabled").onchange = setState;
-$("cSave").onclick = async () => {
-  status("Saving…");
-  const body = { enabled: $("cEnabled").checked, day: Number($("cDay").value), time: $("cTime").value };
+}
+async function saveCutoff() {
+  const time = $("cTime").value;
+  if (!/^\d\d:\d\d$/.test(time)) return; // time not fully entered yet
+  const body = { enabled: $("cEnabled").checked, day: Number($("cDay").value), time };
+  const seq = ++saveSeq;
   const r = await fetch("/api/admin/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const d = r ? await r.json().catch(() => ({})) : {};
-  if (!r || !r.ok) return status(d.message || "Could not save the cutoff. Try again.", true);
-  cutoffUI(d); status("Cutoff saved.");
-};
-fetch("/api/admin/settings").then((r) => r.ok ? r.json() : null).then((d) => d && cutoffUI(d)).catch(() => {});
+  if (seq !== saveSeq) return; // a newer change is already saving
+  if (!r || !r.ok) { if (lastGood) showCutoff(lastGood); return status(d.message || "Couldn't save. Your change was not applied.", true); }
+  showCutoff(d);
+  status(d.cutoff.enabled ? "Cutoff on. Requests close " + d.closesLabel + "." : "Cutoff off. Requests stay open until " + d.closesLabel + ".");
+}
+$("cEnabled").onchange = () => { $("cDetails").hidden = !$("cEnabled").checked; saveCutoff(); };
+$("cDay").onchange = saveCutoff; $("cTime").onchange = saveCutoff;
+fetch("/api/admin/settings").then((r) => r.ok ? r.json() : null).then((d) => { if (d) showCutoff(d); else $("cState").textContent = ""; }).catch(() => {});
 
 (async () => {
   const r = await fetch("/api/admin/access").catch(() => null);
