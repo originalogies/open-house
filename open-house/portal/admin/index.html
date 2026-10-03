@@ -21,10 +21,22 @@ form{display:flex;gap:8px;margin-bottom:12px}
 input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
 button{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer}
 button.link{background:none;color:var(--danger);padding:4px 8px;font-weight:500}
-label.check{display:flex;gap:8px;align-items:center;margin:0 0 12px}
-.cut{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}.cut label{display:flex;gap:8px;align-items:center}
-select{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+input[type=checkbox]{flex:none;min-width:0;width:auto}
+.switch{display:flex;align-items:center;gap:12px;cursor:pointer;margin:0 0 14px}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .track{position:relative;flex:none;width:46px;height:26px;border-radius:99px;background:var(--line);transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.switch input:checked + .track{background:var(--accent)}
+.switch input:checked + .track::after{transform:translateX(20px)}
+.switch input:focus-visible + .track{outline:3px solid var(--accent);outline-offset:2px}
+.switch-text{display:flex;flex-direction:column}
+.switch-text small{color:var(--muted);font-size:.85rem}
+.cut{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .cut.off{opacity:.45;pointer-events:none}
+.cut .tz{color:var(--muted);font-size:.9rem}
+select{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+input.time{flex:none;width:auto}
+.summary{background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:14px}
 ul{list-style:none;margin:0;padding:0}
 li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);word-break:break-all}
 li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
@@ -42,13 +54,20 @@ li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
 
   <section>
     <h2>Request cutoff</h2>
-    <p class="hint">Stop accepting requests at the same day and time every week (Central time). When it is off, requests stay open until the end of the weekend. Once the cutoff passes, agents see the next weekend.</p>
-    <label class="check"><input type="checkbox" id="cEnabled"> Use a weekly cutoff</label>
+    <p class="hint">Choose when agents can no longer send requests for the coming weekend. Once it passes, they see the next weekend.</p>
+    <label class="switch" for="cEnabled">
+      <input type="checkbox" id="cEnabled" role="switch">
+      <span class="track" aria-hidden="true"></span>
+      <span class="switch-text"><b>Close requests each week</b><small id="cState"></small></span>
+    </label>
     <div class="cut" id="cFields">
-      <label>Day <select id="cDay"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label>
-      <label>Time <input id="cTime" type="time" step="900" style="flex:none"></label>
+      <span>Close every</span>
+      <select id="cDay" aria-label="Day of the week"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select>
+      <span>at</span>
+      <input id="cTime" type="time" step="900" aria-label="Time" class="time">
+      <span class="tz">Central time</span>
     </div>
-    <p class="hint" id="cSummary" aria-live="polite"></p>
+    <div class="summary" id="cSummary" aria-live="polite"></div>
     <button id="cSave" type="button">Save cutoff</button>
   </section>
 
@@ -116,10 +135,15 @@ $("fEmail").onsubmit = (e) => { e.preventDefault(); const v = $("iEmail").value.
 
 const cutoffUI = (d) => {
   $("cEnabled").checked = d.cutoff.enabled; $("cDay").value = String(d.cutoff.day); $("cTime").value = d.cutoff.time;
-  $("cFields").classList.toggle("off", !d.cutoff.enabled);
-  $("cSummary").textContent = "Requests for the weekend of " + d.weekend + " close " + d.closesLabel + ".";
+  setState();
+  $("cSummary").innerHTML = "Requests for the weekend of <b>" + d.weekend + "</b> close <b>" + d.closesLabel + "</b>.";
 };
-$("cEnabled").onchange = () => $("cFields").classList.toggle("off", !$("cEnabled").checked);
+const setState = () => {
+  const on = $("cEnabled").checked;
+  $("cFields").classList.toggle("off", !on);
+  $("cState").textContent = on ? "On: requests stop at the day and time below." : "Off: requests stay open until the end of the weekend.";
+};
+$("cEnabled").onchange = setState;
 $("cSave").onclick = async () => {
   status("Saving…");
   const body = { enabled: $("cEnabled").checked, day: Number($("cDay").value), time: $("cTime").value };
