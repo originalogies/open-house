@@ -138,6 +138,27 @@ export async function probe() {
   return out;
 }
 
+// Admin /listings test page: every active listing for Troy George (any class, land included), plus single-listing detail.
+export const TROY_AGENT_ID = BOARD_AGENT_IDS[0];
+
+export async function troyListings() {
+  const all = [];
+  for (let page = 1; page <= 5; page++) {
+    const d = await repliers(new URLSearchParams({ status: "A", agent: TROY_AGENT_ID, resultsPerPage: "100", pageNum: String(page) }));
+    all.push(...(d.listings || []));
+    if (page >= (d.numPages || 1)) break;
+  }
+  return all.map((l) => ({ ...normalize(l), type: l.details?.propertyType || "", class: l.class || "" }));
+}
+
+export async function listingDetail(mls) {
+  const key = process.env.REPLIERS_API_KEY;
+  if (!key) throw new Error("REPLIERS_API_KEY is not set");
+  const res = await fetch(`${BASE}/listings/${encodeURIComponent(mls)}`, { headers: { "REPLIERS-API-KEY": key, accept: "application/json" } });
+  if (!res.ok) throw new Error(`Repliers ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
 export const rawSample = async () => {
   const [first] = await fetchRaw();
   if (!first) return null;

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Listings test | Open House Requests</title>
+<style>
+:root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--danger:#A12B2B}
+@media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--danger:#E58A8A}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 64px}
+a{color:var(--accent)}
+h1{font-size:1.5rem;margin:.5rem 0 .25rem}
+.lead{color:var(--muted);margin:0 0 20px}
+.msg{font-size:.95rem}.msg.err{color:var(--danger)}
+ul{list-style:none;margin:0;padding:0}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.item>button{all:unset;box-sizing:border-box;display:flex;gap:12px;align-items:center;width:100%;padding:10px 12px;cursor:pointer}
+.item>button:hover{background:var(--bg)}
+.item>button:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.thumb{flex:none;width:72px;height:54px;border-radius:6px;background:var(--line) center/cover no-repeat}
+.info{flex:1;min-width:0}
+.addr{font-weight:600}
+.meta{color:var(--muted);font-size:.88rem}
+.price{font-weight:700;white-space:nowrap}
+.detail{border-top:1px solid var(--line);padding:12px}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:.8rem;margin:8px 0 0}
+[hidden]{display:none!important}
+#gbtn{display:flex;justify-content:center;margin-top:12px}
+</style>
+</head>
+<body>
+<main id="app"><p>Loading…</p></main>
+<script>
+const app = document.getElementById("app");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => (n ? "$" + Number(n).toLocaleString("en-US") : "—");
+const imgUrl = (p) => (p ? (/^https?:/.test(p) ? p : "https://cdn.repliers.io/" + p + "?class=small") : "");
+
+async function signIn() {
+  app.innerHTML = '<h1>Sign in</h1><p class="lead">Administrators only.</p><div id="gbtn"></div><p class="msg err" id="m"></p>';
+  const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({}));
+  const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+  s.onload = () => {
+    google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: async (resp) => {
+      const r = await fetch("/api/auth/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ credential: resp.credential }) });
+      if (r.ok) return location.reload();
+      document.getElementById("m").textContent = r.status === 403 ? "That account isn't authorized for this site." : "Sign-in failed. Try again.";
+    } });
+    google.accounts.id.renderButton(document.getElementById("gbtn"), { theme: "outline", size: "large", shape: "pill", width: 280 });
+  };
+  document.head.append(s);
+}
+
+async function toggle(item, mls) {
+  const box = item.querySelector(".detail"), btn = item.querySelector("button");
+  if (!box.hidden) { box.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
+  box.hidden = false; btn.setAttribute("aria-expanded", "true");
+  if (box.dataset.loaded) return;
+  box.innerHTML = '<p class="meta">Loading raw Repliers record…</p>';
+  const r = await fetch("/api/admin/listings?mls=" + encodeURIComponent(mls)).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : {};
+  if (!r || !r.ok) { box.innerHTML = '<p class="msg err">' + esc(d.message || "Could not load this listing.") + "</p>"; return; }
+  box.dataset.loaded = "1";
+  box.innerHTML = '<div class="meta">Raw Repliers record for MLS# ' + esc(mls) + "</div><pre>" + esc(JSON.stringify(d.listing, null, 2)) + "</pre>";
+}
+
+async function load() {
+  const r = await fetch("/api/admin/listings").catch(() => null);
+  if (!r) { app.innerHTML = '<p class="msg err">Could not reach the server.</p>'; return; }
+  if (r.status === 401) return signIn();
+  if (r.status === 403) { app.innerHTML = '<h1>Admins only</h1><p class="lead">Your account does not have access to this page.</p><a href="/">← Back</a>'; return; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { app.innerHTML = '<a href="/">← Back</a><h1>Listings test</h1><p class="msg err">Repliers error: ' + esc(d.message || d.error || r.status) + "</p>"; return; }
+  app.innerHTML = '<a href="/">← Back to open house requests</a><h1>Listings test</h1>'
+    + '<p class="lead">' + d.count + " active listing" + (d.count === 1 ? "" : "s") + " for " + esc(d.agent) + " (board agent ID " + esc(d.agentId) + "), pulled live from Repliers. Click a listing to see its raw data.</p>"
+    + '<ul id="list"></ul>';
+  const ul = document.getElementById("list");
+  if (!d.listings.length) ul.innerHTML = '<li class="meta">No active listings returned.</li>';
+  for (const l of d.listings) {
+    const li = document.createElement("li"); li.className = "item";
+    const specs = [l.bd && l.bd + " bd", l.ba && l.ba + " ba", l.sf && l.sf.toLocaleString("en-US") + " sf", l.dom + " DOM"].filter(Boolean).join(" · ");
+    li.innerHTML = '<button type="button" aria-expanded="false"><div class="thumb" style="background-image:url(\'' + esc(imgUrl(l.img)) + '\')"></div>'
+      + '<div class="info"><div class="addr">' + esc(l.addr || "(no address)") + '</div><div class="meta">' + esc([l.city, l.zip].filter(Boolean).join(" ")) + " · MLS# " + esc(l.mls) + " · " + esc(l.type) + '</div><div class="meta">' + esc(specs) + "</div></div>"
+      + '<div class="price">' + money(l.price) + '</div></button><div class="detail" hidden></div>';
+    li.querySelector("button").onclick = () => toggle(li, l.mls);
+    ul.append(li);
+  }
+}
+load();
+</script>
+</body>
+</html>
