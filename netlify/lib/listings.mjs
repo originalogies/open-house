@@ -93,18 +93,14 @@ export async function teamListings(week = getWeek()) {
   });
 }
 
-// Diagnostic: how many listings each filter combination returns (no key is ever included).
+// Diagnostic: tries ways of finding the two agents and shows how Repliers describes agents on a listing.
 export async function probe() {
-  const sets = [
-    "resultsPerPage=1",
-    ...AGENT_IDS.flatMap((a) => [`agent=${a}`, `agent=${a}&status=A`, `agent=${a}&status=A&type=sale`, `agent=${a}&status=A&type=sale&class=residential`]),
-    "status=A&type=sale&class=residential&resultsPerPage=1",
-  ];
+  const sets = ["agent=Troy%20George&status=A", "agent=Lucy%20Noonan&status=A", "agent=George&status=A", "agent=Noonan&status=A",
+    "search=Noonan&searchFields=agents.name&status=A", "search=Troy%20George&searchFields=agents.name&status=A"];
   return Promise.all(sets.map(async (q) => {
     try {
-      const d = await repliers(new URLSearchParams(q + (q.includes("resultsPerPage") ? "" : "&resultsPerPage=1")));
-      const f = (d.listings || [])[0];
-      return { query: q, count: d.count ?? (d.listings || []).length, firstAgent: f?.agents?.[0] ? { id: f.agents[0].agentId, name: f.agents[0].name } : null, firstStatus: f?.status, firstClass: f?.class };
+      const d = await repliers(new URLSearchParams(q + "&resultsPerPage=2"));
+      return { query: q, count: d.count, agents: (d.listings || []).slice(0, 2).map((l) => ({ mls: l.mlsNumber, agents: l.agents, office: l.office })) };
     } catch (e) { return { query: q, error: e.message }; }
   }));
 }
