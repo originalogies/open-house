@@ -31,7 +31,7 @@ The portal uses sample time blocks, a sample sign-in and sample instructions. Li
 
 ## Sign-in and access control
 
-Agents sign in with Google. The server checks every sign-in against an allowlist, so only approved people get in. Code lives in `netlify/functions/` (the `/api/*` routes) and `portal/auth.js`.
+Agents sign in with Google. The server checks every sign-in against an allowlist, so only approved people get in. Code lives in `netlify/functions/` (repo root) (the `/api/*` routes) and `portal/auth.js`.
 
 **Netlify environment variables**
 
