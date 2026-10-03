@@ -1,8 +1,8 @@
 import { json, currentUser } from "../lib/shared.mjs";
-import { troyListings, listingDetail, TROY_AGENT_ID } from "../lib/listings.mjs";
+import { troyListings, listingDetail, feedUpdatedOn, TROY_AGENT_ID } from "../lib/listings.mjs";
 
-// Admin-only test of the Repliers data pull. GET lists Troy George's active listings;
-// GET ?mls=NNN returns the full raw Repliers record for one listing.
+// Admin-only test of the Repliers data pull. GET lists Troy George's active and inactive
+// (status U) listings, so an empty "active" result can be diagnosed. GET ?mls=NNN returns the full raw Repliers record for one listing.
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
@@ -16,7 +16,7 @@ export default async (req) => {
       return json(200, { listing: await listingDetail(mls) });
     }
     const listings = await troyListings();
-    return json(200, { agent: "Troy George", agentId: TROY_AGENT_ID, count: listings.length, listings });
+    return json(200, { agent: "Troy George", agentId: TROY_AGENT_ID, count: listings.length, feedUpdatedOn: await feedUpdatedOn().catch(() => null), listings });
   } catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable", message: e.message.slice(0, 200) }); }
 };
 export const config = { path: "/api/admin/listings" };

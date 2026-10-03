@@ -138,17 +138,19 @@ export async function probe() {
   return out;
 }
 
-// Admin /listings test page: every active listing for Troy George (any class, land included), plus single-listing detail.
+// Admin /listings test page: every active or inactive listing for Troy George (any class, land included), plus single-listing detail.
 export const TROY_AGENT_ID = BOARD_AGENT_IDS[0];
 
 export async function troyListings() {
   const all = [];
   for (let page = 1; page <= 5; page++) {
-    const d = await repliers(new URLSearchParams({ status: "A", agent: TROY_AGENT_ID, resultsPerPage: "100", pageNum: String(page) }));
+    const q = new URLSearchParams({ agent: TROY_AGENT_ID, resultsPerPage: "100", pageNum: String(page) });
+    q.append("status", "A"); q.append("status", "U");
+    const d = await repliers(q);
     all.push(...(d.listings || []));
     if (page >= (d.numPages || 1)) break;
   }
-  return all.map((l) => ({ ...normalize(l), type: l.details?.propertyType || "", class: l.class || "" }));
+  return all.map((l) => ({ ...normalize(l), type: l.details?.propertyType || "", class: l.class || "", status: l.status || "", lastStatus: l.lastStatus || "" }));
 }
 
 export async function listingDetail(mls) {

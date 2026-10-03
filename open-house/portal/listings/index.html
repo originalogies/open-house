@@ -24,6 +24,9 @@ ul{list-style:none;margin:0;padding:0}
 .info{flex:1;min-width:0}
 .addr{font-weight:600}
 .meta{color:var(--muted);font-size:.88rem}
+.badge{display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:99px;background:var(--line);margin-left:6px}
+.badge.on{background:var(--accent);color:var(--accent-ink)}
+.stale{background:var(--surface);border:1px solid var(--line);border-left:4px solid #B7791F;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.92rem}
 .price{font-weight:700;white-space:nowrap}
 .detail{border-top:1px solid var(--line);padding:12px}
 pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:.8rem;margin:8px 0 0}
@@ -75,15 +78,16 @@ async function load() {
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { app.innerHTML = '<a href="/">← Back</a><h1>Listings test</h1><p class="msg err">Repliers error: ' + esc(d.message || d.error || r.status) + "</p>"; return; }
   app.innerHTML = '<a href="/">← Back to open house requests</a><h1>Listings test</h1>'
-    + '<p class="lead">' + d.count + " active listing" + (d.count === 1 ? "" : "s") + " for " + esc(d.agent) + " (board agent ID " + esc(d.agentId) + "), pulled live from Repliers. Click a listing to see its raw data.</p>"
+    + '<p class="lead">' + d.count + " listing" + (d.count === 1 ? "" : "s") + " (active and inactive) for " + esc(d.agent) + " (board agent ID " + esc(d.agentId) + "), pulled live from Repliers. Click a listing to see its raw data.</p>"
+    + (d.feedUpdatedOn ? '<div class="stale">Repliers feed last updated <b>' + esc(d.feedUpdatedOn) + "</b> (" + Math.floor((Date.now() - new Date(d.feedUpdatedOn + "T12:00:00Z")) / 86400000) + " days ago).</div>" : "")
     + '<ul id="list"></ul>';
   const ul = document.getElementById("list");
-  if (!d.listings.length) ul.innerHTML = '<li class="meta">No active listings returned.</li>';
+  if (!d.listings.length) ul.innerHTML = '<li class="meta">No listings returned.</li>';
   for (const l of d.listings) {
     const li = document.createElement("li"); li.className = "item";
     const specs = [l.bd && l.bd + " bd", l.ba && l.ba + " ba", l.sf && l.sf.toLocaleString("en-US") + " sf", l.dom + " DOM"].filter(Boolean).join(" · ");
     li.innerHTML = '<button type="button" aria-expanded="false"><div class="thumb" style="background-image:url(\'' + esc(imgUrl(l.img)) + '\')"></div>'
-      + '<div class="info"><div class="addr">' + esc(l.addr || "(no address)") + '</div><div class="meta">' + esc([l.city, l.zip].filter(Boolean).join(" ")) + " · MLS# " + esc(l.mls) + " · " + esc(l.type) + '</div><div class="meta">' + esc(specs) + "</div></div>"
+      + '<div class="info"><div class="addr">' + esc(l.addr || "(no address)") + '<span class="badge' + (l.status === "A" ? " on" : "") + '">' + esc(l.status === "A" ? "Active" : l.status === "U" ? "Inactive" : l.status) + (l.lastStatus ? " · " + esc(l.lastStatus) : "") + "</span></div><div class="meta">' + esc([l.city, l.zip].filter(Boolean).join(" ")) + " · MLS# " + esc(l.mls) + " · " + esc(l.type) + '</div><div class="meta">' + esc(specs) + "</div></div>"
       + '<div class="price">' + money(l.price) + '</div></button><div class="detail" hidden></div>';
     li.querySelector("button").onclick = () => toggle(li, l.mls);
     ul.append(li);
