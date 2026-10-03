@@ -56,3 +56,5 @@ Nothing is allowed by default: with no admins and no allowed entries, no one can
 | `TEAM_EMAILS` | Optional. Extra people who may approve. Admins (`ADMIN_EMAILS`) can always approve |
 
 The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/inventory/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.
+
+See `../docs/PROJECT_SUMMARY.md` for the full project summary, architecture, configuration and open issues.
