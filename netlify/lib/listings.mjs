@@ -1,5 +1,4 @@
 import { getStore } from "@netlify/blobs";
-import { getWeek } from "./week.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
@@ -122,7 +121,7 @@ async function catalog(week) {
 }
 
 // Listings the team has offered for the current weekend. Never includes access details.
-export async function offeredListings(week = getWeek()) {
+export async function offeredListings(week) {
   const { list } = await catalog(week);
   const info = await allInfo(list.map((x) => x.n.mls));
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
@@ -130,7 +129,7 @@ export async function offeredListings(week = getWeek()) {
     .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
 }
 
-export async function teamListings(week = getWeek()) {
+export async function teamListings(week) {
   const { list, warning } = await catalog(week);
   const info = await allInfo(list.map((x) => x.n.mls));
   return {

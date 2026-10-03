@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Manage access | Open House Requests</title>
+<title>Admin settings | Open House Requests</title>
 <style>
 :root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--danger:#A12B2B}
 @media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--danger:#E58A8A}}
@@ -21,6 +21,10 @@ form{display:flex;gap:8px;margin-bottom:12px}
 input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
 button{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer}
 button.link{background:none;color:var(--danger);padding:4px 8px;font-weight:500}
+label.check{display:flex;gap:8px;align-items:center;margin:0 0 12px}
+.cut{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}.cut label{display:flex;gap:8px;align-items:center}
+select{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.cut.off{opacity:.45;pointer-events:none}
 ul{list-style:none;margin:0;padding:0}
 li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);word-break:break-all}
 li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
@@ -32,9 +36,21 @@ li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
 <body>
 <main>
   <a href="/">← Back to open house requests</a>
-  <h1>Manage access</h1>
+  <h1>Admin settings</h1>
   <p class="lead">Only people on this list can sign in with Google. A person can sign in if their email address is listed, or if their email domain is listed. Changes apply right away.</p>
   <div id="status" role="status"></div>
+
+  <section>
+    <h2>Request cutoff</h2>
+    <p class="hint">Stop accepting requests at the same day and time every week (Central time). When it is off, requests stay open until the end of the weekend. Once the cutoff passes, agents see the next weekend.</p>
+    <label class="check"><input type="checkbox" id="cEnabled"> Use a weekly cutoff</label>
+    <div class="cut" id="cFields">
+      <label>Day <select id="cDay"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label>
+      <label>Time <input id="cTime" type="time" step="900" style="flex:none"></label>
+    </div>
+    <p class="hint" id="cSummary" aria-live="polite"></p>
+    <button id="cSave" type="button">Save cutoff</button>
+  </section>
 
   <section>
     <h2>Allowed email domains</h2>
@@ -97,6 +113,22 @@ async function save(next) {
 
 $("fDomain").onsubmit = (e) => { e.preventDefault(); const v = $("iDomain").value.trim().toLowerCase().replace(/^@/, ""); if (!v) return; $("iDomain").value = ""; save({ emails: state.emails, domains: [...new Set([...state.domains, v])] }); };
 $("fEmail").onsubmit = (e) => { e.preventDefault(); const v = $("iEmail").value.trim().toLowerCase(); if (!v) return; $("iEmail").value = ""; save({ emails: [...new Set([...state.emails, v])], domains: state.domains }); };
+
+const cutoffUI = (d) => {
+  $("cEnabled").checked = d.cutoff.enabled; $("cDay").value = String(d.cutoff.day); $("cTime").value = d.cutoff.time;
+  $("cFields").classList.toggle("off", !d.cutoff.enabled);
+  $("cSummary").textContent = "Requests for the weekend of " + d.weekend + " close " + d.closesLabel + ".";
+};
+$("cEnabled").onchange = () => $("cFields").classList.toggle("off", !$("cEnabled").checked);
+$("cSave").onclick = async () => {
+  status("Saving…");
+  const body = { enabled: $("cEnabled").checked, day: Number($("cDay").value), time: $("cTime").value };
+  const r = await fetch("/api/admin/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : {};
+  if (!r || !r.ok) return status(d.message || "Could not save the cutoff. Try again.", true);
+  cutoffUI(d); status("Cutoff saved.");
+};
+fetch("/api/admin/settings").then((r) => r.ok ? r.json() : null).then((d) => d && cutoffUI(d)).catch(() => {});
 
 (async () => {
   const r = await fetch("/api/admin/access").catch(() => null);

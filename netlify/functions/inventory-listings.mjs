@@ -1,6 +1,6 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { teamListings, getInfo, saveInfo, rawSample, probe } from "../lib/listings.mjs";
-import { getWeek } from "../lib/week.mjs";
+import { currentWeek } from "../lib/settings.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
 // PUT { mls, offered, days, instr[], access } saves one listing. GET ?raw=1 shows one raw Repliers
@@ -9,7 +9,7 @@ export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
   if (!user.team) return json(403, { error: "team_only" });
-  const week = getWeek();
+  const week = await currentWeek();
 
   if (req.method === "GET") {
     try {

@@ -74,3 +74,26 @@ test("Repliers listing mapping", () => {
   const oh = openHouseBlocks({ openHouse: [{ startTime: "2026-10-10 10:00:00", endTime: "2026-10-10 12:30:00" }, { startTime: "2026-10-03 10:00:00", endTime: "2026-10-03 12:00:00" }] }, w);
   assert.deepEqual(oh, [{ day: "sat", from: 10, to: 13 }]);
 });
+
+import { cutoffInfo, normalizeCutoff } from "../netlify/lib/week.mjs";
+
+test("configurable cutoff", () => {
+  const wed = { enabled: true, day: 3, time: "12:30" };
+  const w = getWeek(new Date("2026-10-05T17:00:00Z"), wed);                 // Monday: still before Wed noon
+  assert.equal(w.satIso, "2026-10-10");
+  assert.equal(w.closesLabel, "Wednesday, Oct 7 at 12:30 PM");
+});
+
+test("cutoff rolls the weekend, and turning it off keeps the weekend open", () => {
+  const wed = { enabled: true, day: 3, time: "12:30" };
+  assert.equal(getWeek(new Date("2026-10-07T18:00:00Z"), wed).satIso, "2026-10-17");
+  const off = { enabled: false, day: 5, time: "17:00" };
+  assert.equal(getWeek(new Date("2026-10-09T23:00:00Z"), off).satIso, "2026-10-10"); // Friday evening, still this weekend
+  assert.equal(getWeek(new Date("2026-10-10T20:00:00Z"), off).satIso, "2026-10-10"); // Saturday, weekend in progress
+  assert.equal(getWeek(new Date("2026-10-11T20:00:00Z"), off).satIso, "2026-10-10"); // Sunday afternoon
+  assert.equal(getWeek(new Date("2026-10-12T01:00:00Z"), off).satIso, "2026-10-17"); // Sunday 8 PM CDT, over
+  assert.equal(cutoffInfo("2026-10-10", off).label, "Sunday, Oct 11 at 7:00 PM");
+  assert.equal(cutoffInfo("2026-10-10", { enabled: true, day: 0, time: "08:00" }).label, "Sunday, Oct 11 at 8:00 AM");
+  assert.equal(normalizeCutoff({ day: 9, time: "17:00" }), null);
+  assert.equal(normalizeCutoff({ day: 5, time: "5pm" }), null);
+});

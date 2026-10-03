@@ -1,12 +1,12 @@
 import { json, currentUser } from "../lib/shared.mjs";
 import { offeredListings, publicListing } from "../lib/listings.mjs";
 import { listRequests } from "../lib/requests.mjs";
-import { getWeek } from "../lib/week.mjs";
+import { currentWeek } from "../lib/settings.mjs";
 
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
-  const week = getWeek();
+  const week = await currentWeek();
   let offered;
   try { offered = await offeredListings(week); }
   catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable" }); }

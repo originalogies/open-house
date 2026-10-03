@@ -3,14 +3,14 @@ import { offeredListings, snapshot } from "../lib/listings.mjs";
 import { listRequests, saveRequest, newId, overlaps } from "../lib/requests.mjs";
 import { sendRequestReceived, sendRequestSent } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
-import { getWeek } from "../lib/week.mjs";
+import { currentWeek } from "../lib/settings.mjs";
 
 export default async (req) => {
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
 
-  const week = getWeek();
+  const week = await currentWeek();
   const b = await req.json().catch(() => null);
   let offered;
   try { offered = await offeredListings(week); } catch { return json(502, { error: "listings_unavailable", message: "Listings are unavailable right now. Try again shortly." }); }
@@ -35,7 +35,7 @@ export default async (req) => {
   if (all.some((r) => r.status === "approved" && overlaps(r, candidate))) return json(409, { error: "taken", message: "Those hours were just taken. Pick another time." });
 
   const record = { id: newId(), ...candidate, listing: snapshot(listing), notes, phone, agent: { email: user.email, name: user.name },
-    status: "pending", createdAt: Date.now(), closesAt: week.closes, reminderSent: false };
+    status: "pending", createdAt: Date.now(), reminderSent: false };
   await saveRequest(record);
 
   const others = all.filter((r) => r.mls === listing.mls && r.status === "pending" && r.iso === iso)
