@@ -1,4 +1,4 @@
-import { json, clearCookie, sameOrigin } from "./_lib.mjs";
+import { json, clearCookie, sameOrigin } from "../lib/shared.mjs";
 
 export default async (req) => {
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });

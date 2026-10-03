@@ -1,4 +1,4 @@
-import { json, getAccess, isAllowed, makeSession, sessionCookie, sameOrigin } from "./_lib.mjs";
+import { json, getAccess, isAllowed, makeSession, sessionCookie, sameOrigin } from "../lib/shared.mjs";
 
 const ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
 

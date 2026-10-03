@@ -1,4 +1,4 @@
-import { json, currentUser } from "./_lib.mjs";
+import { json, currentUser } from "../lib/shared.mjs";
 
 export default async (req) => {
   const user = await currentUser(req);

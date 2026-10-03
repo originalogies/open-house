@@ -1,6 +1,6 @@
 import {
   json, currentUser, getAccess, saveAccess, adminEmails, normalizeEmail, normalizeDomain, sameOrigin,
-} from "./_lib.mjs";
+} from "../lib/shared.mjs";
 
 export default async (req) => {
   const user = await currentUser(req);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAllowed, normalizeEmail, normalizeDomain, makeSession, readSession } from "./_lib.mjs";
+import { isAllowed, normalizeEmail, normalizeDomain, makeSession, readSession } from "../netlify/lib/shared.mjs";
 
 process.env.ADMIN_EMAILS = "boss@synergyrealtors.com";
 process.env.SESSION_SECRET = "x".repeat(40);
