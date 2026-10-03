@@ -84,6 +84,7 @@ async function load() {
   if (!r.ok) return (app.innerHTML = `<a href="/">← Back</a><h1>Listings unavailable</h1><p class="msg err">${esc(d.message || "Could not load listings from Repliers.")}</p>`);
   app.innerHTML = `<a href="/">← Back to open house requests</a><h1>Manage open houses</h1>
     <p class="lead">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Turn on the homes agents can request, and add instructions and access details. Offers reset each week; instructions are kept.</p>
+    ${d.warning ? `<p class="msg err">Repliers problem: ${esc(d.warning)}</p>` : ""}
     <div id="list"></div>
     <details><summary>Check Repliers data</summary><p class="note">Shows one raw listing so field mapping can be verified.</p><button id="raw">Show sample</button><pre id="rawOut" hidden></pre></details>`;
   const list = document.getElementById("list");

@@ -105,25 +105,37 @@ export async function allInfo(mlsList) {
   return Object.fromEntries(entries);
 }
 
+// Homes that always appear, even if Repliers doesn't return them. Live Repliers data wins when present.
+const MANUAL = [
+  { mls: "21297798", addr: "2006 Nighthawk Court", city: "Westlake", zip: "76262", lat: 32.978088, lng: -97.18720096, price: 5950000, dom: 50, bd: 4, ba: 6, sf: 6331, img: "ntreismls/IMG-21297798_0.jpg" },
+  { mls: "21372196", addr: "6900 Rockingham Court", city: "Colleyville", zip: "76034", lat: 32.908375, lng: -97.157547, price: 4350000, dom: 13, bd: 6, ba: 9, sf: 10026, img: "ntreismls/IMG-21372196_4446441738281566696.jpg" },
+  { mls: "21332907", addr: "69 Cortes Drive", city: "Westlake", zip: "76262", lat: 32.983337, lng: -97.18004802, price: 1297000, dom: 32, bd: 3, ba: 4, sf: 2038, img: "ntreismls/IMG-21332907_4446676996495488826.jpg" },
+  { mls: "21346883", addr: "441 Watermere Drive", city: "Southlake", zip: "76092", lat: 32.929991, lng: -97.193693, price: 629000, dom: 28, bd: 2, ba: 3, sf: 2109, img: "ntreismls/IMG-21346883_4444455829925220134.jpg" },
+];
+
+async function catalog(week) {
+  let raw = [], warning = null;
+  try { raw = await fetchRaw(); } catch (e) { console.error(e.message); warning = e.message.slice(0, 300); }
+  const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week) }));
+  for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [] });
+  return { list, warning };
+}
+
 // Listings the team has offered for the current weekend. Never includes access details.
 export async function offeredListings(week = getWeek()) {
-  const raw = await fetchRaw();
-  const info = await allInfo(raw.map((l) => String(l.mlsNumber)));
-  return raw
-    .filter((l) => info[String(l.mlsNumber)].offeredWeek === week.satIso)
-    .map((l) => {
-      const n = normalize(l), i = info[n.mls];
-      return { ...n, days: i.days, instr: i.instr, external: openHouseBlocks(l, week) };
-    });
+  const { list } = await catalog(week);
+  const info = await allInfo(list.map((x) => x.n.mls));
+  return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
+    .map((x) => ({ ...x.n, days: info[x.n.mls].days, instr: info[x.n.mls].instr, external: x.openHouses }));
 }
 
 export async function teamListings(week = getWeek()) {
-  const raw = await fetchRaw();
-  const info = await allInfo(raw.map((l) => String(l.mlsNumber)));
-  return raw.map((l) => {
-    const n = normalize(l), i = info[n.mls];
-    return { ...n, offered: i.offeredWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: openHouseBlocks(l, week) };
-  });
+  const { list, warning } = await catalog(week);
+  const info = await allInfo(list.map((x) => x.n.mls));
+  return {
+    warning,
+    listings: list.map((x) => { const i = info[x.n.mls]; return { ...x.n, offered: i.offeredWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: x.openHouses }; }),
+  };
 }
 
 // Diagnostic: shows what /members returns and which agent ids were resolved.
