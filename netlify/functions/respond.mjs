@@ -1,5 +1,5 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
-import { WEEK, findListing } from "../lib/listings.mjs";
+import { dayMeta } from "../lib/week.mjs";
 import { getRequest, saveRequest, listRequests, overlaps, isTeam } from "../lib/requests.mjs";
 import { sendConfirmed, sendDeclined } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
@@ -14,10 +14,10 @@ export default async (req) => {
   if (req.method === "GET") {
     const r = await getRequest(new URL(req.url).searchParams.get("id") || "");
     if (!r) return json(404, { error: "not_found" });
-    const l = findListing(r.mls);
+    const l = r.listing, d = dayMeta(r.iso);
     return json(200, {
       status: r.status, address: `${l.addr}, ${l.city}, TX ${l.zip}`, mls: r.mls,
-      when: `${WEEK.days[r.day].label}, ${WEEK.days[r.day].date}, ${fmtRange(r.from, r.to)}`,
+      when: `${d.label}, ${d.date}, ${fmtRange(r.from, r.to)}`,
       agent: `${r.agent.name} (${r.agent.email})`, phone: r.phone, notes: r.notes, decidedBy: r.decidedByName || null,
     });
   }

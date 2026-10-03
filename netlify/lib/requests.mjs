@@ -1,13 +1,11 @@
 import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import { adminEmails, parseList } from "./shared.mjs";
-import { WEEK } from "./listings.mjs";
 
 const store = () => getStore("open-house-requests");
 
 export const newId = () => crypto.randomBytes(16).toString("hex");
-export const overlaps = (a, b) => a.mls === b.mls && a.day === b.day && a.from < b.to && b.from < a.to;
-export const closed = (now = Date.now()) => now > new Date(WEEK.closes).getTime();
+export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from < b.to && b.from < a.to;
 
 // Team members who may approve: admins plus optional TEAM_EMAILS.
 export const isTeam = (email) => [...adminEmails(), ...parseList(process.env.TEAM_EMAILS)].includes(String(email).toLowerCase());

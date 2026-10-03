@@ -51,7 +51,8 @@ Nothing is allowed by default: with no admins and no allowed entries, no one can
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Resend API key (sends from openhouse@synergyrealtors.com) |
+| `REPLIERS_API_KEY` | Repliers API key (read-only). Listings come from agents 492946 (Troy George) and 560617 (Lucy Noonan): active, residential, for sale, land excluded |
 | `TEAM_EMAIL` | Optional. Team inbox(es), comma-separated. Defaults to team@georgeandnoonan.com |
 | `TEAM_EMAILS` | Optional. Extra people who may approve. Admins (`ADMIN_EMAILS`) can always approve |
 
-Listings and the weekend dates are sample data in `netlify/lib/listings.mjs` (access codes live only there). After editing a template in `emails/`, run `npm run build:templates` (Netlify also runs it on each build).
+The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/team/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.

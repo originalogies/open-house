@@ -202,7 +202,7 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
 
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers. Example page: times and claimed slots are sample data.</footer>
+  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
 
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
@@ -307,7 +307,15 @@ async function loadListings(){
 }
 document.addEventListener("signedin", async () => {
   const d = await loadListings();
-  if(d){ renderGrid(); if(d.closed) document.querySelector(".deadline").textContent = "Requests for this weekend are closed."; }
+  if(!d) return;
+  const part = (iso,o) => new Date(iso+"T12:00:00Z").toLocaleDateString("en-US",Object.assign({timeZone:"UTC"},o));
+  document.querySelector(".cal").innerHTML = ["sat","sun"].map(k => {
+    const w = d.week[k];
+    return '<div><b>'+part(w.iso,{day:"numeric"})+'</b><span>'+part(w.iso,{weekday:"short"})+', '+part(w.iso,{month:"short"})+'</span></div>';
+  }).join("");
+  document.querySelector(".deadline").innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
+  renderGrid();
+  if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
 });
 
 // Sheet

@@ -98,7 +98,8 @@ export async function currentUser(req) {
   if (!s) return null;
   const access = await getAccess();
   if (!isAllowed(s.email, access)) return null;
-  return { email: s.email, name: s.name, admin: adminEmails().includes(s.email) };
+  const admin = adminEmails().includes(s.email);
+  return { email: s.email, name: s.name, admin, team: admin || parseList(process.env.TEAM_EMAILS).includes(s.email) };
 }
 
 // Reject cross-site writes.
