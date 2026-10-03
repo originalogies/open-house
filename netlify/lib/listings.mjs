@@ -93,15 +93,15 @@ export async function teamListings(week = getWeek()) {
   });
 }
 
-// Diagnostic: tries ways of finding the two agents and shows how Repliers describes agents on a listing.
+// Diagnostic: looks up known MLS numbers (any status) to reveal how Repliers identifies their agents.
 export async function probe() {
-  const sets = ["agent=Troy%20George&status=A", "agent=Lucy%20Noonan&status=A", "agent=George&status=A", "agent=Noonan&status=A",
-    "search=Noonan&searchFields=agents.name&status=A", "search=Troy%20George&searchFields=agents.name&status=A"];
-  return Promise.all(sets.map(async (q) => {
+  const mls = ["21297798", "21372196", "21332907", "21346883"];
+  return Promise.all(mls.map(async (m) => {
     try {
-      const d = await repliers(new URLSearchParams(q + "&resultsPerPage=2"));
-      return { query: q, count: d.count, agents: (d.listings || []).slice(0, 2).map((l) => ({ mls: l.mlsNumber, agents: l.agents, office: l.office })) };
-    } catch (e) { return { query: q, error: e.message }; }
+      const d = await repliers(new URLSearchParams({ mlsNumber: m }));
+      const l = (d.listings || [])[0];
+      return { mls: m, count: d.count, found: !!l, status: l?.status, lastStatus: l?.lastStatus, class: l?.class, board: l?.boardId, agents: l?.agents, office: l?.office, openHouse: l?.openHouse };
+    } catch (e) { return { mls: m, error: e.message }; }
   }));
 }
 
