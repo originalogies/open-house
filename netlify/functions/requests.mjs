@@ -1,7 +1,7 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { offeredListings, snapshot } from "../lib/listings.mjs";
 import { listRequests, saveRequest, newId, overlaps } from "../lib/requests.mjs";
-import { sendRequestReceived, sendRequestSent } from "../lib/email.mjs";
+import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
@@ -35,7 +35,7 @@ export default async (req) => {
   if (all.some((r) => r.status === "approved" && overlaps(r, candidate))) return json(409, { error: "taken", message: "Those hours were just taken. Pick another time." });
 
   const record = { id: newId(), ...candidate, listing: snapshot(listing), notes, phone, agent: { email: user.email, name: user.name },
-    status: "pending", createdAt: Date.now(), reminderSent: false };
+    site: siteFor(new URL(req.url).origin), status: "pending", createdAt: Date.now(), reminderSent: false };
   await saveRequest(record);
 
   const others = all.filter((r) => r.mls === listing.mls && r.status === "pending" && r.iso === iso)

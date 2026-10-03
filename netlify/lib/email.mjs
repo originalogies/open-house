@@ -5,11 +5,16 @@ import { dayMeta } from "./week.mjs";
 import { fmtRange, fmtArrival, fmtReceived, chicagoToUtc } from "./time.mjs";
 
 export const SITE = "https://open-house.synergyrealtors.com";
+// Links in emails point back to the site the request was made on, so local tests link to localhost.
+// Only the production site and localhost are trusted.
+export const siteFor = (origin) => (origin === SITE || /^http:\/\/localhost:\d+$/.test(origin) ? origin : SITE);
 const FROM = "George & Noonan Open Houses <openhouse@synergyrealtors.com>";
 export const TEAM_TO = () => (process.env.TEAM_EMAIL || "team@georgeandnoonan.com").split(",").map((s) => s.trim());
 
 const money = (n) => "$" + n.toLocaleString("en-US");
 const compile = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, Handlebars.compile(v)]));
+
+const site = (req) => req.site || SITE;
 
 export function fields(req, extra = {}) {
   const l = req.listing;
@@ -18,14 +23,14 @@ export function fields(req, extra = {}) {
     address: l.addr, city: l.city, zip: l.zip, mls_number: l.mls, list_price: money(l.price),
     photo_url: `https://cdn.repliers.io/${l.img}?class=medium`,
     map_url: `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`,
-    listing_url: SITE,
+    listing_url: site(req),
     request_id: req.id, day_name: d.label, date: d.date, time_range: fmtRange(req.from, req.to),
     received_at: fmtReceived(req.createdAt), agent_notes: req.notes || "",
     relative_day: "tomorrow", arrival_time: fmtArrival(req.from),
     agent_name: req.agent.name, agent_first_name: (req.agent.name || "").split(" ")[0] || req.agent.name,
     agent_phone: req.phone || "", agent_email: req.agent.email,
     approver_name: req.decidedByName || "", approved_at: req.decidedAt ? fmtReceived(req.decidedAt) : "",
-    ics_url: `${SITE}/api/ics?id=${req.id}`,
+    ics_url: `${site(req)}/api/ics?id=${req.id}`,
     instructions: [],
     ...extra,
   };
@@ -65,8 +70,8 @@ export const sendRequestReceived = (req, others) =>
     subject: `Open house request: ${req.listing.addr}, ${dayMeta(req.iso).label} ${dayMeta(req.iso).date}, ${fmtRange(req.from, req.to)}`,
     html: compile.requestReceived(fields(req, {
       other_requests: others, // plain text list
-      approve_url: `${SITE}/respond/?id=${req.id}&action=approve`,
-      decline_url: `${SITE}/respond/?id=${req.id}&action=decline`,
+      approve_url: `${site(req)}/respond/?id=${req.id}&action=approve`,
+      decline_url: `${site(req)}/respond/?id=${req.id}&action=decline`,
     })),
   });
 

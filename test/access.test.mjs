@@ -109,3 +109,12 @@ test("session cookie is Secure on https only", () => {
   assert.match(clearCookie(https), /Secure/);
   assert.doesNotMatch(clearCookie(local), /Secure/);
 });
+
+import { siteFor, SITE } from "../netlify/lib/email.mjs";
+
+test("email links only point at trusted sites", () => {
+  assert.equal(siteFor("http://localhost:8888"), "http://localhost:8888");
+  assert.equal(siteFor(SITE), SITE);
+  assert.equal(siteFor("https://evil.example.com"), SITE);
+  assert.equal(siteFor("http://localhost.evil.com"), SITE);
+});
