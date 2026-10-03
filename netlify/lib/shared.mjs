@@ -87,9 +87,11 @@ export function readSession(req) {
   }
 }
 
-export const sessionCookie = (value) =>
-  `${COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_SECONDS}`;
-export const clearCookie = () => `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+// "Secure" is dropped on plain http://localhost so Safari accepts the cookie during local development.
+const secureFlag = (req) => (new URL(req.url).protocol === "https:" ? "; Secure" : "");
+export const sessionCookie = (value, req) =>
+  `${COOKIE}=${value}; Path=/; HttpOnly${secureFlag(req)}; SameSite=Lax; Max-Age=${SESSION_SECONDS}`;
+export const clearCookie = (req) => `${COOKIE}=; Path=/; HttpOnly${secureFlag(req)}; SameSite=Lax; Max-Age=0`;
 
 // Current signed-in user, re-checked against the live allowlist on every call so
 // removing someone takes effect immediately.

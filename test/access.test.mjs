@@ -97,3 +97,15 @@ test("cutoff rolls the weekend, and turning it off keeps the weekend open", () =
   assert.equal(normalizeCutoff({ day: 9, time: "17:00" }), null);
   assert.equal(normalizeCutoff({ day: 5, time: "5pm" }), null);
 });
+
+import { sessionCookie, clearCookie } from "../netlify/lib/shared.mjs";
+
+test("session cookie is Secure on https only", () => {
+  const https = new Request("https://open-house.synergyrealtors.com/api/auth/google");
+  const local = new Request("http://localhost:8888/api/auth/google");
+  assert.match(sessionCookie("v", https), /; Secure;/);
+  assert.doesNotMatch(sessionCookie("v", local), /Secure/);
+  assert.match(sessionCookie("v", local), /HttpOnly; SameSite=Lax/);
+  assert.match(clearCookie(https), /Secure/);
+  assert.doesNotMatch(clearCookie(local), /Secure/);
+});

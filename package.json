@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "node --test test/access.test.mjs",
-    "build:templates": "node scripts/build-templates.mjs"
+    "build:templates": "node scripts/build-templates.mjs",
+    "dev": "npx netlify-cli dev"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",

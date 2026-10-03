@@ -58,3 +58,17 @@ Nothing is allowed by default: with no admins and no allowed entries, no one can
 The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/inventory/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.
 
 See `../docs/PROJECT_SUMMARY.md` for the full project summary, architecture, configuration and open issues.
+
+## Running locally
+
+```bash
+cp .env.example .env     # then fill in the values (run from the repo root)
+npm install
+npm run dev              # http://localhost:8888
+```
+
+- Use `http://localhost:8888`, not a plain file server: the `/api` functions and sign-in only run under Netlify's dev tool.
+- Add `http://localhost:8888` as an Authorized JavaScript origin on the Google OAuth client.
+- Set `TEAM_EMAIL` to your own address. With a real `RESEND_API_KEY`, local requests send real emails.
+- Local data (requests, offered listings, settings) is stored in a local Netlify Blobs sandbox and never touches production.
+- `.env` is git-ignored. Secret variables in Netlify are not available locally, which is why the local values live in `.env`.

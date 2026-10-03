@@ -23,6 +23,6 @@ export default async (req) => {
   if (!isAllowed(email, await getAccess())) return json(403, { error: "not_allowed", email });
 
   const name = t.name || email;
-  return json(200, { email, name }, { "set-cookie": sessionCookie(makeSession({ email, name })) });
+  return json(200, { email, name }, { "set-cookie": sessionCookie(makeSession({ email, name }), req) });
 };
 export const config = { path: "/api/auth/google" };
