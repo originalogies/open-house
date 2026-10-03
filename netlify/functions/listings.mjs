@@ -23,6 +23,6 @@ export default async (req) => {
     ],
     mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status })),
   }));
-  return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, closed: false, listings });
+  return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, listings });
 };
 export const config = { path: "/api/listings" };

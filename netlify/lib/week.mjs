@@ -42,6 +42,7 @@ export function getWeek(now = new Date(), cutoff = DEFAULT_CUTOFF) {
     days: { sat: dayMeta(sat), sun: dayMeta(addDays(sat, 1)) },
     satIso: sat,
     closes: c.ms,
+    cutoffEnabled: cutoff.enabled,
     closesLabel: c.label,
     firstHour: FIRST_HOUR,
     lastHour: LAST_HOUR,

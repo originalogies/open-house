@@ -37,8 +37,8 @@ button{font:inherit;color:inherit}
 
 .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
 header.top{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
-.brand{font-family:var(--serif);font-size:1.25rem;font-weight:600;letter-spacing:.01em}
-.brand .logo{display:block;width:260px;max-width:100%;height:auto;margin-bottom:6px}
+.brand{display:flex;flex-direction:column;align-items:center;width:260px;max-width:100%}
+.brand .logo{display:block;width:100%;height:auto;margin-bottom:8px}
 .brand .logo-dark{display:none}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .brand .logo-light{display:none}
@@ -46,18 +46,19 @@ header.top{display:flex;justify-content:space-between;align-items:center;padding
 }
 :root[data-theme="dark"] .brand .logo-light{display:none}
 :root[data-theme="dark"] .brand .logo-dark{display:block}
-.brand small{display:block;font-family:var(--sans);font-size:.78rem;font-weight:500;color:var(--muted);letter-spacing:0}
+.brand .portal-label{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.34em;margin-right:-.34em;color:var(--ink)}
 .who{font-size:.85rem;color:var(--muted);text-align:right}
 .who strong{color:var(--ink);font-weight:600}
 
-.intro{padding:40px 0 28px;display:grid;grid-template-columns:1.4fr 1fr;gap:32px;align-items:end}
-.intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(2rem,4.6vw,3.4rem);line-height:1.04;margin:0;letter-spacing:-.01em}
-.intro p{margin:0;color:var(--muted);max-width:42ch}
-.cal{display:flex;gap:10px;margin-top:14px}
+.intro{padding:36px 0 28px}
+.intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.5rem);line-height:1.12;margin:0 0 8px;letter-spacing:-.01em}
+.intro .sub{margin:0;color:var(--muted);font-size:1.05rem;max-width:62ch}
+.when{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin-top:18px}
+.cal{display:flex;gap:10px}
 .cal div{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;text-align:center;min-width:76px}
 .cal b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:500;line-height:1}
 .cal span{font-size:.78rem;color:var(--muted)}
-.deadline{margin-top:14px;font-size:.88rem;color:var(--ink)}
+.deadline{font-size:.9rem;color:var(--ink)}
 .deadline em{font-style:normal;color:var(--brass);font-weight:600}
 
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;padding-bottom:64px}
@@ -152,7 +153,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
 @media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
-  .intro{grid-template-columns:1fr;gap:18px;padding-top:28px}
+  .intro{padding-top:24px}
   .grid{grid-template-columns:1fr}
   .card .addr,.card .price{font-size:1.3rem}
   .sheet{top:auto;bottom:0;height:92%;width:100%;border-radius:18px 18px 0 0;transform:translateY(100%)}
@@ -184,21 +185,16 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
 <body class="signed-out">
 <div class="wrap">
   <header class="top">
-    <div class="brand"><img class="logo logo-light" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo logo-dark" src="gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><small>Open house requests for George &amp; Noonan listings</small></div>
+    <div class="brand"><img class="logo logo-light" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo logo-dark" src="gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><div class="portal-label">Open House Portal</div></div>
     <div class="who" id="who"></div>
   </header>
 
   <section class="intro">
-    <div>
-      <h1>Host one of our homes this weekend</h1>
-    </div>
-    <div>
-      <p>Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
-      <div class="cal" aria-label="Weekend dates">
-        <div><b>10</b><span>Sat, Oct</span></div>
-        <div><b>11</b><span>Sun, Oct</span></div>
-      </div>
-      <div class="deadline">Requests close <em>Friday, Oct 9 at 5:00 PM</em>.</div>
+    <h1>Host one of our homes this weekend</h1>
+    <p class="sub">Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+    <div class="when">
+      <div class="cal" aria-label="Weekend dates"></div>
+      <div class="deadline" hidden></div>
     </div>
   </section>
 
@@ -315,7 +311,9 @@ document.addEventListener("signedin", async () => {
     const w = d.week[k];
     return '<div><b>'+part(w.iso,{day:"numeric"})+'</b><span>'+part(w.iso,{weekday:"short"})+', '+part(w.iso,{month:"short"})+'</span></div>';
   }).join("");
-  document.querySelector(".deadline").innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
+  const dl = document.querySelector(".deadline");
+  dl.hidden = !d.cutoffEnabled; // no cutoff, no deadline message
+  if(d.cutoffEnabled) dl.innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
   renderGrid();
   if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
 });
