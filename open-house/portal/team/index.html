@@ -91,7 +91,7 @@ async function load() {
   d.listings.forEach((l) => list.append(card(l)));
   document.getElementById("raw").onclick = async () => {
     const j = await fetch("/api/team/listings?raw=1").then((x) => x.json()).catch(() => ({}));
-    const o = document.getElementById("rawOut"); o.hidden = false; o.textContent = JSON.stringify(j.sample ?? j, null, 2);
+    const o = document.getElementById("rawOut"); o.hidden = false; o.textContent = JSON.stringify(j, null, 2);
   };
 }
 load();

@@ -93,6 +93,22 @@ export async function teamListings(week = getWeek()) {
   });
 }
 
+// Diagnostic: how many listings each filter combination returns (no key is ever included).
+export async function probe() {
+  const sets = [
+    "resultsPerPage=1",
+    ...AGENT_IDS.flatMap((a) => [`agent=${a}`, `agent=${a}&status=A`, `agent=${a}&status=A&type=sale`, `agent=${a}&status=A&type=sale&class=residential`]),
+    "status=A&type=sale&class=residential&resultsPerPage=1",
+  ];
+  return Promise.all(sets.map(async (q) => {
+    try {
+      const d = await repliers(new URLSearchParams(q + (q.includes("resultsPerPage") ? "" : "&resultsPerPage=1")));
+      const f = (d.listings || [])[0];
+      return { query: q, count: d.count ?? (d.listings || []).length, firstAgent: f?.agents?.[0] ? { id: f.agents[0].agentId, name: f.agents[0].name } : null, firstStatus: f?.status, firstClass: f?.class };
+    } catch (e) { return { query: q, error: e.message }; }
+  }));
+}
+
 export const rawSample = async () => {
   const [first] = await fetchRaw();
   if (!first) return null;
