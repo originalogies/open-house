@@ -1,43 +1,11 @@
 import { getStore } from "@netlify/blobs";
+import { chicagoNow } from "./time.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
-// MLS board agent IDs (NTREIS) and a name to search by. Repliers filters listings by its own
-// internal agentId, so we look that up from /members using the board ID.
-export const AGENTS = [
-  { boardAgentId: "492946", name: "Troy George", last: "George" },
-  { boardAgentId: "560617", name: "Lucy Noonan", last: "Noonan" },
-];
-let resolved = null;
-
-async function repliersGet(path, params) {
-  const key = process.env.REPLIERS_API_KEY;
-  if (!key) throw new Error("REPLIERS_API_KEY is not set");
-  const res = await fetch(`${BASE}${path}?${params}`, { headers: { "REPLIERS-API-KEY": key, accept: "application/json" } });
-  if (!res.ok) throw new Error(`Repliers ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return res.json();
-}
-const membersOf = (d) => d.members || d.agents || d.results || [];
-
-async function resolveAgentIds() {
-  if (resolved) return resolved;
-  const ids = [];
-  for (const a of AGENTS) {
-    const tries = [{ agentName: a.name }, { keywords: a.name }, { keywords: a.last }];
-    let hit = null;
-    for (const t of tries) {
-      const d = await repliersGet("/members", new URLSearchParams({ ...t, resultsPerPage: "200" })).catch(() => ({}));
-      hit = membersOf(d).find((m) => String(m.boardAgentId) === a.boardAgentId);
-      if (hit) break;
-    }
-    if (!hit) throw new Error(`Could not find ${a.name} (board agent ${a.boardAgentId}) in Repliers members`);
-    ids.push(String(hit.agentId));
-  }
-  return (resolved = ids);
-}
-const LAND = /land|lot|farm|ranch|acre/i;
-
-let cache = { at: 0, data: null };
+// MLS board agent IDs (NTREIS): Troy George 492946, Lucy Noonan 560617. Repliers stores them zero-padded
+// to 7 digits ("0492946") and its `agent` filter accepts that form.
+export const BOARD_AGENT_IDS = ["492946", "560617"].map((id) => id.padStart(7, "0"));
 
 async function repliers(params) {
   const key = process.env.REPLIERS_API_KEY;
@@ -47,17 +15,33 @@ async function repliers(params) {
   return res.json();
 }
 
-// Active residential sale listings for the two agents. One request per agent, merged by MLS#.
+const LAND = /land|lot|farm|ranch|acre/i;
+let cache = { at: 0, data: null };
+let freshness = { at: 0, date: null };
+
+// Active residential sale listings for the two agents (land excluded).
 async function fetchRaw() {
   if (cache.data && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
-  const agentIds = await resolveAgentIds();
-  const pages = await Promise.all(agentIds.map((id) =>
-    repliers(new URLSearchParams({ agent: id, status: "A", type: "sale", class: "residential", resultsPerPage: "100" }))));
-  const byMls = new Map();
-  for (const p of pages) for (const l of p.listings || []) byMls.set(String(l.mlsNumber), l);
+  const all = [];
+  for (let page = 1; page <= 5; page++) {
+    const q = new URLSearchParams({ status: "A", type: "sale", class: "residential", resultsPerPage: "100", pageNum: String(page) });
+    for (const id of BOARD_AGENT_IDS) q.append("agent", id);
+    const d = await repliers(q);
+    all.push(...(d.listings || []));
+    if (page >= (d.numPages || 1)) break;
+  }
+  const byMls = new Map(all.map((l) => [String(l.mlsNumber), l]));
   const data = [...byMls.values()].filter((l) => !LAND.test(String(l.details?.propertyType || "")));
   cache = { at: Date.now(), data };
   return data;
+}
+
+// Date (YYYY-MM-DD) the Repliers data was last updated, so a stale feed is obvious.
+export async function feedUpdatedOn() {
+  if (freshness.date && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.date;
+  const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc" }));
+  freshness = { at: Date.now(), date: String(d.listings?.[0]?.updatedOn || "").slice(0, 10) || null };
+  return freshness.date;
 }
 
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
@@ -76,18 +60,18 @@ export function normalize(l) {
   };
 }
 
-// Open houses already on the MLS, mapped to whole-hour blocks. Repliers is read-only for us.
-// Entries look like { startTime: "2026-10-10 10:00:00", endTime: "2026-10-10 12:00:00" }.
+// Open houses already on the MLS, mapped to whole-hour blocks (Central time). Repliers is read-only for us.
+// Entries look like { date, startTime: "2026-05-23T18:00:00.000-00:00" (UTC), endTime, type, status }.
 export function openHouseBlocks(raw, week) {
   const out = [];
   for (const o of Array.isArray(raw.openHouse) ? raw.openHouse : []) {
-    const s = String(o.startTime || o.start || ""), e = String(o.endTime || o.end || "");
-    const iso = s.slice(0, 10);
-    const day = Object.keys(week.days).find((k) => week.days[k].iso === iso);
+    if (/deleted|cancel/i.test(String(o.status || ""))) continue;
+    const start = new Date(o.startTime), end = new Date(o.endTime);
+    if (Number.isNaN(+start) || Number.isNaN(+end) || end <= start) continue;
+    const { date, hour } = chicagoNow(start);
+    const day = Object.keys(week.days).find((k) => week.days[k].iso === date);
     if (!day) continue;
-    const from = parseInt(s.slice(11, 13), 10);
-    const to = parseInt(e.slice(11, 13), 10) + (parseInt(e.slice(14, 16), 10) > 0 ? 1 : 0);
-    if (Number.isInteger(from) && Number.isInteger(to) && to > from) out.push({ day, from, to });
+    out.push({ day, from: hour, to: hour + Math.ceil((end - start) / 3600000) });
   }
   return out;
 }
@@ -134,21 +118,23 @@ export async function teamListings(week) {
   const info = await allInfo(list.map((x) => x.n.mls));
   return {
     warning,
+    feedUpdatedOn: await feedUpdatedOn().catch(() => null),
     listings: list.map((x) => { const i = info[x.n.mls]; return { ...x.n, offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: x.openHouses }; })
       .sort((a, b) => Number(b.priority) - Number(a.priority)),
   };
 }
 
-// Diagnostic: shows what /members returns and which agent ids were resolved.
+// Diagnostic for the inventory page: what Repliers returns for the two agents and how fresh the data is.
 export async function probe() {
-  const out = {};
-  for (const [label, q] of Object.entries({ byName: { agentName: "Troy George" }, byKeywordGeorge: { keywords: "George" }, byKeywordNoonan: { keywords: "Noonan" } })) {
-    try {
-      const d = await repliersGet("/members", new URLSearchParams({ ...q, resultsPerPage: "5" }));
-      out[label] = { topLevelKeys: Object.keys(d), count: d.count, members: membersOf(d).slice(0, 5).map((m) => ({ agentId: m.agentId, boardAgentId: m.boardAgentId, name: m.name, status: m.status, officeId: m.officeId })) };
-    } catch (e) { out[label] = { error: e.message }; }
-  }
-  try { out.resolvedAgentIds = await resolveAgentIds(); } catch (e) { out.resolveError = e.message; }
+  const out = { agentIds: BOARD_AGENT_IDS };
+  const q = (extra) => { const p = new URLSearchParams({ resultsPerPage: "1", ...extra }); for (const id of BOARD_AGENT_IDS) p.append("agent", id); return p; };
+  try {
+    out.activeResidentialSale = (await repliers(q({ status: "A", type: "sale", class: "residential" }))).count;
+    out.activeAnyClass = (await repliers(q({ status: "A" }))).count;
+    const inactive = await repliers((() => { const p = q({}); p.append("status", "A"); p.append("status", "U"); return p; })());
+    out.activeAndInactive = inactive.count;
+    out.feedUpdatedOn = await feedUpdatedOn();
+  } catch (e) { out.error = e.message; }
   return out;
 }
 

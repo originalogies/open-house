@@ -24,6 +24,7 @@ button{padding:10px 18px;border:0;border-radius:8px;background:var(--accent);col
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
 .msg{font-size:.9rem}.msg.err{color:var(--danger)}
 .note{font-size:.85rem;color:var(--muted)}
+.stale{background:var(--surface);border:1px solid var(--line);border-left:4px solid #B7791F;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.92rem}
 .badge.pri{background:#2F8BE0;color:#fff;font-weight:700}
 .card.pri{border-color:#2F8BE0;box-shadow:0 0 0 2px #2F8BE0,0 0 14px 2px rgba(47,139,224,.5)}
 .badge{display:inline-block;font-size:.75rem;padding:2px 8px;border-radius:99px;background:var(--line);margin-left:8px;vertical-align:middle}
@@ -51,6 +52,15 @@ async function signIn() {
     google.accounts.id.renderButton(document.getElementById("gbtn"), { theme: "outline", size: "large", shape: "pill", width: 280 });
   };
   document.head.append(s);
+}
+
+// Warn when the Repliers feed has not updated recently (a stale feed means missing or old listings).
+function staleBanner(updatedOn) {
+  if (!updatedOn) return "";
+  const days = Math.floor((Date.now() - new Date(updatedOn + "T12:00:00Z")) / 86400000);
+  if (days < 3) return "";
+  const nice = new Date(updatedOn + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+  return `<div class="stale"><b>Repliers data looks out of date.</b> It was last updated ${esc(nice)} (${days} days ago), so current listings may be missing. Ask Repliers to confirm this API key is connected to your live NTREIS feed.</div>`;
 }
 
 function card(l) {
@@ -88,10 +98,11 @@ async function load() {
   app.innerHTML = `<a href="/">← Back to open house requests</a><h1>Open house inventory</h1>
     <p class="lead">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Turn on the homes agents can request, and add instructions and access details. Offers and priority reset each week; instructions are kept.</p>
     ${d.warning ? `<p class="msg err">Repliers problem: ${esc(d.warning)}</p>` : ""}
+    ${staleBanner(d.feedUpdatedOn)}
     <div id="list"></div>
     <details><summary>Check Repliers data</summary><p class="note">Shows one raw listing so field mapping can be verified.</p><button id="raw">Show sample</button><pre id="rawOut" hidden></pre></details>`;
   const list = document.getElementById("list");
-  if (!d.listings.length) list.innerHTML = '<p class="lead">No active listings found for Troy George or Lucy Noonan.</p>';
+  if (!d.listings.length) list.innerHTML = '<p class="lead">No active residential for-sale listings found in Repliers for Troy George or Lucy Noonan.</p>';
   d.listings.forEach((l) => list.append(card(l)));
   document.getElementById("raw").onclick = async () => {
     const j = await fetch("/api/inventory/listings?raw=1").then((x) => x.json()).catch(() => ({}));

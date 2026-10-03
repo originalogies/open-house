@@ -71,7 +71,12 @@ test("Repliers listing mapping", () => {
     map: { latitude: 32.97, longitude: -97.18 }, details: { numBedrooms: 4, numBathrooms: 6, sqft: "6,331" } });
   assert.deepEqual([n.mls, n.addr, n.zip, n.sf, n.ba, n.img], ["123", "2006 Nighthawk Court", "76262", 6331, 6, "ntreismls/IMG-1.jpg"]);
   const w = getWeek(new Date("2026-10-05T17:00:00Z"));
-  const oh = openHouseBlocks({ openHouse: [{ startTime: "2026-10-10 10:00:00", endTime: "2026-10-10 12:30:00" }, { startTime: "2026-10-03 10:00:00", endTime: "2026-10-03 12:00:00" }] }, w);
+  // Repliers sends UTC times: 15:00Z on Oct 10 is 10:00 AM Central. Deleted entries are ignored.
+  const oh = openHouseBlocks({ openHouse: [
+    { startTime: "2026-10-10T15:00:00.000-00:00", endTime: "2026-10-10T17:30:00.000-00:00", status: "Active" },
+    { startTime: "2026-10-11T18:00:00.000-00:00", endTime: "2026-10-11T20:00:00.000-00:00", status: "Deleted" },
+    { startTime: "2026-10-03T15:00:00.000-00:00", endTime: "2026-10-03T17:00:00.000-00:00", status: "Active" },
+  ] }, w);
   assert.deepEqual(oh, [{ day: "sat", from: 10, to: 13 }]);
 });
 
@@ -117,4 +122,9 @@ test("email links only point at trusted sites", () => {
   assert.equal(siteFor(SITE), SITE);
   assert.equal(siteFor("https://evil.example.com"), SITE);
   assert.equal(siteFor("http://localhost.evil.com"), SITE);
+});
+
+import { BOARD_AGENT_IDS } from "../netlify/lib/listings.mjs";
+test("board agent ids are zero-padded like Repliers stores them", () => {
+  assert.deepEqual(BOARD_AGENT_IDS, ["0492946", "0560617"]);
 });
