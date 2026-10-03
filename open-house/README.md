@@ -28,3 +28,18 @@ Weekly open house request system for George & Noonan Real Estate Group listings 
 ## Prototype notes
 
 The portal uses sample time blocks, a sample sign-in and sample instructions. Listing data comes from NTREIS via the Repliers API. Listing photos load from the Repliers CDN and the map from a Google Maps embed. Production should load listings, availability and requests from the agent server.
+
+## Sign-in and access control
+
+Agents sign in with Google. The server checks every sign-in against an allowlist, so only approved people get in. Code lives in `netlify/functions/` (the `/api/*` routes) and `portal/auth.js`.
+
+**Netlify environment variables**
+
+| Variable | Purpose |
+|----------|---------|
+| `GOOGLE_CLIENT_ID` | OAuth Web client ID from Google Cloud Console. Authorized JavaScript origin: `https://open-house.synergyrealtors.com` |
+| `SESSION_SECRET` | Random string, 32+ characters, used to sign the login cookie |
+| `ADMIN_EMAILS` | Comma-separated admin emails. Admins can always sign in and use `/admin/` |
+| `ALLOWED_EMAILS`, `ALLOWED_DOMAINS` | Optional starting lists. Admins manage the live list at `/admin/` |
+
+Nothing is allowed by default: with no admins and no allowed entries, no one can sign in. Removing someone at `/admin/` ends their access right away.

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Manage access | Open House Requests</title>
+<style>
+:root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--danger:#A12B2B}
+@media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--danger:#E58A8A}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+a{color:var(--accent)}
+h1{font-size:1.5rem;margin:.5rem 0 .25rem}
+p.lead{color:var(--muted);margin:0 0 24px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+h2{font-size:1.05rem;margin:0 0 4px}
+.hint{color:var(--muted);font-size:.9rem;margin:0 0 12px}
+form{display:flex;gap:8px;margin-bottom:12px}
+input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+button{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;cursor:pointer}
+button.link{background:none;color:var(--danger);padding:4px 8px;font-weight:500}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);word-break:break-all}
+li.fixed span:last-child{color:var(--muted);font-size:.85rem;white-space:nowrap}
+.empty{color:var(--muted);padding:8px 0}
+#status{min-height:1.4em;margin:8px 0;font-size:.95rem}
+#status.err{color:var(--danger)}
+</style>
+</head>
+<body>
+<main>
+  <a href="/">← Back to open house requests</a>
+  <h1>Manage access</h1>
+  <p class="lead">Only people on this list can sign in with Google. A person can sign in if their email address is listed, or if their email domain is listed. Changes apply right away.</p>
+  <div id="status" role="status"></div>
+
+  <section>
+    <h2>Allowed email domains</h2>
+    <p class="hint">Everyone with an address at the domain, for example <b>synergyrealtors.com</b>. Subdomains are not included.</p>
+    <form id="fDomain"><input id="iDomain" placeholder="synergyrealtors.com" autocomplete="off" aria-label="Domain"><button>Add domain</button></form>
+    <ul id="lDomains"></ul>
+  </section>
+
+  <section>
+    <h2>Allowed email addresses</h2>
+    <p class="hint">Specific people, for example an agent who uses a personal Gmail account.</p>
+    <form id="fEmail"><input id="iEmail" type="email" placeholder="agent@example.com" autocomplete="off" aria-label="Email address"><button>Add email</button></form>
+    <ul id="lEmails"></ul>
+  </section>
+
+  <section>
+    <h2>Administrators</h2>
+    <p class="hint">Set by the <code>ADMIN_EMAILS</code> setting in Netlify. Administrators can always sign in and manage this list.</p>
+    <ul id="lAdmins"></ul>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let state = { emails: [], domains: [], env: { emails: [], domains: [] }, admins: [] };
+
+function status(t, err) { const s = $("status"); s.textContent = t || ""; s.className = err ? "err" : ""; }
+
+function render() {
+  const fill = (ul, items, fixed, remove) => {
+    ul.innerHTML = "";
+    if (!items.length && !fixed.length) { const e = document.createElement("li"); e.className = "empty"; e.textContent = "None yet"; ul.append(e); return; }
+    for (const v of items) {
+      const li = document.createElement("li"); const s = document.createElement("span"); s.textContent = v;
+      const b = document.createElement("button"); b.className = "link"; b.textContent = "Remove"; b.setAttribute("aria-label", "Remove " + v);
+      b.onclick = () => remove(v);
+      li.append(s, b); ul.append(li);
+    }
+    for (const v of fixed) {
+      const li = document.createElement("li"); li.className = "fixed";
+      const a = document.createElement("span"); a.textContent = v; const b = document.createElement("span"); b.textContent = "Set in Netlify";
+      li.append(a, b); ul.append(li);
+    }
+  };
+  fill($("lDomains"), state.domains, state.env.domains.filter((d) => !state.domains.includes(d)));
+  fill($("lEmails"), state.emails, state.env.emails.filter((e) => !state.emails.includes(e)));
+  const ua = $("lAdmins"); ua.innerHTML = "";
+  for (const v of state.admins) { const li = document.createElement("li"); li.textContent = v; ua.append(li); }
+  if (!state.admins.length) ua.innerHTML = '<li class="empty">None set</li>';
+}
+
+// Removal helper dispatches by which list the value belongs to.
+function remove(v) { save({ emails: state.emails.filter((x) => x !== v), domains: state.domains.filter((x) => x !== v) }); }
+
+async function save(next) {
+  status("Saving…");
+  const r = await fetch("/api/admin/access", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(next) }).catch(() => null);
+  if (!r || !r.ok) { const d = r ? await r.json().catch(() => ({})) : {}; return status(d.error === "invalid_entry" ? "That doesn't look like a valid entry." : "Could not save. Try again.", true); }
+  state.emails = next.emails; state.domains = next.domains; render(); status("Saved.");
+}
+
+$("fDomain").onsubmit = (e) => { e.preventDefault(); const v = $("iDomain").value.trim().toLowerCase().replace(/^@/, ""); if (!v) return; $("iDomain").value = ""; save({ emails: state.emails, domains: [...new Set([...state.domains, v])] }); };
+$("fEmail").onsubmit = (e) => { e.preventDefault(); const v = $("iEmail").value.trim().toLowerCase(); if (!v) return; $("iEmail").value = ""; save({ emails: [...new Set([...state.emails, v])], domains: state.domains }); };
+
+(async () => {
+  const r = await fetch("/api/admin/access").catch(() => null);
+  if (!r) return status("Could not reach the server.", true);
+  if (r.status === 401) { location.href = "/"; return; }
+  if (r.status === 403) return status("Only administrators can manage access.", true);
+  state = await r.json(); render();
+})();
+</script>
+</body>
+</html>

@@ -39,6 +39,13 @@ button{font:inherit;color:inherit}
 header.top{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
 .brand{font-family:var(--serif);font-size:1.25rem;font-weight:600;letter-spacing:.01em}
 .brand .logo{display:block;width:260px;max-width:100%;height:auto;margin-bottom:6px}
+.brand .logo-dark{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .brand .logo-light{display:none}
+  :root:not([data-theme="light"]) .brand .logo-dark{display:block}
+}
+:root[data-theme="dark"] .brand .logo-light{display:none}
+:root[data-theme="dark"] .brand .logo-dark{display:block}
 .brand small{display:block;font-family:var(--sans);font-size:.78rem;font-weight:500;color:var(--muted);letter-spacing:0}
 .who{font-size:.85rem;color:var(--muted);text-align:right}
 .who strong{color:var(--ink);font-weight:600}
@@ -150,13 +157,32 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.signed-out .wrap{visibility:hidden}
+.who-links{display:flex;gap:12px;justify-content:flex-end;margin-top:2px}
+.who-links a,.who-links button{background:none;border:0;padding:0;font:inherit;font-size:.8rem;color:var(--accent);text-decoration:underline;cursor:pointer}
+.gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg)}
+.gate[hidden]{display:none}
+.gate-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 24px;text-align:center}
+.gate-card .logo{width:240px;max-width:100%;height:auto;margin:0 auto 20px}
+.gate-card .logo-dark{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .gate-card .logo-light{display:none}
+  :root:not([data-theme="light"]) .gate-card .logo-dark{display:block}
+}
+:root[data-theme="dark"] .gate-card .logo-light{display:none}
+:root[data-theme="dark"] .gate-card .logo-dark{display:block}
+.gate-card h2{font-family:var(--serif);font-size:1.4rem;margin:0 0 8px}
+.gate-card p{color:var(--muted);margin:0 0 20px;font-size:.95rem}
+#gBtn{display:flex;justify-content:center;min-height:44px}
+.gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
+@media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
 </style>
 </head>
-<body>
+<body class="signed-out">
 <div class="wrap">
   <header class="top">
-    <div class="brand"><img class="logo" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group"><small>Open house requests for George &amp; Noonan listings</small></div>
-    <div class="who">Signed in as<br><strong>Sample Agent</strong></div>
+    <div class="brand"><img class="logo logo-light" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo logo-dark" src="gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><small>Open house requests for George &amp; Noonan listings</small></div>
+    <div class="who" id="who"></div>
   </header>
 
   <section class="intro">
@@ -175,7 +201,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
 
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers. Example page: times, claimed slots and the sign-in are sample data.</footer>
+  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers. Example page: times and claimed slots are sample data.</footer>
+</div>
+
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
+  <div class="gate-card">
+    <img class="logo logo-light" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group">
+    <img class="logo logo-dark" src="gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
+    <h2 id="gateTitle">Sign in to request an open house</h2>
+    <p>Use your Google account. Access is limited to approved Synergy agents.</p>
+    <div id="gBtn"></div>
+    <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
+  </div>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -219,6 +256,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   </div>
 </aside>
 
+<script src="auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
 const homes = [
