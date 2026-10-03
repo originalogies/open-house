@@ -93,16 +93,24 @@ export async function teamListings(week = getWeek()) {
   });
 }
 
-// Diagnostic: looks up known MLS numbers (any status) to reveal how Repliers identifies their agents.
+// Diagnostic: shows how Repliers describes agents and whether known homes exist under any status.
+async function get(path) {
+  const res = await fetch(`${BASE}${path}`, { headers: { "REPLIERS-API-KEY": process.env.REPLIERS_API_KEY, accept: "application/json" } });
+  const text = await res.text();
+  let body; try { body = JSON.parse(text); } catch { body = text.slice(0, 200); }
+  return { path, http: res.status, body };
+}
+const brief = (l) => l && { mls: l.mlsNumber, addr: l.address && [l.address.streetNumber, l.address.streetName, l.address.city].join(" "), status: l.status, lastStatus: l.lastStatus, class: l.class, agents: l.agents, office: l.office, openHouse: l.openHouse };
+
 export async function probe() {
-  const mls = ["21297798", "21372196", "21332907", "21346883"];
-  return Promise.all(mls.map(async (m) => {
-    try {
-      const d = await repliers(new URLSearchParams({ mlsNumber: m }));
-      const l = (d.listings || [])[0];
-      return { mls: m, count: d.count, found: !!l, status: l?.status, lastStatus: l?.lastStatus, class: l?.class, board: l?.boardId, agents: l?.agents, office: l?.office, openHouse: l?.openHouse };
-    } catch (e) { return { mls: m, error: e.message }; }
-  }));
+  const out = [];
+  const direct = await get("/listings/21346883");
+  out.push({ path: direct.path, http: direct.http, listing: direct.body && direct.body.mlsNumber ? brief(direct.body) : direct.body });
+  for (const p of ["/listings?mlsNumber=21346883&status=U", "/listings?streetName=Watermere&resultsPerPage=3", "/listings?city=Southlake&status=A&type=sale&class=residential&resultsPerPage=3"]) {
+    const r = await get(p);
+    out.push({ path: p, http: r.http, count: r.body?.count, listings: (r.body?.listings || []).map(brief), error: r.http >= 400 ? r.body : undefined });
+  }
+  return out;
 }
 
 export const rawSample = async () => {
