@@ -3,7 +3,39 @@ import { getWeek } from "./week.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
-export const AGENT_IDS = ["492946", "560617"]; // Troy George, Lucy Noonan
+// MLS board agent IDs (NTREIS) and a name to search by. Repliers filters listings by its own
+// internal agentId, so we look that up from /members using the board ID.
+export const AGENTS = [
+  { boardAgentId: "492946", name: "Troy George", last: "George" },
+  { boardAgentId: "560617", name: "Lucy Noonan", last: "Noonan" },
+];
+let resolved = null;
+
+async function repliersGet(path, params) {
+  const key = process.env.REPLIERS_API_KEY;
+  if (!key) throw new Error("REPLIERS_API_KEY is not set");
+  const res = await fetch(`${BASE}${path}?${params}`, { headers: { "REPLIERS-API-KEY": key, accept: "application/json" } });
+  if (!res.ok) throw new Error(`Repliers ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+const membersOf = (d) => d.members || d.agents || d.results || [];
+
+async function resolveAgentIds() {
+  if (resolved) return resolved;
+  const ids = [];
+  for (const a of AGENTS) {
+    const tries = [{ agentName: a.name }, { keywords: a.name }, { keywords: a.last }];
+    let hit = null;
+    for (const t of tries) {
+      const d = await repliersGet("/members", new URLSearchParams({ ...t, resultsPerPage: "200" })).catch(() => ({}));
+      hit = membersOf(d).find((m) => String(m.boardAgentId) === a.boardAgentId);
+      if (hit) break;
+    }
+    if (!hit) throw new Error(`Could not find ${a.name} (board agent ${a.boardAgentId}) in Repliers members`);
+    ids.push(String(hit.agentId));
+  }
+  return (resolved = ids);
+}
 const LAND = /land|lot|farm|ranch|acre/i;
 
 let cache = { at: 0, data: null };
@@ -19,7 +51,8 @@ async function repliers(params) {
 // Active residential sale listings for the two agents. One request per agent, merged by MLS#.
 async function fetchRaw() {
   if (cache.data && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
-  const pages = await Promise.all(AGENT_IDS.map((id) =>
+  const agentIds = await resolveAgentIds();
+  const pages = await Promise.all(agentIds.map((id) =>
     repliers(new URLSearchParams({ agent: id, status: "A", type: "sale", class: "residential", resultsPerPage: "100" }))));
   const byMls = new Map();
   for (const p of pages) for (const l of p.listings || []) byMls.set(String(l.mlsNumber), l);
@@ -93,23 +126,16 @@ export async function teamListings(week = getWeek()) {
   });
 }
 
-// Diagnostic: shows how Repliers describes agents and whether known homes exist under any status.
-async function get(path) {
-  const res = await fetch(`${BASE}${path}`, { headers: { "REPLIERS-API-KEY": process.env.REPLIERS_API_KEY, accept: "application/json" } });
-  const text = await res.text();
-  let body; try { body = JSON.parse(text); } catch { body = text.slice(0, 200); }
-  return { path, http: res.status, body };
-}
-const brief = (l) => l && { mls: l.mlsNumber, addr: l.address && [l.address.streetNumber, l.address.streetName, l.address.city].join(" "), status: l.status, lastStatus: l.lastStatus, class: l.class, agents: l.agents, office: l.office, openHouse: l.openHouse };
-
+// Diagnostic: shows what /members returns and which agent ids were resolved.
 export async function probe() {
-  const out = [];
-  const direct = await get("/listings/21346883");
-  out.push({ path: direct.path, http: direct.http, listing: direct.body && direct.body.mlsNumber ? brief(direct.body) : direct.body });
-  for (const p of ["/listings?mlsNumber=21346883&status=U", "/listings?streetName=Watermere&resultsPerPage=3", "/listings?city=Southlake&status=A&type=sale&class=residential&resultsPerPage=3"]) {
-    const r = await get(p);
-    out.push({ path: p, http: r.http, count: r.body?.count, listings: (r.body?.listings || []).map(brief), error: r.http >= 400 ? r.body : undefined });
+  const out = {};
+  for (const [label, q] of Object.entries({ byName: { agentName: "Troy George" }, byKeywordGeorge: { keywords: "George" }, byKeywordNoonan: { keywords: "Noonan" } })) {
+    try {
+      const d = await repliersGet("/members", new URLSearchParams({ ...q, resultsPerPage: "5" }));
+      out[label] = { topLevelKeys: Object.keys(d), count: d.count, members: membersOf(d).slice(0, 5).map((m) => ({ agentId: m.agentId, boardAgentId: m.boardAgentId, name: m.name, status: m.status, officeId: m.officeId })) };
+    } catch (e) { out[label] = { error: e.message }; }
   }
+  try { out.resolvedAgentIds = await resolveAgentIds(); } catch (e) { out.resolveError = e.message; }
   return out;
 }
 
