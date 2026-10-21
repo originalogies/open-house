@@ -128,3 +128,19 @@ import { BOARD_AGENT_IDS } from "../netlify/lib/listings.mjs";
 test("board agent ids are zero-padded like Repliers stores them", () => {
   assert.deepEqual(BOARD_AGENT_IDS, ["0492946", "0560617"]);
 });
+
+import { historyFor } from "../netlify/lib/requests.mjs";
+test("agent history shows only their own requests, with no private details", () => {
+  const listing = { addr: "1 Main St", city: "Southlake", zip: "76092", img: "x.jpg", access: "Gate 1234" };
+  const all = [
+    { id: "a", status: "approved", mls: "1", iso: "2026-10-03", from: 9, to: 11, listing, agent: { email: "me@synergyrealtors.com" }, access: "Gate 1234", phone: "555", createdAt: 1 },
+    { id: "b", status: "declined", mls: "1", iso: "2026-10-24", from: 13, to: 15, listing, agent: { email: "Me@SynergyRealtors.com" }, createdAt: 2 },
+    { id: "c", status: "approved", mls: "1", iso: "2026-10-24", from: 9, to: 11, listing, agent: { email: "other@synergyrealtors.com" }, createdAt: 3 },
+  ];
+  const h = historyFor(all, "me@synergyrealtors.com");
+  assert.deepEqual(h.map((r) => r.id), ["b", "a"]);                 // own only (any case), newest first
+  assert.equal(h[1].time, "9:00 AM to 11:00 AM");
+  assert.ok(!JSON.stringify(h).includes("1234"));                    // access details never included
+  assert.ok(h.every((r) => !("agent" in r) && !("phone" in r)));
+  assert.deepEqual(historyFor(all, ""), []);
+});
