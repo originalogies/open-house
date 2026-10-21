@@ -28,7 +28,8 @@ export const historyFor = (all, email) => {
       const d = dayMeta(r.iso), l = r.listing || {};
       return { id: r.id, status: r.status, mls: r.mls, iso: r.iso, from: r.from, to: r.to,
         addr: l.addr, city: l.city, zip: l.zip, img: l.img || null, day: d.label, date: d.date, time: fmtRange(r.from, r.to),
-        notes: r.notes || "", createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null };
+        notes: r.notes || "", createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
+        cancelRequested: !!r.cancelRequest && !r.cancelRequest.outcome }; // same rule as openCancelRequest in changes.mjs
     });
 };
 

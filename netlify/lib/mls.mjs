@@ -60,7 +60,9 @@ export function needsDispatch(r, now = Date.now(), runMode = mode()) {
 
 // Webhook body. Matches the payload documented in the mls-open-house skill.
 // `d` is what needsDispatch returned: { action, from (MLS now), to (MLS wanted) }.
-export function buildPayload(r, d, jobId, { dryRun = mode() !== "live", site = SITE } = {}) {
+// The bot calls back the site the request was made on, so a local copy gets its own callbacks;
+// MLS_CALLBACK_URL overrides that (e.g. a tunnel to a local copy, since a remote bot can't reach localhost).
+export function buildPayload(r, d, jobId, { dryRun = mode() !== "live", site = r.site || SITE } = {}) {
   const l = r.listing, { action, from: cur, to: want } = d;
   const target = action === "cancel" ? cur : want;
   const body = {
@@ -68,7 +70,7 @@ export function buildPayload(r, d, jobId, { dryRun = mode() !== "live", site = S
     mls_number: String(r.mls), address: `${l.addr}, ${l.city}, TX ${l.zip}`,
     type: target.type, date: target.iso, start: hh(target.from), end: hh(target.to), timezone: "America/Chicago",
     approved_by: r.decidedBy || null, approved_at: r.decidedAt ? new Date(r.decidedAt).toISOString() : null,
-    dry_run: dryRun, callback_url: `${site}/api/mls/callback`,
+    dry_run: dryRun, callback_url: process.env.MLS_CALLBACK_URL || `${site}/api/mls/callback`,
   };
   if (action !== "add") Object.assign(body, { original_date: cur.iso, original_start: hh(cur.from), original_end: hh(cur.to), original_type: cur.type });
   if (action === "cancel") body.remove_method = "cancel"; // set the entry to Canceled, keep the record
@@ -145,7 +147,7 @@ export async function listEvents(requestId) {
   return all.filter(Boolean).sort((a, b) => a.at.localeCompare(b.at));
 }
 
-export const MAX_SHOT_BYTES = 5 * 1024 * 1024;
+export const MAX_SHOT_BYTES = 4 * 1024 * 1024; // 4 MB of image is about 5.4 MB as base64, under Netlify's 6 MB request limit
 export async function saveScreenshot(requestId, jobId, base64) {
   const buf = Buffer.from(String(base64 || ""), "base64");
   if (!buf.length || buf.length > MAX_SHOT_BYTES) return null;

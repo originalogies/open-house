@@ -176,7 +176,10 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 .opill.approved,.opill.hosted{color:var(--accent);background:var(--accent-soft)}
 .opill.declined{color:#A12B2B;background:rgba(161,43,43,.1)}
 @media (prefers-color-scheme: dark){.opill.declined{color:#E58A8A}}
-@media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .opill{grid-column:2;justify-self:start}}
+.myoh-list .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.myoh-list .cancel{background:none;border:0;padding:0;font:inherit;font-size:.82rem;color:var(--muted);text-decoration:underline;cursor:pointer}
+.myoh-list .cancel:disabled{opacity:.5;cursor:wait}
+@media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .side{grid-column:2;align-items:flex-start}}
 
 @media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
@@ -237,6 +240,7 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
       <button role="tab" id="tabPast" aria-selected="false">History</button>
     </div>
     <ul class="myoh-list" id="myohList"></ul>
+    <p class="fine" id="myohErr" role="alert" hidden style="color:#A12B2B"></p>
   </section>
 
   <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
@@ -289,7 +293,7 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
     <div class="status" id="status">
       <h3>Your requests for this home</h3>
       <ul class="mine" id="mine"></ul>
-      <p class="mine-note" id="mineNote">Need a different time? Contact the George &amp; Noonan team. You can cancel a request here until it starts.</p>
+      <p class="mine-note" id="mineNote">Need a different time? Contact the George &amp; Noonan team. To cancel, send the team a cancellation request here any time before it starts.</p>
       <p class="fine" id="mineErr" role="alert" hidden style="color:#A12B2B"></p>
       <ol class="track" id="track"></ol>
       <button class="secondary" id="another">Request another day or time</button>
@@ -364,8 +368,9 @@ let myReqs = [], myTab = "up";
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
 const isUpcoming = r => r.iso >= todayIso() && (r.status === "pending" || r.status === "approved");
 function myLabel(r){
+  if (r.cancelRequested && isUpcoming(r)) return ["pending","Cancellation requested"];
   if (r.status === "approved") return r.iso < todayIso() ? ["hosted","Hosted"] : ["approved","Approved"];
-  return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"] })[r.status] || ["", r.status];
+  return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"], cancelled:["cancelled","Cancelled"] })[r.status] || ["", r.status];
 }
 function renderMine(){
   const up = myReqs.filter(isUpcoming).sort((a,b) => a.iso.localeCompare(b.iso) || a.from - b.from);
@@ -378,8 +383,29 @@ function renderMine(){
   $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
       ${r.img ? `<img class="thumb" src="${CDN + esc(r.img)}?class=small" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
       <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
-      <span class="opill ${c}">${t}</span></li>`; }).join("")
+      <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}</span></li>`; }).join("")
     : `<li><span class="empty">${myTab === "up" ? "No upcoming open houses. Pick a home above to request one." : "Your past open houses will show up here."}</span></li>`;
+  $("myohErr").hidden = true;
+  $("myohList").querySelectorAll(".cancel").forEach(b => b.onclick = async () => {
+    const r = myReqs.find(x => x.id === b.dataset.id);
+    b.disabled = true;
+    const sent = await askToCancel(r.id, `${r.addr} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
+    if(!sent) b.disabled = false;
+  });
+}
+// Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
+// or keep the open house. Returns true once the request is sent.
+async function askToCancel(id, what, showError){
+  const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
+  if(reason === null) return false;
+  const r = await fetch("/api/requests/cancel-request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id, reason})}).catch(()=>null);
+  const d = r ? await r.json().catch(()=>({})) : {};
+  if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
+  if(r.status===502) alert(d.message);
+  const idx = cur ? homes.indexOf(cur) : -1;
+  await Promise.all([loadListings(), loadMine()]);
+  if(idx >= 0) cur = homes[idx];
+  return true;
 }
 async function loadMine(){
   const r = await fetch("/api/requests").catch(() => null);
@@ -476,22 +502,17 @@ function showForm(){
 function showStatus(){
   $("form").style.display="none"; $("status").classList.add("on");
   const list = mine();
-  const tag = r => r.status==="approved" ? ["ok","Approved"] : ["","Waiting for approval"];
-  $("mine").innerHTML = list.map(r=>{ const [c,t]=tag(r); return `<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="right"><span class="tag ${c}">${t}</span><button class="cancel" data-id="${esc(r.id)}" aria-label="Cancel ${DAYS[r.day].label} ${range(r)}">Cancel</button></span></li>`; }).join("");
+  const tag = r => r.cancelRequested ? ["","Cancellation requested"] : r.status==="approved" ? ["ok","Approved"] : ["","Waiting for approval"];
+  $("mine").innerHTML = list.map(r=>{ const [c,t]=tag(r); return `<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="right"><span class="tag ${c}">${t}</span>${r.cancelRequested ? "" : `<button class="cancel" data-id="${esc(r.id)}" aria-label="Request cancellation of ${DAYS[r.day].label} ${range(r)}">Request cancellation</button>`}</span></li>`; }).join("");
   $("mineErr").hidden = true;
   $("mine").querySelectorAll(".cancel").forEach(b => b.onclick = () => cancelMine(b));
   $("track").innerHTML = trackHTML(list[list.length-1]);
 }
 async function cancelMine(btn){
   const r0 = mine().find(x => x.id === btn.dataset.id);
-  const what = `${DAYS[r0.day].label}, ${range(r0)}`;
-  if(!confirm(r0.status==="approved" ? `Cancel your open house on ${what}? The team will be notified and the time opens up for others.` : `Withdraw your request for ${what}?`)) return;
   btn.disabled = true;
-  const r = await fetch("/api/requests/cancel",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:btn.dataset.id})}).catch(()=>null);
-  const d = r ? await r.json().catch(()=>({})) : {};
-  if(!r || (!r.ok && r.status!==502)){ $("mineErr").textContent = d.message || "Could not cancel. Try again."; $("mineErr").hidden=false; btn.disabled=false; return; }
-  const idx = homes.indexOf(cur);
-  await loadListings(); cur = homes[idx];
+  const sent = await askToCancel(r0.id, `your ${r0.status==="approved" ? "open house" : "request"} on ${DAYS[r0.day].label}, ${range(r0)}`, msg => { $("mineErr").textContent = msg; $("mineErr").hidden = false; });
+  if(!sent){ btn.disabled = false; return; }
   if(mine().length) showStatus(); else showForm();
 }
 $("another").onclick=()=>{ showForm(); $("sheet").scrollTo({top:0,behavior:"smooth"}); };

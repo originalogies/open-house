@@ -2,6 +2,7 @@ import { json, currentUser } from "../lib/shared.mjs";
 import { offeredListings, publicListing } from "../lib/listings.mjs";
 import { listRequests } from "../lib/requests.mjs";
 import { currentWeek } from "../lib/settings.mjs";
+import { openCancelRequest } from "../lib/changes.mjs";
 
 export default async (req) => {
   const user = await currentUser(req);
@@ -21,7 +22,7 @@ export default async (req) => {
       ...all.filter((r) => r.mls === l.mls && r.status === "approved" && r.agent.email !== user.email).map((r) => ({ day: dayKey(r.iso), from: r.from, to: r.to })),
       ...l.external,
     ],
-    mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status })),
+    mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status, cancelRequested: openCancelRequest(r) })),
   }));
   return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, listings });
 };

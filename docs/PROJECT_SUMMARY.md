@@ -37,8 +37,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 |------|-----|---------|
 | `/` | Signed-in agents | Browse offered listings, request a time. |
 | `/inventory/` | Team (admins and `TEAM_EMAILS`) | Offer listings for the weekend, set Priority, edit instructions and access details, check Repliers data. (Old `/team/` redirects here.) |
-| `/respond/?id=...` | Team | Approve or Decline a request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
-| `/admin/` | Admins (`ADMIN_EMAILS`) | Allowed email domains and addresses, weekly request cutoff. |
+| `/respond/?id=...` | Team | Approve or Decline a request, or answer an agent's cancellation request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
+| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Team console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
 
 ## Features
 
@@ -48,8 +48,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Subdomains and look-alike domains do not match an allowed domain.
 
 **Changes and cancellations**
-- Agents can cancel their own pending or approved requests until the open house starts; the weekly cutoff doesn't apply. Time changes go through the team.
-- The team can change the date or hours of an approved open house, or cancel it, from the request page. The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
+- Agents can't cancel on their own. They send a cancellation request for their own pending or approved request until the open house starts (the weekly cutoff doesn't apply). The team gets an email like a new booking and approves the cancellation or keeps the open house. Time changes go through the team.
+- The team can change the date or hours of an approved open house, or cancel it, from the request page (cancel also from the team console). The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
 - Every action and every MLS bot result is logged (Netlify Blobs store `open-house-audit`) and shown as History on the request page.
 
 **Requests and email**
@@ -92,7 +92,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 

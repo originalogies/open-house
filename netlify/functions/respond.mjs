@@ -4,6 +4,7 @@ import { getRequest, saveRequest, listRequests, overlaps, isTeam } from "../lib/
 import { sendConfirmed, sendDeclined } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { mode, desiredFor, logEvent, listEvents } from "../lib/mls.mjs";
+import { openCancelRequest } from "../lib/changes.mjs";
 
 // GET  /api/respond?id=...   -> request details for the team confirm page
 // POST /api/respond          -> { id, action: approve|decline, mlsEntered }
@@ -23,6 +24,7 @@ export default async (req) => {
       when: `${d.label}, ${d.date}, ${fmtRange(r.from, r.to)}`, iso: r.iso, from: r.from, to: r.to, firstHour: FIRST_HOUR, lastHour: LAST_HOUR,
       agent: `${r.agent.name} (${r.agent.email})`, phone: r.phone, notes: r.notes, decidedBy: r.decidedByName || null,
       cancelledBy: r.cancelledByName || null, mode: mode(),
+      cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, byName: r.cancelRequest.byName, reason: r.cancelRequest.reason || "" } : null,
       sync: s && { state: s.state, message: s.message || "", current: s.current, job: s.job && { id: s.job.id, action: s.job.action, sentAt: s.job.sentAt, done: !!s.job.done, result: s.job.result || null, screenshot: !!s.job.screenshot } },
       events: (await listEvents(r.id).catch(() => [])).map((e) => ({ at: e.at, type: e.type, by: e.by, note: e.note || e.message || "" })),
     });
@@ -33,6 +35,7 @@ export default async (req) => {
   const r = b && (await getRequest(String(b.id || "")));
   if (!r || !["approve", "decline"].includes(b.action)) return json(400, { error: "invalid_request" });
   if (r.status !== "pending") return json(409, { error: "already_answered", status: r.status, by: r.decidedByName || null });
+  if (b.action === "approve" && openCancelRequest(r)) return json(409, { error: "cancel_requested", message: "The agent asked to cancel this request. Approve the cancellation or keep it first." });
 
   const manual = mode() === "off";
   if (b.action === "approve") {

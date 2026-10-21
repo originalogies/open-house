@@ -136,25 +136,48 @@ export const sendUpdated = (req, before, byName) => {
   });
 };
 
-// Approved open house cancelled (by the agent or the team) -> agent + team, with a calendar cancellation.
-export const sendCancelled = (req, byName, byAgent) => {
+// Approved open house cancelled by the team (atRequest: because the agent asked) -> agent + team,
+// with a calendar cancellation.
+export const sendCancelled = (req, byName, atRequest) => {
   const l = req.listing, esc = Handlebars.escapeExpression;
   return send({
-    to: [req.agent.email, ...TEAM_TO()], replyTo: byAgent ? req.agent.email : TEAM_TO()[0],
+    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
     subject: `Cancelled: open house at ${l.addr}, ${when(req.iso, req.from, req.to)}`,
-    html: plain(`The open house at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))} hosted by ${esc(req.agent.name)} has been cancelled${byName ? ` by ${esc(byName)}` : ""}.<br><br>
+    html: plain(`The open house at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))} hosted by ${esc(req.agent.name)} has been cancelled${byName ? ` by ${esc(byName)}` : ""}${atRequest ? ` at ${esc(req.agent.name)}'s request` : ""}.<br><br>
       The attached file removes it from your calendar. Those hours are open again for other requests.`),
     attachments: icsFile(req),
   });
 };
 
-// Agent withdrew a request before anyone answered it -> team.
-export const sendWithdrawn = (req) => {
+// Team withdrew a request before approving it (atRequest: because the agent asked) -> agent + team.
+export const sendWithdrawn = (req, byName, atRequest) => {
   const l = req.listing, esc = Handlebars.escapeExpression;
   return send({
-    to: TEAM_TO(), replyTo: req.agent.email,
+    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
     subject: `Withdrawn: open house request for ${l.addr}, ${when(req.iso, req.from, req.to)}`,
-    html: plain(`${esc(req.agent.name)} withdrew their request for ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))}. No action is needed.`),
+    html: plain(`${esc(req.agent.name)}'s request for ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))} has been withdrawn${byName ? ` by ${esc(byName)}` : ""}${atRequest ? ", as they asked" : ""}. No action is needed.`),
+  });
+};
+
+// Agent asked to cancel -> team, with a link to approve the cancellation or keep the open house.
+export const sendCancelRequested = (req) => {
+  const l = req.listing, esc = Handlebars.escapeExpression, c = req.cancelRequest;
+  const link = `${site(req)}/respond/?id=${req.id}`;
+  return send({
+    to: TEAM_TO(), replyTo: req.agent.email,
+    subject: `Cancellation request: ${l.addr}, ${when(req.iso, req.from, req.to)}`,
+    html: plain(`${esc(req.agent.name)} asked to cancel their ${req.status === "approved" ? "approved open house" : "open house request"} at ${esc(l.addr)} (MLS# ${esc(req.mls)}) on ${esc(when(req.iso, req.from, req.to))}.<br><br>
+      ${c.reason ? `<b>Reason:</b> ${esc(c.reason)}<br><br>` : ""}Nothing changes until someone on the team answers. <a href="${link}">Open the request</a> to approve the cancellation or keep the open house.`),
+  });
+};
+
+// Team kept the open house after the agent asked to cancel -> agent.
+export const sendCancelKept = (req, byName) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  return send({
+    to: req.agent.email, replyTo: TEAM_TO()[0],
+    subject: `Still on: open house at ${l.addr}, ${when(req.iso, req.from, req.to)}`,
+    html: plain(`Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team${byName ? ` (${esc(byName)})` : ""} kept your ${req.status === "approved" ? "open house" : "open house request"} at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))}, so it hasn't been cancelled. Reply to this email to talk it through.`),
   });
 };
 

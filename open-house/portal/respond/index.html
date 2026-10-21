@@ -35,6 +35,7 @@ ul.log{list-style:none;padding:0;margin:0;font-size:.85rem}ul.log li{padding:6px
 ul.log .t{color:var(--muted)}
 .shot{max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px}
 .muted{color:var(--muted);font-size:.9rem}
+.box.ask{border:2px solid var(--danger)}.box.ask h2{margin-top:0;color:var(--danger)}
 </style>
 </head>
 <body>
@@ -70,6 +71,7 @@ async function load() {
   const d = await r.json();
   const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (MLS# ${esc(d.mls)})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
     <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+  if (d.status === "pending" && d.cancelRequest) return askView(d, details);
   if (d.status === "approved" || d.status === "cancelled") return manage(d, details);
   if (d.status !== "pending") {
     return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
@@ -103,16 +105,47 @@ const EVENT = {
   mls_job_sent: "Sent to MLS bot", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
   mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "MLS bot failed", mls_needs_login: "MLS sign-in needed",
   mls_stalled: "MLS bot stalled", mls_delivery_failed: "Couldn't reach MLS bot",
+  cancel_requested: "Agent asked to cancel", cancel_kept: "Cancellation request turned down",
 };
 const fmtAt = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
+// POST a team action to /api/manage, then reload the page (a 502 means it saved but an email failed).
+async function postManage(body, btn) {
+  btn.disabled = true; $("msg").className = ""; $("msg").textContent = "Saving…";
+  const r = await fetch("/api/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  if (r && (r.ok || r.status === 502)) { await load(); if (j.message) { $("msg").className = "err"; $("msg").textContent = j.message; } return; }
+  $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again."; btn.disabled = false;
+}
+
+// The agent asked to cancel: the team approves it or keeps the open house.
+function cancelBox(d) {
+  const c = d.cancelRequest, what = d.status === "approved" ? "open house" : "request";
+  return `<div class="box ask"><h2>Cancellation requested</h2>
+    <p style="margin:0">${esc(c.byName || "The agent")} asked on ${esc(fmtAt(new Date(c.at).toISOString()))} to cancel this ${what}.</p>
+    ${c.reason ? `<p class="muted"><b>Reason:</b> ${esc(c.reason)}</p>` : ""}
+    <p class="muted">Approving emails the agent and the team${d.status === "approved" && d.mode !== "off" ? ", and the MLS bot marks it Canceled on the listing" : ""}. Keeping it emails the agent that it's still on.</p>
+    <div class="row"><button class="go" id="approveCancel">Approve cancellation</button><button class="no" id="keep">Keep the ${what}</button></div></div>`;
+}
+function bindCancelBox() {
+  if ($("approveCancel")) $("approveCancel").onclick = () => postManage({ action: "cancel" }, $("approveCancel"));
+  if ($("keep")) $("keep").onclick = () => postManage({ action: "keep" }, $("keep"));
+}
+function askView(d, details) {
+  el(`<h1>Open house request</h1>${details}${cancelBox(d)}<p id="msg" role="status"></p>`);
+  bindCancelBox();
+}
+
 function manage(d, details) {
-  const s = d.sync || {}, [cls, label] = STATE[s.state] || ["", d.mode === "off" ? "Entered by hand" : "Not sent yet"];
-  const live = d.status === "approved";
+  const s = d.sync || {}, live = d.status === "approved";
+  let [cls, label] = STATE[s.state] || ["", d.mode === "off" ? "Entered by hand" : "Not sent yet"];
+  if (!live && s.state === "synced") label = "Cancelled on the MLS ✓"; // "synced" means the MLS matches, which for a cancellation means it's gone
+  if (!live && s.state === "manual") label = "Remove by hand";
   const canRetry = ["failed", "needs_login", "dry_run_ok"].includes(s.state);
   const hours = (sel) => Array.from({ length: d.lastHour - d.firstHour + 1 }, (_, i) => d.firstHour + i)
     .map((h) => `<option value="${h}" ${h === sel ? "selected" : ""}>${fmtH(h)}</option>`).join("");
   el(`<h1>${live ? "Approved open house" : "Cancelled open house"}</h1>${details}
+    ${live && d.cancelRequest ? cancelBox(d) : ""}
     <p>${d.decidedBy ? "Approved by " + esc(d.decidedBy) + ". " : ""}${d.cancelledBy ? "Cancelled by " + esc(d.cancelledBy) + "." : ""}</p>
     <h2>MLS</h2>
     <div class="box"><span class="pill ${cls}">${esc(label)}</span>${s.message ? `<p class="muted">${esc(s.message)}</p>` : ""}
@@ -132,13 +165,8 @@ function manage(d, details) {
     <p id="msg" role="status"></p>
     <h2>History</h2><ul class="log">${(d.events || []).map((e) => `<li><span class="t">${esc(fmtAt(e.at))}</span> · ${esc(EVENT[e.type] || e.type)}${e.by ? " · " + esc(e.by) : ""}${e.note ? `<br><span class="t">${esc(e.note)}</span>` : ""}</li>`).join("") || '<li class="t">No history yet.</li>'}</ul>`);
 
-  const post = async (body, btn) => {
-    btn.disabled = true; $("msg").className = ""; $("msg").textContent = "Saving…";
-    const r = await fetch("/api/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
-    const j = r ? await r.json().catch(() => ({})) : {};
-    if (r && (r.ok || r.status === 502)) { await load(); if (j.message) { $("msg").className = "err"; $("msg").textContent = j.message; } return; }
-    $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again."; btn.disabled = false;
-  };
+  const post = postManage;
+  bindCancelBox();
   if ($("retry")) $("retry").onclick = () => post({ action: "retry" }, $("retry"));
   if ($("change")) $("change").onclick = () => post({ action: "change", iso: $("cDate").value, from: Number($("cFrom").value), to: Number($("cTo").value) }, $("change"));
   if ($("cancel")) $("cancel").onclick = () => confirm("Cancel this open house? The agent and team will be emailed.") && post({ action: "cancel" }, $("cancel"));

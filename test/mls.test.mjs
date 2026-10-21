@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 process.env.MLS_WEBHOOK_SECRET = "s".repeat(40);
 const { nextAction, needsDispatch, buildPayload, applyResult, sign, verify, desiredFor } = await import("../netlify/lib/mls.mjs");
-const { checkChange, checkCancel } = await import("../netlify/lib/changes.mjs");
+const { checkChange, checkCancel, checkCancelRequest, openCancelRequest } = await import("../netlify/lib/changes.mjs");
 const { ics } = await import("../netlify/lib/email.mjs");
 
 const NOW = Date.parse("2026-10-21T13:00:00Z"); // Wed Oct 21, 8 AM Central
@@ -51,6 +51,9 @@ test("webhook payload", () => {
   const c = { ...onMls(req()), status: "cancelled" };
   const pc = buildPayload(c, needsDispatch(c, NOW, "live"), "job_2");
   assert.deepEqual([pc.action, pc.remove_method, pc.start, pc.original_start], ["cancel", "cancel", "13:00", "13:00"]);
+  assert.equal(pc.callback_url, "https://open-house.synergyrealtors.com/api/mls/callback");      // no site recorded: production
+  const local = req({ site: "http://localhost:8888" });
+  assert.equal(buildPayload(local, needsDispatch(local, NOW, "live"), "job_3").callback_url, "http://localhost:8888/api/mls/callback");
 });
 
 test("bot results update the MLS state", () => {
@@ -94,15 +97,29 @@ test("team change rules", () => {
   assert.match(checkChange(r, { iso: "2026-10-25", from: 14, to: 16 }, [r], Date.parse("2026-10-24T18:30:00Z")), /already started/);
 });
 
-test("cancel rules", () => {
-  const agent = { email: "agent@synergyrealtors.com", team: false }, stranger = { email: "x@synergyrealtors.com", team: false }, team = { email: "t@georgeandnoonan.com", team: true };
-  assert.equal(checkCancel(req(), agent, NOW), null);                           // own approved, before the cutoff passes or not
-  assert.equal(checkCancel(req({ status: "pending" }), agent, NOW), null);
+const agent = { email: "agent@synergyrealtors.com", name: "Pat Agent", team: false }, stranger = { email: "x@synergyrealtors.com", team: false }, team = { email: "t@georgeandnoonan.com", team: true };
+
+test("cancel rules: only the team cancels", () => {
   assert.equal(checkCancel(req(), team, NOW), null);
-  assert.match(checkCancel(req(), stranger, NOW), /your own/);
-  assert.match(checkCancel(req({ status: "declined" }), agent, NOW), /already declined/);
-  assert.equal(checkCancel(req(), agent, Date.parse("2026-10-24T17:00:00Z")), null);  // Saturday noon, still before 1 PM start
-  assert.match(checkCancel(req(), agent, Date.parse("2026-10-24T18:30:00Z")), /already started/);
+  assert.equal(checkCancel(req({ status: "pending" }), team, NOW), null);
+  assert.match(checkCancel(req(), agent, NOW), /Only the George & Noonan team/);   // agents ask instead
+  assert.match(checkCancel(req({ status: "declined" }), team, NOW), /already declined/);
+  assert.equal(checkCancel(req(), team, Date.parse("2026-10-24T17:00:00Z")), null);   // Saturday noon, still before 1 PM start
+  assert.match(checkCancel(req(), team, Date.parse("2026-10-24T18:30:00Z")), /already started/);
+});
+
+test("agents ask the team to cancel their own requests", () => {
+  assert.equal(checkCancelRequest(req(), agent, NOW), null);                     // own approved open house
+  assert.equal(checkCancelRequest(req({ status: "pending" }), agent, NOW), null); // own pending request
+  assert.match(checkCancelRequest(req(), stranger, NOW), /your own/);
+  assert.match(checkCancelRequest(req({ status: "cancelled" }), agent, NOW), /already cancelled/);
+  assert.match(checkCancelRequest(req(), agent, Date.parse("2026-10-24T18:30:00Z")), /already started/);
+  const asked = req({ cancelRequest: { at: NOW, by: agent.email } });
+  assert.ok(openCancelRequest(asked));
+  assert.match(checkCancelRequest(asked, agent, NOW), /already asked/);            // one open request at a time
+  const kept = req({ cancelRequest: { at: NOW, by: agent.email, outcome: "kept" } });
+  assert.ok(!openCancelRequest(kept));
+  assert.equal(checkCancelRequest(kept, agent, NOW), null);                      // can ask again after the team kept it
 });
 
 test("calendar invites update and cancel the same event", () => {

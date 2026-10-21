@@ -7,13 +7,26 @@
   const money = (n) => "$" + Number(n || 0).toLocaleString("en-US");
   const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-  const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired" };
+  const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
+  // MLS status of approved and cancelled open houses: [pill class, label]. "synced" means the MLS matches.
+  const MLS = {
+    manual: ["", "Entered by hand"], idle: ["pending", "Waiting for MLS bot"], booking: ["pending", "MLS bot working"],
+    synced: ["approved", "On the MLS"], dry_run_ok: ["approved", "Dry run passed"], failed: ["declined", "MLS update failed"], needs_login: ["declined", "MLS sign-in needed"],
+  };
+  const mlsCell = (r) => {
+    if (r.status !== "approved" && r.status !== "cancelled") return '<span class="sub">—</span>';
+    let [c, t] = MLS[r.mlsState] || ["", mode === "off" ? "Entered by hand" : "Not sent yet"];
+    if (r.status === "cancelled" && r.mlsState === "synced") t = "Cancelled on the MLS";
+    if (r.status === "cancelled" && (r.mlsState === "manual" || (!r.mlsState && mode === "off"))) t = "Remove by hand";
+    return `<span class="pill ${c}">${esc(t)}</span><div class="sub"><a href="/respond/?id=${encodeURIComponent(r.id)}">MLS status</a></div>`;
+  };
   // Listing photos are Repliers CDN paths; built-in listings may carry a full URL.
   const photo = (img, size = "small") => !img ? "" : /^https?:/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
 
   let me = null;
   let requests = [];
+  let mode = "off"; // MLS_BOOKING_MODE: off means the team enters the MLS by hand
 
   let toastTimer;
   function toast(text, err) {
@@ -76,11 +89,13 @@
 
   async function loadRequests() {
     const r = await api("GET", "/api/team/requests");
-    if (r.ok) requests = r.data.requests;
-    const n = requests.filter((x) => x.status === "pending").length;
+    if (r.ok) { requests = r.data.requests; mode = r.data.mode || "off"; }
+    const n = requests.filter((x) => x.status === "pending" || asksToCancel(x)).length;
     $("pendingCount").textContent = n; $("pendingCount").hidden = !n;
     return r.ok;
   }
+  // The agent asked to cancel and the open house hasn't happened yet.
+  const asksToCancel = (r) => !!r.cancelRequest && r.iso >= todayIso();
 
   async function start() {
     const r = await api("GET", "/api/me");
@@ -106,14 +121,15 @@
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
     const today = todayIso();
     const pending = requests.filter((r) => r.status === "pending");
+    const asks = requests.filter(asksToCancel);
     const upcoming = requests.filter((r) => r.status === "approved" && r.iso >= today);
     const agents = new Set(requests.map((r) => r.agent.email));
 
     view.innerHTML = `
       <section class="intro"><div><h1>Open house requests</h1>
-        <p class="sub">Approve or decline requests from Synergy agents. The first approval locks the time, and the agent gets the confirmation email with access details.</p></div></section>
+        <p class="sub">Approve or decline requests from Synergy agents. The first approval locks the time, and the agent gets the confirmation email with access details. Agents can't cancel on their own; their cancellation requests show up here too.</p></div></section>
       <div class="stats">
-        <div class="card stat"><b>${pending.length}</b><span>Waiting for a decision</span></div>
+        <div class="card stat"><b>${pending.filter((r) => !r.cancelRequest).length + asks.length}</b><span>Waiting for a decision</span></div>
         <div class="card stat"><b>${upcoming.length}</b><span>Upcoming approved</span></div>
         <div class="card stat"><b>${requests.filter((r) => r.status === "approved").length}</b><span>Approved all time</span></div>
         <div class="card stat"><b>${agents.size}</b><span>Agents who requested</span></div>
@@ -122,17 +138,18 @@
       <div class="queue" id="queue"></div>
       <h2 class="section">All requests</h2>
       <div class="toolbar">
-        <div class="chips" id="chips">${["all", "pending", "approved", "declined", "expired"].map((s) =>
+        <div class="chips" id="chips">${["all", "pending", "approved", "declined", "expired", "cancelled"].map((s) =>
           `<button class="chip" data-s="${s}" aria-pressed="${s === reqFilter}">${s === "all" ? "All" : STATUS[s]}</button>`).join("")}</div>
         <input class="field" id="search" type="search" placeholder="Search agent or address" value="${esc(reqSearch)}" aria-label="Search requests">
         <span class="spacer"></span>
         <button class="btn ghost small" id="csv">Export CSV</button>
       </div>
-      <div class="card table-wrap"><table class="stack"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+      <div class="card table-wrap"><table class="stack"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
     const q = $("queue");
-    if (!pending.length) q.innerHTML = '<div class="card empty">Nothing waiting. New requests show up here.</div>';
-    pending.slice().sort((a, b) => a.iso.localeCompare(b.iso) || a.from - b.from).forEach((r) => q.append(pendingCard(r)));
+    const waiting = [...asks, ...pending.filter((r) => !r.cancelRequest)];
+    if (!waiting.length) q.innerHTML = '<div class="card empty">Nothing waiting. New requests and cancellation requests show up here.</div>';
+    waiting.sort((a, b) => a.iso.localeCompare(b.iso) || a.from - b.from).forEach((r) => q.append(r.cancelRequest ? cancelCard(r) : pendingCard(r)));
 
     $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); fillRows(); };
     $("search").oninput = (e) => { reqSearch = e.target.value; fillRows(); };
@@ -152,9 +169,47 @@
         <td data-l="Open house"><b>${esc(r.day)}, ${esc(r.date)}</b><div class="sub">${esc(r.time)}</div></td>
         <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · MLS# ${esc(r.mls)}</div></td>
         <td data-l="Agent">${agentLink(r.agent.email, r.agent.name)}<div class="sub">${esc(r.agent.email)}</div></td>
-        <td data-l="Status">${pill(r.status)}</td>
+        <td data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}</td>
         <td data-l="Decided">${r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>` : '<span class="sub">—</span>'}</td>
-      </tr>`).join("") : '<tr><td colspan="5" class="empty">No requests match.</td></tr>';
+        <td data-l="MLS">${mlsCell(r)}</td>
+        <td data-l="">${r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
+      </tr>`).join("") : '<tr><td colspan="7" class="empty">No requests match.</td></tr>';
+    $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => {
+      const r = requests.find((x) => x.id === b.dataset.cancel);
+      if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${mode === "off" ? "; remove it from the MLS by hand" : " and the MLS bot marks it Canceled"}.`)) manageAction(r, "cancel", b);
+    });
+  }
+
+  // Team actions after a request was made: cancel (or approve the agent's cancellation request) and keep.
+  async function manageAction(r, action, btn) {
+    btn.disabled = true;
+    const res = await api("POST", "/api/manage", { id: r.id, action });
+    const done = action === "keep" ? "Kept. The agent was told it's still on." : "Cancelled. The agent and team were emailed.";
+    if (res.ok) toast(res.data.message || done);
+    else if (res.data.error === "email_failed") toast(res.data.message || "Saved, but the email failed to send.", true);
+    else { toast(res.data.message || "Could not save. Try again.", true); btn.disabled = false; return; }
+    renderRequests();
+  }
+
+  function cancelCard(r) {
+    const c = document.createElement("article"); c.className = "card req";
+    const what = r.status === "approved" ? "open house" : "request";
+    c.innerHTML = `
+      ${r.img ? `<img class="thumb" src="${esc(photo(r.img))}" alt="">` : '<div class="thumb"></div>'}
+      <div>
+        <h3>${esc(r.addr)}, ${esc(r.city)} <span class="pill declined">Cancellation requested</span></h3>
+        <div class="when">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}</div>
+        <div class="meta">${agentLink(r.agent.email, r.agent.name)} asked ${esc(fmtDate(r.cancelRequest.at))} to cancel this ${r.status === "approved" ? "approved open house" : "request"} · MLS# ${esc(r.mls)}</div>
+        ${r.cancelRequest.reason ? `<div class="notes">${esc(r.cancelRequest.reason)}</div>` : ""}
+        ${r.status === "approved" ? `<div class="meta"><a href="/respond/?id=${encodeURIComponent(r.id)}">MLS status</a></div>` : ""}
+      </div>
+      <div class="act">
+        <div class="btns" style="flex-direction:column"><button class="btn danger small approve">Approve cancellation</button><button class="btn ghost small keep">Keep ${what}</button></div>
+      </div>`;
+    const approve = c.querySelector(".approve"), keep = c.querySelector(".keep");
+    approve.onclick = () => confirm(`Cancel ${r.agent.name}'s ${what} at ${r.addr}? The agent and team will be emailed${r.status === "approved" && mode !== "off" ? " and the MLS bot marks it Canceled" : ""}.`) && manageAction(r, "cancel", approve);
+    keep.onclick = () => manageAction(r, "keep", keep);
+    return c;
   }
 
   function pendingCard(r) {
@@ -169,15 +224,16 @@
         ${r.notes ? `<div class="notes">${esc(r.notes)}</div>` : ""}
       </div>
       <div class="act">
-        <label class="check"><input type="checkbox" class="mls"> Entered on the MLS</label>
-        <div class="btns"><button class="btn small approve" disabled>Approve</button><button class="btn danger small decline">Decline</button></div>
+        ${mode === "off" ? '<label class="check"><input type="checkbox" class="mls"> Entered on the MLS</label>'
+          : `<span class="fine">Approving sends it to the MLS bot${mode === "dry_run" ? " as a dry run" : ""}.</span>`}
+        <div class="btns"><button class="btn small approve" ${mode === "off" ? "disabled" : ""}>Approve</button><button class="btn danger small decline">Decline</button></div>
       </div>`;
     const box = c.querySelector(".mls"), approve = c.querySelector(".approve"), decline = c.querySelector(".decline");
-    box.onchange = () => { approve.disabled = !box.checked; };
+    if (box) box.onchange = () => { approve.disabled = !box.checked; };
     const act = async (action) => {
       if (action === "decline" && !confirm(`Decline ${r.agent.name}'s request for ${r.addr}? They'll get an email.`)) return;
       approve.disabled = decline.disabled = true;
-      const res = await api("POST", "/api/respond", { id: r.id, action, mlsEntered: action === "approve" ? box.checked : undefined });
+      const res = await api("POST", "/api/respond", { id: r.id, action, mlsEntered: action === "approve" ? !!(box && box.checked) : undefined });
       if (res.ok) toast(action === "approve" ? "Approved. Confirmation sent to the agent and team." : "Declined. The agent was notified.");
       else if (res.data.error === "email_failed") toast(`${action === "approve" ? "Approved" : "Declined"}, but the email failed to send.`, true);
       else { toast(res.data.message || (res.data.error === "already_answered" ? `Already ${res.data.status} by ${res.data.by || "someone else"}.` : "Could not save. Try again."), true); }

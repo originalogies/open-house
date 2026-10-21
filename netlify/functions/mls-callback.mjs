@@ -10,7 +10,7 @@ import { verify, applyResult, RESULTS, getInflight, clearInflight, logEvent, sav
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   const raw = await req.text();
-  if (raw.length > 8 * 1024 * 1024) return json(413, { error: "too_large" });
+  if (raw.length > 6 * 1024 * 1024) return json(413, { error: "too_large" }); // Netlify rejects request bodies over 6 MB anyway
   if (!verify(req.headers.get("x-oh-timestamp"), req.headers.get("x-oh-signature"), raw)) return json(401, { error: "bad_signature" });
 
   const b = (() => { try { return JSON.parse(raw); } catch { return null; } })();

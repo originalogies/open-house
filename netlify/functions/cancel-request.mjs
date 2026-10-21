@@ -1,10 +1,11 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { getRequest } from "../lib/requests.mjs";
-import { cancelRequest } from "../lib/actions.mjs";
+import { requestCancellation } from "../lib/actions.mjs";
 
-// POST /api/requests/cancel { id }
-// Agents cancel their own pending or approved request, any time before it starts (the weekly
-// cutoff does not apply). Time changes go through the George & Noonan team.
+// POST /api/requests/cancel-request { id, reason? }
+// Agents can't cancel on their own. They ask, any time before the open house starts (the weekly
+// cutoff does not apply), and the George & Noonan team approves the cancellation or keeps it.
+// Time changes also go through the team.
 export default async (req) => {
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
@@ -12,8 +13,8 @@ export default async (req) => {
   const b = await req.json().catch(() => null);
   const r = b && (await getRequest(String(b.id || "")));
   // Agents only see their own requests; anyone else's id looks like it doesn't exist.
-  if (!r || (r.agent.email !== user.email && !user.team)) return json(404, { error: "not_found" });
-  const { status, ...body } = await cancelRequest(r, user);
+  if (!r || r.agent.email !== user.email) return json(404, { error: "not_found" });
+  const { status, ...body } = await requestCancellation(r, user, b.reason);
   return json(status, body);
 };
-export const config = { path: "/api/requests/cancel" };
+export const config = { path: "/api/requests/cancel-request" };

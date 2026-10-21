@@ -32,12 +32,22 @@ export function checkChange(r, next, all, now = Date.now(), external = []) {
   return null;
 }
 
-// Who may cancel. Agents: their own pending or approved request, until it starts.
-// Team: any pending or approved request, until it starts.
+// An agent's cancellation request that the team hasn't answered yet.
+export const openCancelRequest = (r) => !!r.cancelRequest && !r.cancelRequest.outcome;
+
+// Only the team cancels: any pending or approved request, until it starts.
 export function checkCancel(r, user, now = Date.now()) {
-  const own = r.agent?.email === user.email;
-  if (!own && !user.team) return "You can only cancel your own requests.";
+  if (!user.team) return "Only the George & Noonan team can cancel an open house.";
   if (!["pending", "approved"].includes(r.status)) return `This request is already ${r.status}.`;
   if (now >= startMs(r)) return "This open house has already started.";
+  return null;
+}
+
+// Agents ask the team to cancel their own pending or approved request, until it starts.
+export function checkCancelRequest(r, user, now = Date.now()) {
+  if (r.agent?.email !== user.email) return "You can only ask to cancel your own requests.";
+  if (!["pending", "approved"].includes(r.status)) return `This request is already ${r.status}.`;
+  if (now >= startMs(r)) return "This open house has already started.";
+  if (openCancelRequest(r)) return "You've already asked to cancel this one. The George & Noonan team will get back to you.";
   return null;
 }

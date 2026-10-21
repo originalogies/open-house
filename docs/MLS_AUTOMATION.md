@@ -71,7 +71,7 @@ Each request stores what the MLS **should** show (an open house while the reques
   "job_id": "job_4be0c2a1d9f37e55",
   "result": "updated",
   "message": "Entry saved as Active in Open Houses; OH icon pending",
-  "screenshot_base64": "<PNG or JPEG, up to 5 MB>"
+  "screenshot_base64": "<PNG or JPEG, up to 4 MB>"
 }
 ```
 
@@ -83,12 +83,15 @@ Each request stores what the MLS **should** show (an open house while the reques
 | `needs_login` | Sign-in or the verification code failed | Emails the team; waits for Retry |
 | `failed` | Anything else, including an overlapping open house found on the MLS form; the bot stopped without submitting | Emails the team; waits for Retry |
 
+Keep `screenshot_base64` to an image of 4 MB or less. A larger image is dropped (the result still counts), and one much over 4 MB pushes the callback past Netlify's 6 MB request limit, so Netlify rejects the whole callback before the portal sees it and the job stalls.
+
 Callbacks for an unknown, old or already-finished `job_id` are ignored. If no callback arrives within **30 minutes**, the job is marked stalled and the team is emailed. A late callback after that is ignored; when the team clicks Retry, the bot's duplicate check reports `already_done` if the first run did post.
 
 ## Team and agent actions
 
-- **Agents** can cancel their own pending or approved requests from the portal until the open house starts (the weekly cutoff doesn't apply). Time changes go through the team.
-- **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house or with an open house already on the MLS per Repliers), cancel it, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
+- **Agents** can't cancel on their own. They send a cancellation request for their own pending or approved request from the portal (the home's request panel or My open houses) until the open house starts; the weekly cutoff doesn't apply. Like a new booking, the team gets an email with a link and the request shows in the team console's "Needs a decision" queue. Nothing changes until the team answers: approving cancels it (and the bot cancels the MLS entry), keeping it emails the agent that it's still on. Time changes go through the team.
+- **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house or with an open house already on the MLS per Repliers), cancel it, approve or keep an agent's cancellation request, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
+- **Team console** (`/admin/`): each approved or cancelled request shows its MLS status with an "MLS status" link to its request page. Cancellation requests appear next to new requests, and upcoming approved open houses have a Cancel button. With MLS automation on, approving no longer asks for the "Entered on the MLS" tick.
 - Changes send the agent an "Updated" email with a calendar invite that updates the existing event (same UID, higher SEQUENCE) and reset the day-before reminder. Cancellations send a calendar cancellation. The requester's approval email still goes out at approval, not when the MLS booking finishes.
 
 ## Conflict checks
@@ -103,7 +106,7 @@ Overlapping open houses are caught in two places:
 | Store | Key | Contents |
 |---|---|---|
 | `open-house-requests` | `req/<id>` | The request, including `sync` (MLS status, current job, delivery retries) and `history` of time changes |
-| `open-house-audit` | `evt/<id>/<timestamp>-<rand>` | One entry per event: approved, declined, changed, cancelled, retry, webhook sent, bot result, stalled, delivery failed. Who and when; never secrets or access codes |
+| `open-house-audit` | `evt/<id>/<timestamp>-<rand>` | One entry per event: approved, declined, changed, cancellation requested, cancellation kept, cancelled, retry, webhook sent, bot result, stalled, delivery failed. Who and when; never secrets or access codes |
 | `open-house-screenshots` | `shot/<id>/<job_id>.png` | Bot confirmation screenshots, served to the team only by `/api/mls/screenshot?id=…` |
 | `open-house-mls` | `inflight` | The one job currently with the bot |
 
@@ -114,10 +117,11 @@ Overlapping open houses are caught in two places:
 | `MLS_BOOKING_MODE` | `off`, `dry_run` or `live`. Default `off`. |
 | `GROKBOT_WEBHOOK_URL` | Where jobs are sent. |
 | `MLS_WEBHOOK_SECRET` | 32+ random characters, shared with the bot, signs both directions. Mark as secret. |
+| `MLS_CALLBACK_URL` | Optional. By default the bot calls back the site the request was made on. Set this to a tunnel's `/api/mls/callback` address to test a local copy with the real bot. Leave it unset in production. |
 
 ## Rollout
 
-1. Deploy with `MLS_BOOKING_MODE=off` (no behaviour change except agent cancel and team change/cancel).
+1. Deploy with `MLS_BOOKING_MODE=off` (no behaviour change except agent cancellation requests and team change/cancel).
 2. Build the bot's webhook receiver and callback against this contract. Set the URL and secret.
 3. Switch to `dry_run` and approve a test request. Check the bot's dry-run result, screenshot and history on the request page.
 4. Switch to `live`.
