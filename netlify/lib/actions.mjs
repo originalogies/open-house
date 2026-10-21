@@ -2,6 +2,7 @@ import { saveRequest, listRequests } from "./requests.mjs";
 import { sendUpdated, sendCancelled, sendWithdrawn } from "./email.mjs";
 import { checkChange, checkCancel, dayKeyOf } from "./changes.mjs";
 import { logEvent, mode, desiredFor } from "./mls.mjs";
+import { mlsOpenHouses } from "./listings.mjs";
 
 // Cancel a pending or approved request. The MLS entry (if any) is cancelled by the sync job,
 // because the request's desired MLS state becomes "nothing".
@@ -25,7 +26,12 @@ export async function cancelRequest(r, user) {
 // Team moves an approved open house to a new date or hours. The sync job then sends an "update".
 export async function changeRequest(r, user, next) {
   const all = await listRequests();
-  const err = checkChange(r, next, all);
+  // Open houses entered on the MLS outside the portal. If Repliers can't be reached the change still
+  // goes through (the MLS bot also stops on an overlapping entry), but the team is told it wasn't checked.
+  let external = [], warning = null;
+  try { external = await mlsOpenHouses(r.mls); }
+  catch (e) { console.error("Repliers check failed", e.message); warning = "Couldn't check the MLS for other open houses at that time. Double-check the listing."; }
+  const err = checkChange(r, next, all, Date.now(), external);
   if (err) return { status: 409, error: "cannot_change", message: err };
   const before = { iso: r.iso, from: r.from, to: r.to };
   Object.assign(r, { iso: next.iso, day: dayKeyOf(next.iso), from: next.from, to: next.to });
@@ -37,8 +43,8 @@ export async function changeRequest(r, user, next) {
   if (manualMls) r.sync = { ...(r.sync || {}), current: desiredFor(r), state: "manual" };
   else if (r.sync && r.sync.state !== "booking") r.sync.state = "idle"; // MLS change pending
   await saveRequest(r);
-  await logEvent(r.id, "changed", { before, after: { iso: r.iso, from: r.from, to: r.to }, note: manualMls ? "Update the MLS by hand" : "Queued MLS update" }, user.email);
+  await logEvent(r.id, "changed", { before, after: { iso: r.iso, from: r.from, to: r.to }, note: [manualMls ? "Update the MLS by hand" : "Queued MLS update", warning].filter(Boolean).join(". ") }, user.email);
   try { await sendUpdated(r, before, user.name); }
-  catch (e) { console.error("email failed", e.message); return { status: 502, error: "email_failed", message: "Changed, but the email failed to send." }; }
-  return { status: 200, ok: true, manualMls };
+  catch (e) { console.error("email failed", e.message); return { status: 502, error: "email_failed", message: ["Changed, but the email failed to send.", warning].filter(Boolean).join(" ") }; }
+  return { status: 200, ok: true, manualMls, ...(warning && { message: warning }) };
 }

@@ -111,3 +111,20 @@ test("calendar invites update and cancel the same event", () => {
   const cx = ics(req({ seq: 2, status: "cancelled" }));
   assert.match(cx, /METHOD:CANCEL/); assert.match(cx, /STATUS:CANCELLED/); assert.match(cx, /UID:a{32}@/);
 });
+
+const { openHouseEntries } = await import("../netlify/lib/listings.mjs");
+
+test("team changes are checked against open houses already on the MLS", () => {
+  const r = { ...req(), sync: { current: { iso: "2026-10-24", from: 13, to: 16, type: "Public" } } };
+  // Repliers sends UTC; 19:00Z on Oct 25 is 2 PM Central.
+  const ext = openHouseEntries({ openHouse: [
+    { startTime: "2026-10-24T18:00:00.000-00:00", endTime: "2026-10-24T21:00:00.000-00:00", status: "Active" },   // this request's own entry
+    { startTime: "2026-10-25T19:00:00.000-00:00", endTime: "2026-10-25T21:00:00.000-00:00", status: "Active" },   // entered outside the portal
+    { startTime: "2026-10-25T15:00:00.000-00:00", endTime: "2026-10-25T17:00:00.000-00:00", status: "Cancelled" },
+  ] });
+  assert.deepEqual(ext, [{ iso: "2026-10-24", from: 13, to: 16 }, { iso: "2026-10-25", from: 14, to: 16 }]);
+  assert.match(checkChange(r, { iso: "2026-10-25", from: 15, to: 17 }, [r], NOW, ext), /already on the MLS \(2:00 PM to 4:00 PM\)/);
+  assert.equal(checkChange(r, { iso: "2026-10-25", from: 10, to: 12 }, [r], NOW, ext), null);       // cancelled entry doesn't block
+  assert.equal(checkChange(r, { iso: "2026-10-24", from: 14, to: 17 }, [r], NOW, ext), null);       // its own entry doesn't block
+  assert.equal(checkChange(r, { iso: "2026-10-25", from: 16, to: 18 }, [r], NOW, ext), null);       // back to back is fine
+});

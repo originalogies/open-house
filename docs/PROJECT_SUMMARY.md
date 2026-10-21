@@ -96,7 +96,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 ## Testing and deployment
 
-- Run `npm test` (20 tests, including MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
+- Run `npm test` (21 tests, including MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
 - After editing a file in `open-house/emails/`, run `npm run build:templates` (Netlify also runs it on each build).
 - Push to `main` to deploy. Functions take about a minute longer than static files to appear.
 
@@ -114,8 +114,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 4. **Not yet built:** an email to agents when a request expires unanswered; a dedicated Declined template (currently a plain message); a restriction limiting requests to a Synergy roster beyond the Google allowlist; the Repliers photo CDN path for built-in listings is unverified.
 5. **End-to-end check still worth doing:** submit a real request, approve it, and confirm the Confirmed email, calendar invite and (the next morning) the Reminder arrive and look correct, including the logo.
 6. **No team list of approved open houses yet.** The team reaches a request's page from its email link. A dashboard listing every request (with MLS status) is the next step for the admin area.
-7. **Team time changes don't check Repliers.** They are checked against other approved requests, but not against open houses entered on the MLS outside the portal.
-8. **Cutoff is global.** It repeats weekly; there is no per-week override.
+7. **Cutoff is global.** It repeats weekly; there is no per-week override.
 
 ## Decisions worth remembering
 

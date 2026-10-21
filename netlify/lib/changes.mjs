@@ -9,8 +9,13 @@ const dow = (iso) => new Date(`${iso}T12:00:00Z`).getUTCDay();
 export const dayKeyOf = (iso) => (dow(iso) === 6 ? "sat" : dow(iso) === 0 ? "sun" : null);
 const startMs = (r) => chicagoToUtc(r.iso, r.from).getTime();
 
+const fmtH = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
+const sameBlock = (a, b) => !!a && !!b && a.iso === b.iso && a.from === b.from && a.to === b.to;
+
 // Team changes the date or hours of an approved open house. Returns an error message or null.
-export function checkChange(r, next, all, now = Date.now()) {
+// `external` is the listing's open houses already on the MLS ([{ iso, from, to }], from Repliers).
+// The request's own MLS entry is ignored, since it's the one being moved.
+export function checkChange(r, next, all, now = Date.now(), external = []) {
   if (r.status !== "approved") return "Only approved open houses can be changed.";
   if (now >= startMs(r)) return "This open house has already started.";
   const { iso, from, to } = next;
@@ -21,6 +26,9 @@ export function checkChange(r, next, all, now = Date.now()) {
   if (iso === r.iso && from === r.from && to === r.to) return "That's the same time it already has.";
   const moved = { ...r, iso, from, to };
   if (all.some((x) => x.id !== r.id && x.status === "approved" && overlaps(x, moved))) return "Another approved open house already holds those hours.";
+  const own = [r.sync?.current, { iso: r.iso, from: r.from, to: r.to }];
+  const clash = external.find((e) => !own.some((o) => sameBlock(o, e)) && e.iso === iso && e.from < to && from < e.to);
+  if (clash) return `That overlaps an open house already on the MLS (${fmtH(clash.from)} to ${fmtH(clash.to)}).`;
   return null;
 }
 

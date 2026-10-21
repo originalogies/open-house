@@ -81,15 +81,22 @@ Each request stores what the MLS **should** show (an open house while the reques
 | `already_done` | The MLS already showed it (e.g. duplicate check) | Marks the MLS as matching |
 | `dry_run` | Dry run finished, nothing submitted | Shows "Dry run passed" |
 | `needs_login` | Sign-in or the verification code failed | Emails the team; waits for Retry |
-| `failed` | Anything else; the bot stopped without submitting | Emails the team; waits for Retry |
+| `failed` | Anything else, including an overlapping open house found on the MLS form; the bot stopped without submitting | Emails the team; waits for Retry |
 
 Callbacks for an unknown, old or already-finished `job_id` are ignored. If no callback arrives within **30 minutes**, the job is marked stalled and the team is emailed. A late callback after that is ignored; when the team clicks Retry, the bot's duplicate check reports `already_done` if the first run did post.
 
 ## Team and agent actions
 
 - **Agents** can cancel their own pending or approved requests from the portal until the open house starts (the weekly cutoff doesn't apply). Time changes go through the team.
-- **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house), cancel it, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
+- **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house or with an open house already on the MLS per Repliers), cancel it, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
 - Changes send the agent an "Updated" email with a calendar invite that updates the existing event (same UID, higher SEQUENCE) and reset the day-before reminder. Cancellations send a calendar cancellation. The requester's approval email still goes out at approval, not when the MLS booking finishes.
+
+## Conflict checks
+
+Overlapping open houses are caught in two places:
+
+1. **Portal:** new requests and team time changes are checked against approved requests and against the listing's open houses on the MLS (from Repliers). The request's own MLS entry is ignored when it's being moved. If Repliers can't be reached, a change still goes through and the team sees a warning.
+2. **Bot:** before adding or updating, the bot checks the Active entries on the Matrix Open Houses form. An exact match is reported as `already_done`; an overlap stops the job as `failed`. This is the final check, since Repliers can lag behind the MLS.
 
 ## Where things are stored (Netlify Blobs)
 

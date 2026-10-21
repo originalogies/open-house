@@ -61,20 +61,33 @@ export function normalize(l) {
   };
 }
 
-// Open houses already on the MLS, mapped to whole-hour blocks (Central time). Repliers is read-only for us.
+// Open houses already on the MLS for one listing, as whole-hour blocks in Central time: [{ iso, from, to }].
 // Entries look like { date, startTime: "2026-05-23T18:00:00.000-00:00" (UTC), endTime, type, status }.
-export function openHouseBlocks(raw, week) {
+// Deleted and cancelled entries are ignored.
+export function openHouseEntries(raw) {
   const out = [];
   for (const o of Array.isArray(raw.openHouse) ? raw.openHouse : []) {
     if (/deleted|cancel/i.test(String(o.status || ""))) continue;
     const start = new Date(o.startTime), end = new Date(o.endTime);
     if (Number.isNaN(+start) || Number.isNaN(+end) || end <= start) continue;
     const { date, hour } = chicagoNow(start);
-    const day = Object.keys(week.days).find((k) => week.days[k].iso === date);
-    if (!day) continue;
-    out.push({ day, from: hour, to: hour + Math.ceil((end - start) / 3600000) });
+    out.push({ iso: date, from: hour, to: hour + Math.ceil((end - start) / 3600000) });
   }
   return out;
+}
+
+// The same, limited to the weekend being offered and keyed by day ("sat"/"sun"). Repliers is read-only for us.
+export function openHouseBlocks(raw, week) {
+  return openHouseEntries(raw).flatMap(({ iso, from, to }) => {
+    const day = Object.keys(week.days).find((k) => week.days[k].iso === iso);
+    return day ? [{ day, from, to }] : [];
+  });
+}
+
+// Open houses on the MLS for one listing, any date. Throws if Repliers can't be reached.
+export async function mlsOpenHouses(mls) {
+  const raw = (await fetchRaw()).find((l) => String(l.mlsNumber) === String(mls));
+  return raw ? openHouseEntries(raw) : [];
 }
 
 // ---- Team-managed details (not in MLS data) ------------------------------
