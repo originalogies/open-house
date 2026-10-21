@@ -139,17 +139,21 @@ export async function probe() {
   return out;
 }
 
-// Admin /listings test page: every active listing for Troy George (any class, land included), plus single-listing detail.
-export const TROY_AGENT_ID = BOARD_AGENT_IDS[0];
+// Admin /listings test page: up to 10 active Southlake homes for sale from Repliers, no agent filter, plus single-listing detail.
+// Repliers' `class` is unreliable (single-family homes appear under CondoProperty), so homes are picked by property type and style instead.
+export const TEST_CITY = "Southlake";
+const NOT_A_HOME = /land|lot|farm|ranch|acre|condo|town ?(home|house)|duplex|multi|commercial|lease/i;
 
-export async function troyListings() {
-  const all = [];
-  for (let page = 1; page <= 5; page++) {
-    const d = await repliers(new URLSearchParams({ status: "A", agent: TROY_AGENT_ID, resultsPerPage: "100", pageNum: String(page) }));
-    all.push(...(d.listings || []));
+export async function testListings() {
+  const homes = [];
+  for (let page = 1; page <= 5 && homes.length < 10; page++) {
+    const d = await repliers(new URLSearchParams({ status: "A", type: "sale", city: TEST_CITY, resultsPerPage: "100", pageNum: String(page) }));
+    for (const l of d.listings || []) {
+      if (/^residential$/i.test(l.details?.propertyType || "") && !NOT_A_HOME.test(l.details?.style || "")) homes.push(l);
+    }
     if (page >= (d.numPages || 1)) break;
   }
-  return all.map((l) => ({ ...normalize(l), type: l.details?.propertyType || "", class: l.class || "" }));
+  return homes.slice(0, 10).map((l) => ({ ...normalize(l), type: l.details?.style || "", class: l.class || "" }));
 }
 
 export async function listingDetail(mls) {

@@ -75,7 +75,7 @@ async function load() {
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { app.innerHTML = '<a href="/">← Back</a><h1>Listings test</h1><p class="msg err">Repliers error: ' + esc(d.message || d.error || r.status) + "</p>"; return; }
   app.innerHTML = '<a href="/">← Back to open house requests</a><h1>Listings test</h1>'
-    + '<p class="lead">' + d.count + " active listing" + (d.count === 1 ? "" : "s") + " for " + esc(d.agent) + " (board agent ID " + esc(d.agentId) + "), pulled live from Repliers. Click a listing to see its raw data.</p>"
+    + '<p class="lead">' + d.count + " active listing" + (d.count === 1 ? "" : "s") + " in " + esc(d.city) + " (no agent filter), pulled live from Repliers. Click a listing to see its raw data.</p>"
     + '<ul id="list"></ul>';
   const ul = document.getElementById("list");
   if (!d.listings.length) ul.innerHTML = '<li class="meta">No active listings returned.</li>';
