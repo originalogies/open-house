@@ -1,11 +1,18 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { offeredListings, snapshot } from "../lib/listings.mjs";
-import { listRequests, saveRequest, newId, overlaps } from "../lib/requests.mjs";
+import { listRequests, saveRequest, newId, overlaps, historyFor } from "../lib/requests.mjs";
 import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
+// GET  /api/requests -> the signed-in agent's own requests (history and status)
+// POST /api/requests -> submit a new request
 export default async (req) => {
+  if (req.method === "GET") {
+    const user = await currentUser(req);
+    if (!user) return json(401, { error: "signed_out" });
+    return json(200, { requests: historyFor(await listRequests(), user.email) });
+  }
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });

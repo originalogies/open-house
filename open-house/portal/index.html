@@ -150,6 +150,29 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 .mine .tag.ok{color:var(--accent)}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+/* My open houses: the agent's own requests and history */
+.myoh{padding:8px 0 56px;scroll-margin-top:16px}
+.myoh-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap;margin-bottom:14px}
+.myoh h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.5rem,3vw,1.9rem);margin:0}
+.myoh-stats{display:flex;gap:22px}
+.myoh-stats div{text-align:right}
+.myoh-stats b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:500;line-height:1}
+.myoh-stats span{font-size:.8rem;color:var(--muted)}
+.myoh-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.myoh-tabs button{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:10px 12px;font-weight:600;color:var(--muted);cursor:pointer}
+.myoh-tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.myoh-list{list-style:none;margin:0;padding:0}
+.myoh-list li{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.myoh-list .thumb{width:72px;height:54px;border-radius:8px;background:var(--photo);object-fit:cover}
+.myoh-list .a{font-family:var(--serif);font-size:1.12rem;font-weight:500;line-height:1.2}
+.myoh-list .w{font-size:.9rem;color:var(--muted)}
+.myoh-list .empty{display:block;color:var(--muted);padding:22px 0}
+.opill{font-size:.78rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;background:var(--taken);color:var(--muted)}
+.opill.pending{color:var(--brass);background:rgba(154,122,58,.12)}
+.opill.approved,.opill.hosted{color:var(--accent);background:var(--accent-soft)}
+.opill.declined{color:#A12B2B;background:rgba(161,43,43,.1)}
+@media (prefers-color-scheme: dark){.opill.declined{color:#E58A8A}}
+@media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .opill{grid-column:2;justify-self:start}}
 
 @media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
@@ -199,6 +222,18 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
   </section>
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
+
+  <section class="myoh" id="my-open-houses" aria-labelledby="myohTitle" hidden>
+    <div class="myoh-head">
+      <h2 id="myohTitle">My open houses</h2>
+      <div class="myoh-stats" id="myohStats"></div>
+    </div>
+    <div class="myoh-tabs" role="tablist">
+      <button role="tab" id="tabUp" aria-selected="true">Upcoming</button>
+      <button role="tab" id="tabPast" aria-selected="false">History</button>
+    </div>
+    <ul class="myoh-list" id="myohList"></ul>
+  </section>
 
   <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
@@ -318,6 +353,39 @@ document.addEventListener("signedin", async () => {
   if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
 });
 
+// My open houses: every request this agent has made, split into upcoming and history.
+let myReqs = [], myTab = "up";
+const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+const isUpcoming = r => r.iso >= todayIso() && (r.status === "pending" || r.status === "approved");
+function myLabel(r){
+  if (r.status === "approved") return r.iso < todayIso() ? ["hosted","Hosted"] : ["approved","Approved"];
+  return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"] })[r.status] || ["", r.status];
+}
+function renderMine(){
+  const up = myReqs.filter(isUpcoming).sort((a,b) => a.iso.localeCompare(b.iso) || a.from - b.from);
+  const past = myReqs.filter(r => !isUpcoming(r));
+  const hosted = past.filter(r => r.status === "approved").length;
+  $("myohStats").innerHTML = `<div><b>${hosted}</b><span>Hosted</span></div><div><b>${up.filter(r=>r.status==="approved").length}</b><span>Upcoming</span></div>`;
+  $("tabUp").textContent = `Upcoming (${up.length})`; $("tabPast").textContent = `History (${past.length})`;
+  $("tabUp").setAttribute("aria-selected", myTab === "up"); $("tabPast").setAttribute("aria-selected", myTab === "past");
+  const list = myTab === "up" ? up : past;
+  $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
+      ${r.img ? `<img class="thumb" src="${CDN + esc(r.img)}?class=small" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
+      <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
+      <span class="opill ${c}">${t}</span></li>`; }).join("")
+    : `<li><span class="empty">${myTab === "up" ? "No upcoming open houses. Pick a home above to request one." : "Your past open houses will show up here."}</span></li>`;
+}
+async function loadMine(){
+  const r = await fetch("/api/requests").catch(() => null);
+  if (!r || !r.ok) return;
+  myReqs = (await r.json()).requests;
+  $("my-open-houses").hidden = false;
+  renderMine();
+}
+$("tabUp").onclick = () => { myTab = "up"; renderMine(); };
+$("tabPast").onclick = () => { myTab = "past"; renderMine(); };
+document.addEventListener("signedin", loadMine);
+
 // Sheet
 let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to} hour blocks, to exclusive
 function openSheet(i, trigger){
@@ -424,7 +492,7 @@ $("submit").onclick=async ()=>{
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ err.textContent = d.message || "Could not send the request. Try again."; err.hidden=false; update(); return; }
   const idx = homes.indexOf(cur);
-  await loadListings(); cur = homes[idx];
+  await loadListings(); cur = homes[idx]; loadMine();
   if(r.status===502){ err.textContent = d.message; }
   showStatus();
   $("sheet").scrollTo({top:0,behavior:"smooth"});

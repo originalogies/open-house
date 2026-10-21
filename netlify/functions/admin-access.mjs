@@ -1,5 +1,5 @@
 import {
-  json, currentUser, getAccess, saveAccess, adminEmails, normalizeEmail, normalizeDomain, sameOrigin,
+  json, currentUser, getAccess, saveAccess, adminEmails, parseList, normalizeEmail, normalizeDomain, sameOrigin,
 } from "../lib/shared.mjs";
 
 export default async (req) => {
@@ -9,7 +9,7 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const a = await getAccess();
-    return json(200, { emails: a.stored.emails, domains: a.stored.domains, env: a.env, admins: adminEmails() });
+    return json(200, { emails: a.stored.emails, domains: a.stored.domains, env: a.env, admins: adminEmails(), team: parseList(process.env.TEAM_EMAILS) });
   }
 
   if (req.method === "PUT") {

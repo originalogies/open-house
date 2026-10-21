@@ -1,0 +1,93 @@
+/* Shared George & Noonan look for every page: colors, type, header, buttons, form fields.
+   Load the fonts in the page head:
+   https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap */
+:root{
+  --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
+  --accent:#1E5B4F; --accent-ink:#FFFFFF; --accent-soft:#E3EEEA; --brass:#9A7A3A; --brass-soft:#F4EEDF;
+  --danger:#A12B2B; --danger-soft:#F6E5E5; --priority:#2F8BE0; --photo:#2B3A45;
+  --serif:"Newsreader", Georgia, "Times New Roman", serif;
+  --sans:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
+    --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --brass-soft:#2E2918;
+    --danger:#E58A8A; --danger-soft:#3A2224; --photo:#24313B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
+  --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --brass-soft:#2E2918;
+  --danger:#E58A8A; --danger-soft:#3A2224; --photo:#24313B;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+[hidden]{display:none!important}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+@media (max-width:600px){.wrap{padding:0 16px}}
+
+/* Header with logo and portal label */
+header.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.brand{display:flex;flex-direction:column;align-items:center;width:260px;max-width:60%;text-decoration:none}
+.brand .logo{display:block;width:100%;height:auto;margin-bottom:8px}
+.brand .logo-dark{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .logo-light{display:none}
+  :root:not([data-theme="light"]) .logo-dark{display:block}
+}
+:root[data-theme="dark"] .logo-light{display:none}
+:root[data-theme="dark"] .logo-dark{display:block}
+.brand .portal-label{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.34em;margin-right:-.34em;color:var(--ink);white-space:nowrap}
+.who{font-size:.85rem;color:var(--muted);text-align:right}
+.who strong{color:var(--ink);font-weight:600}
+.who-links{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;margin-top:2px}
+.who-links a,.who-links button{background:none;border:0;padding:0;color:var(--accent);font-size:.85rem;text-decoration:underline;cursor:pointer}
+
+/* Page intro */
+.intro{padding:32px 0 22px}
+.intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.7rem,3.4vw,2.3rem);line-height:1.12;margin:0 0 6px;letter-spacing:-.01em}
+.intro .sub{margin:0;color:var(--muted);font-size:1.02rem;max-width:68ch}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:10px;border:1px solid transparent;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer;text-decoration:none;line-height:1.2}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn.danger{background:var(--surface);color:var(--danger);border-color:var(--line)}
+.btn.small{padding:7px 12px;font-size:.88rem;border-radius:8px}
+.link{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:.9rem}
+
+/* Form fields */
+.field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+textarea.field{min-height:84px;resize:vertical}
+.label{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
+.check{display:inline-flex;gap:8px;align-items:center;font-size:.93rem;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+
+/* Surfaces and labels */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.pill{display:inline-block;font-size:.76rem;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--bg);color:var(--muted);white-space:nowrap}
+.pill.pending{background:var(--brass-soft);color:var(--brass)}
+.pill.approved{background:var(--accent-soft);color:var(--accent)}
+.pill.declined{background:var(--danger-soft);color:var(--danger)}
+.pill.priority{background:var(--priority);color:#fff}
+.muted{color:var(--muted)}
+.fine{font-size:.85rem;color:var(--muted)}
+
+/* Toast */
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:.92rem;transition:.2s;z-index:50;max-width:calc(100vw - 32px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{background:var(--danger);color:#fff}
+
+/* Sign-in gate */
+.gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:16px;z-index:40}
+.gate-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:400px;width:100%;text-align:center}
+.gate-card .logo{width:240px;margin:0 auto 18px}
+.gate-card h2{font-family:var(--serif);font-weight:500;font-size:1.4rem;margin:0 0 8px}
+.gate-card p{color:var(--muted);margin:0 0 20px;font-size:.95rem}
+.gate-msg{margin:16px 0 0!important;color:var(--danger)!important}
+#gBtn{display:flex;justify-content:center;min-height:44px}
