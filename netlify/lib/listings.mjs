@@ -15,23 +15,24 @@ async function repliers(params) {
   return res.json();
 }
 
-const LAND = /land|lot|farm|ranch|acre/i;
+// Repliers' `class` is unreliable (single-family homes appear under CondoProperty), so filter on propertyType instead.
+const NOT_RESIDENTIAL = /land|lot|farm|ranch|acre|commercial/i;
 let cache = { at: 0, data: null };
 let freshness = { at: 0, date: null };
 
-// Active residential sale listings for the two agents (land excluded).
+// Active residential sale listings for the two agents (land and commercial excluded).
 async function fetchRaw() {
   if (cache.data && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
   const all = [];
   for (let page = 1; page <= 5; page++) {
-    const q = new URLSearchParams({ status: "A", type: "sale", class: "residential", resultsPerPage: "100", pageNum: String(page) });
+    const q = new URLSearchParams({ status: "A", type: "sale", resultsPerPage: "100", pageNum: String(page) });
     for (const id of BOARD_AGENT_IDS) q.append("agent", id);
     const d = await repliers(q);
     all.push(...(d.listings || []));
     if (page >= (d.numPages || 1)) break;
   }
   const byMls = new Map(all.map((l) => [String(l.mlsNumber), l]));
-  const data = [...byMls.values()].filter((l) => !LAND.test(String(l.details?.propertyType || "")));
+  const data = [...byMls.values()].filter((l) => !NOT_RESIDENTIAL.test(String(l.details?.propertyType || "")));
   cache = { at: Date.now(), data };
   return data;
 }
@@ -129,7 +130,7 @@ export async function probe() {
   const out = { agentIds: BOARD_AGENT_IDS };
   const q = (extra) => { const p = new URLSearchParams({ resultsPerPage: "1", ...extra }); for (const id of BOARD_AGENT_IDS) p.append("agent", id); return p; };
   try {
-    out.activeResidentialSale = (await repliers(q({ status: "A", type: "sale", class: "residential" }))).count;
+    out.activeResidentialSale = (await fetchRaw()).length; // same filter the site uses
     out.activeAnyClass = (await repliers(q({ status: "A" }))).count;
     const inactive = await repliers((() => { const p = q({}); p.append("status", "A"); p.append("status", "U"); return p; })());
     out.activeAndInactive = inactive.count;
