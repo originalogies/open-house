@@ -5,7 +5,7 @@ import { ics } from "../lib/email.mjs";
 // contains only the address and time, no access details.
 export default async (req) => {
   const r = await getRequest(new URL(req.url).searchParams.get("id") || "");
-  if (!r || r.status !== "approved") return new Response("Not found", { status: 404 });
+  if (!r || !["approved", "cancelled"].includes(r.status)) return new Response("Not found", { status: 404 }); // cancelled -> a calendar cancellation
   return new Response(ics(r), { headers: { "content-type": "text/calendar; charset=utf-8", "content-disposition": 'attachment; filename="open-house.ics"' } });
 };
 export const config = { path: "/api/ics" };

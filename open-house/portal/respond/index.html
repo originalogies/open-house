@@ -23,6 +23,18 @@ button.no{background:none;color:var(--accent)}
 button:disabled{opacity:.5;cursor:not-allowed}
 #msg{margin-top:14px}#msg.err{color:var(--danger)}
 #gbtn{display:flex;justify-content:center;margin-top:12px}
+h2{font-size:1rem;margin:22px 0 8px}
+.pill{display:inline-block;font-size:.8rem;font-weight:700;padding:2px 10px;border-radius:99px;border:1px solid var(--line)}
+.pill.ok{color:var(--accent);border-color:var(--accent)}.pill.bad{color:var(--danger);border-color:var(--danger)}
+.box{border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+@media (max-width:420px){.grid{grid-template-columns:1fr}}
+.grid label{font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+input[type=date],select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%}
+ul.log{list-style:none;padding:0;margin:0;font-size:.85rem}ul.log li{padding:6px 0;border-bottom:1px solid var(--line)}
+ul.log .t{color:var(--muted)}
+.shot{max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+.muted{color:var(--muted);font-size:.9rem}
 </style>
 </head>
 <body>
@@ -58,24 +70,78 @@ async function load() {
   const d = await r.json();
   const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (MLS# ${esc(d.mls)})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
     <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+  if (d.status === "approved" || d.status === "cancelled") return manage(d, details);
   if (d.status !== "pending") {
     return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
   }
+  const manual = d.mode === "off";
   el(`<h1>Open house request</h1>${details}
-    <label class="check"><input type="checkbox" id="mls"> <span>I have entered this open house on the MLS (NTREIS). Required to approve.</span></label>
-    <div class="row"><button class="go" id="approve" disabled>Approve</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
+    ${manual ? '<label class="check"><input type="checkbox" id="mls"> <span>I have entered this open house on the MLS (NTREIS). Required to approve.</span></label>'
+      : `<p class="muted">Approving sends this open house to the MLS bot${d.mode === "dry_run" ? " as a <b>dry run</b> (it fills the form but doesn't submit)" : ""}. You'll see the MLS status on this page.</p>`}
+    <div class="row"><button class="go" id="approve" ${manual ? "disabled" : ""}>Approve</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
   const approve = $("approve"), mls = $("mls");
-  mls.onchange = () => (approve.disabled = !mls.checked);
-  if (preset === "approve") mls.focus();
+  if (mls) mls.onchange = () => (approve.disabled = !mls.checked);
+  if (preset === "approve" && mls) mls.focus();
   const act = async (action) => {
     approve.disabled = true; $("decline").disabled = true;
-    const r = await fetch("/api/respond", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, action, mlsEntered: mls.checked }) });
+    const r = await fetch("/api/respond", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, action, mlsEntered: mls ? mls.checked : false }) });
     const j = await r.json().catch(() => ({}));
-    if (r.ok) return el(`<h1>${action === "approve" ? "Approved" : "Declined"}</h1><p>${action === "approve" ? "The confirmation email and calendar invite are on their way to the agent and the team." : "The agent has been notified."}</p>`);
+    if (r.ok) return action === "approve" ? load() : el(`<h1>Declined</h1><p>The agent has been notified.</p>`);
     $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
-    $("decline").disabled = false; approve.disabled = !mls.checked;
+    $("decline").disabled = false; approve.disabled = mls ? !mls.checked : false;
   };
   approve.onclick = () => act("approve"); $("decline").onclick = () => act("decline");
+}
+
+const fmtH = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
+const STATE = {
+  manual: ["", "Entered by hand"], idle: ["", "Waiting to send to the MLS bot"], booking: ["", "MLS bot is working on it"],
+  synced: ["ok", "On the MLS ✓"], dry_run_ok: ["ok", "Dry run passed (not submitted)"], failed: ["bad", "MLS update failed"], needs_login: ["bad", "MLS sign-in needed"],
+};
+const EVENT = {
+  approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
+  mls_job_sent: "Sent to MLS bot", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
+  mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "MLS bot failed", mls_needs_login: "MLS sign-in needed",
+  mls_stalled: "MLS bot stalled", mls_delivery_failed: "Couldn't reach MLS bot",
+};
+const fmtAt = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+function manage(d, details) {
+  const s = d.sync || {}, [cls, label] = STATE[s.state] || ["", d.mode === "off" ? "Entered by hand" : "Not sent yet"];
+  const live = d.status === "approved";
+  const canRetry = ["failed", "needs_login", "dry_run_ok"].includes(s.state);
+  const hours = (sel) => Array.from({ length: d.lastHour - d.firstHour + 1 }, (_, i) => d.firstHour + i)
+    .map((h) => `<option value="${h}" ${h === sel ? "selected" : ""}>${fmtH(h)}</option>`).join("");
+  el(`<h1>${live ? "Approved open house" : "Cancelled open house"}</h1>${details}
+    <p>${d.decidedBy ? "Approved by " + esc(d.decidedBy) + ". " : ""}${d.cancelledBy ? "Cancelled by " + esc(d.cancelledBy) + "." : ""}</p>
+    <h2>MLS</h2>
+    <div class="box"><span class="pill ${cls}">${esc(label)}</span>${s.message ? `<p class="muted">${esc(s.message)}</p>` : ""}
+      ${d.mode === "off" ? `<p class="muted">Automatic MLS entry is off. ${live ? "Keep the MLS in step by hand after any change." : "Remove it from the MLS by hand if it's there."}</p>` : ""}
+      ${s.job?.screenshot ? `<img class="shot" alt="MLS confirmation screenshot" src="/api/mls/screenshot?id=${encodeURIComponent(d.id)}">` : ""}
+      ${canRetry ? '<div class="row" style="margin-top:10px"><button class="no" id="retry">Retry MLS job</button></div>' : ""}</div>
+    ${live ? `<h2>Change the time</h2>
+    <div class="box"><div class="grid">
+      <label>Date (Sat or Sun)<input type="date" id="cDate" value="${esc(d.iso)}"></label>
+      <label>Start<select id="cFrom">${hours(d.from)}</select></label>
+      <label>End<select id="cTo">${hours(d.to)}</select></label></div>
+      <div class="row" style="margin-top:12px"><button class="go" id="change">Save new time</button></div>
+      <p class="muted">The agent gets an updated calendar invite${d.mode === "off" ? "" : " and the MLS bot updates the listing"}.</p></div>
+    <h2>Cancel</h2>
+    <div class="box"><p class="muted" style="margin-top:0">Emails the agent and the team${d.mode === "off" ? "" : ", and the MLS bot marks it Canceled on the listing"}.</p>
+      <div class="row"><button class="no" id="cancel">Cancel this open house</button></div></div>` : ""}
+    <p id="msg" role="status"></p>
+    <h2>History</h2><ul class="log">${(d.events || []).map((e) => `<li><span class="t">${esc(fmtAt(e.at))}</span> · ${esc(EVENT[e.type] || e.type)}${e.by ? " · " + esc(e.by) : ""}${e.note ? `<br><span class="t">${esc(e.note)}</span>` : ""}</li>`).join("") || '<li class="t">No history yet.</li>'}</ul>`);
+
+  const post = async (body, btn) => {
+    btn.disabled = true; $("msg").className = ""; $("msg").textContent = "Saving…";
+    const r = await fetch("/api/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    if (r && (r.ok || r.status === 502)) { await load(); if (j.message) { $("msg").className = "err"; $("msg").textContent = j.message; } return; }
+    $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again."; btn.disabled = false;
+  };
+  if ($("retry")) $("retry").onclick = () => post({ action: "retry" }, $("retry"));
+  if ($("change")) $("change").onclick = () => post({ action: "change", iso: $("cDate").value, from: Number($("cFrom").value), to: Number($("cTo").value) }, $("change"));
+  if ($("cancel")) $("cancel").onclick = () => confirm("Cancel this open house? The agent and team will be emailed.") && post({ action: "cancel" }, $("cancel"));
 }
 load();
 </script>

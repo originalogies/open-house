@@ -36,18 +36,21 @@ export function fields(req, extra = {}) {
   };
 }
 
-// RFC 5545 calendar file for an approved request.
+// RFC 5545 calendar file for an approved request. The UID stays the same for the life of the
+// request; SEQUENCE goes up on every change so calendars update the existing event, and a
+// cancelled request produces METHOD:CANCEL so calendars remove it.
 export function ics(req) {
   const l = req.listing;
   const iso = req.iso;
+  const cancelled = req.status === "cancelled";
   const z = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const esc = (s) => String(s).replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
   return [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//George & Noonan//Open House//EN", "METHOD:PUBLISH", "BEGIN:VEVENT",
-    `UID:${req.id}@open-house.synergyrealtors.com`, `DTSTAMP:${z(new Date())}`,
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//George & Noonan//Open House//EN", `METHOD:${cancelled ? "CANCEL" : "PUBLISH"}`, "BEGIN:VEVENT",
+    `UID:${req.id}@open-house.synergyrealtors.com`, `SEQUENCE:${req.seq || 0}`, `DTSTAMP:${z(new Date())}`,
     `DTSTART:${z(chicagoToUtc(iso, req.from))}`, `DTEND:${z(chicagoToUtc(iso, req.to))}`,
     `SUMMARY:${esc("Open house: " + l.addr)}`, `LOCATION:${esc(`${l.addr}, ${l.city}, TX ${l.zip}`)}`,
-    "BEGIN:VALARM", "TRIGGER:-PT30M", "ACTION:DISPLAY", "DESCRIPTION:Open house starts soon", "END:VALARM",
+    ...(cancelled ? ["STATUS:CANCELLED"] : ["BEGIN:VALARM", "TRIGGER:-PT30M", "ACTION:DISPLAY", "DESCRIPTION:Open house starts soon", "END:VALARM"]),
     "END:VEVENT", "END:VCALENDAR",
   ].join("\r\n") + "\r\n";
 }
@@ -112,5 +115,57 @@ export const sendDeclined = (req) => {
     to: req.agent.email, replyTo: TEAM_TO()[0],
     subject: `Update on your open house request: ${l.addr}, ${d.label} ${d.date}`,
     html: `<p style="font-family:Arial,sans-serif;font-size:15px;line-height:23px;color:#16202A;">Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team couldn't confirm your open house request for ${esc(l.addr)} on ${d.label}, ${d.date}, ${fmtRange(req.from, req.to)}. Reply to this email if you'd like to try a different day or time.</p>`,
+  });
+};
+
+// ---- changes after approval ------------------------------------------------
+const plain = (html) => `<p style="font-family:Arial,sans-serif;font-size:15px;line-height:23px;color:#16202A;">${html}</p>`;
+const icsFile = (req) => [{ filename: "open-house.ics", content: Buffer.from(ics(req)).toString("base64") }];
+const when = (iso, from, to) => { const d = dayMeta(iso); return `${d.label}, ${d.date}, ${fmtRange(from, to)}`; };
+
+// Team changed the time of an approved open house -> agent + team, with an updated calendar invite.
+export const sendUpdated = (req, before, byName) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  return send({
+    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
+    subject: `Updated: open house at ${l.addr}, now ${when(req.iso, req.from, req.to)}`,
+    html: plain(`Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team${byName ? ` (${esc(byName)})` : ""} changed your open house at ${esc(l.addr)}.<br><br>
+      <b>Was:</b> ${esc(when(before.iso, before.from, before.to))}<br><b>Now:</b> ${esc(when(req.iso, req.from, req.to))}<br><br>
+      The attached calendar invite updates the event on your calendar. Your access details are unchanged; you'll get a reminder the day before. Reply to this email with any questions.`),
+    attachments: icsFile(req),
+  });
+};
+
+// Approved open house cancelled (by the agent or the team) -> agent + team, with a calendar cancellation.
+export const sendCancelled = (req, byName, byAgent) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  return send({
+    to: [req.agent.email, ...TEAM_TO()], replyTo: byAgent ? req.agent.email : TEAM_TO()[0],
+    subject: `Cancelled: open house at ${l.addr}, ${when(req.iso, req.from, req.to)}`,
+    html: plain(`The open house at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))} hosted by ${esc(req.agent.name)} has been cancelled${byName ? ` by ${esc(byName)}` : ""}.<br><br>
+      The attached file removes it from your calendar. Those hours are open again for other requests.`),
+    attachments: icsFile(req),
+  });
+};
+
+// Agent withdrew a request before anyone answered it -> team.
+export const sendWithdrawn = (req) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  return send({
+    to: TEAM_TO(), replyTo: req.agent.email,
+    subject: `Withdrawn: open house request for ${l.addr}, ${when(req.iso, req.from, req.to)}`,
+    html: plain(`${esc(req.agent.name)} withdrew their request for ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))}. No action is needed.`),
+  });
+};
+
+// Something needs a person: MLS booking failed, needs a login, or stalled -> team.
+export const sendTeamAlert = (req, headline, detail) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  const link = `${site(req)}/respond/?id=${req.id}`;
+  return send({
+    to: TEAM_TO(), replyTo: TEAM_TO()[0],
+    subject: `Action needed: MLS ${headline} for ${l.addr}`,
+    html: plain(`<b>MLS ${esc(headline)}</b> for the open house at ${esc(l.addr)} (MLS# ${esc(req.mls)}), ${esc(when(req.iso, req.from, req.to))}, hosted by ${esc(req.agent.name)}.<br><br>
+      ${esc(detail || "")}<br><br><a href="${link}">Open the request</a> to see the details and retry.`),
   });
 };

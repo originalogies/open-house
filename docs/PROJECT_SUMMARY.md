@@ -1,6 +1,6 @@
 # Open House Portal: project summary
 
-Last updated: 2026-10-03
+Last updated: 2026-10-21
 
 This document records what has been built, how it fits together, how it is configured, and what is still open. For day-to-day usage see `open-house/README.md`; for email template fields see `open-house/emails/README.md`.
 
@@ -12,6 +12,7 @@ A weekly open house request system for George & Noonan Real Estate Group listing
 2. Synergy agents sign in with Google, pick a listing, a day (Saturday or Sunday) and an hourly time range between 9:00 AM and 7:00 PM, and submit a request.
 3. The team gets an email with Approve and Decline links. The first approval locks the slot.
 4. The agent and the team get a confirmation email (with access details and a calendar invite). A reminder goes out at 9:00 AM Central the day before.
+5. The MLS bot enters the open house on NTREIS Matrix, and keeps it in step when the team changes or cancels it (see `docs/MLS_AUTOMATION.md`). Off by default.
 
 Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatically from `main`).
 
@@ -36,7 +37,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 |------|-----|---------|
 | `/` | Signed-in agents | Browse offered listings, request a time. |
 | `/inventory/` | Team (admins and `TEAM_EMAILS`) | Offer listings for the weekend, set Priority, edit instructions and access details, check Repliers data. (Old `/team/` redirects here.) |
-| `/respond/?id=...` | Team | Approve or Decline a request. Approving requires ticking "entered on the MLS". |
+| `/respond/?id=...` | Team | Approve or Decline a request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
 | `/admin/` | Admins (`ADMIN_EMAILS`) | Allowed email domains and addresses, weekly request cutoff. |
 
 ## Features
@@ -45,6 +46,11 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Google sign-in. Access is deny-by-default: a person can sign in only if their email address, or their email domain, is on the allowlist (or they are an admin).
 - Admins manage the list at `/admin/`. Removing someone ends their access immediately (the list is re-checked on every request).
 - Subdomains and look-alike domains do not match an allowed domain.
+
+**Changes and cancellations**
+- Agents can cancel their own pending or approved requests until the open house starts; the weekly cutoff doesn't apply. Time changes go through the team.
+- The team can change the date or hours of an approved open house, or cancel it, from the request page. The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
+- Every action and every MLS bot result is logged (Netlify Blobs store `open-house-audit`) and shown as History on the request page.
 
 **Requests and email**
 - Submitting a request sends template 1 (Request Received) to `team@georgeandnoonan.com` and template 2 (Request Sent) to the agent.
@@ -80,14 +86,17 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `ALLOWED_DOMAINS`, `ALLOWED_EMAILS` | No | Starting allowlist entries (admins can also manage the list at `/admin/`). |
 | `TEAM_EMAIL` | No | Team inbox(es) that receive request emails. Defaults to `team@georgeandnoonan.com`. |
 | `TEAM_EMAILS` | No | Extra people allowed to use `/inventory/` and approve requests. |
+| `MLS_BOOKING_MODE` | No | `off` (default), `dry_run` or `live`. See `docs/MLS_AUTOMATION.md`. |
+| `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent. |
+| `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters shared with the bot; signs webhooks and callbacks. Mark as secret. |
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/respond`, `/api/ics`, `/api/inventory/listings`, `/api/admin/access`, `/api/admin/settings`. The hourly job is `reminders` (scheduled, not an HTTP route).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 
-- Run `npm test` (9 tests: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
+- Run `npm test` (20 tests, including MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
 - After editing a file in `open-house/emails/`, run `npm run build:templates` (Netlify also runs it on each build).
 - Push to `main` to deploy. Functions take about a minute longer than static files to appear.
 
@@ -101,10 +110,12 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 1. **The Repliers account has no current data for Troy and Lucy.** The agent filter now works (Repliers stores MLS agent IDs zero-padded: `0492946`, `0560617`; `agent=` accepts them), but the account returns zero active listings for them. It has only four old, sold or terminated condo listings. The whole feed is a snapshot last updated 2026-07-31, and known homes (such as 441 Watermere Drive and 2006 Nighthawk Court) are not in it. Ask Repliers whether this key is a sandbox or sample dataset and request a key tied to the live NTREIS feed. `/inventory/` shows a warning when the feed is more than 3 days old. Until then only the four built-in listings appear.
 2. **Open house data is only partly verified.** The code reads an `openHouse` array (`date`, `startTime`, `endTime`, `type`, `status`). Times are UTC and are converted to Central; Deleted and cancelled entries are ignored. Verified against sample data, not against a current listing.
-3. **MLS entry is manual.** Repliers is read-only, so the team enters approved open houses on the NTREIS MLS by hand; the approve page requires them to confirm they did.
+3. **MLS entry is manual until the bot is live.** Repliers is read-only. With `MLS_BOOKING_MODE=off` the team enters approved open houses by hand; the approve page requires them to confirm they did. The bot integration is built on the portal side (`docs/MLS_AUTOMATION.md`); the bot's webhook receiver still needs building, then a dry run.
 4. **Not yet built:** an email to agents when a request expires unanswered; a dedicated Declined template (currently a plain message); a restriction limiting requests to a Synergy roster beyond the Google allowlist; the Repliers photo CDN path for built-in listings is unverified.
 5. **End-to-end check still worth doing:** submit a real request, approve it, and confirm the Confirmed email, calendar invite and (the next morning) the Reminder arrive and look correct, including the logo.
-6. **Cutoff is global.** It repeats weekly; there is no per-week override.
+6. **No team list of approved open houses yet.** The team reaches a request's page from its email link. A dashboard listing every request (with MLS status) is the next step for the admin area.
+7. **Team time changes don't check Repliers.** They are checked against other approved requests, but not against open houses entered on the MLS outside the portal.
+8. **Cutoff is global.** It repeats weekly; there is no per-week override.
 
 ## Decisions worth remembering
 

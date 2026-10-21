@@ -148,6 +148,10 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 .mine li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:.93rem}
 .mine .tag{font-size:.8rem;font-weight:600;color:var(--brass)}
 .mine .tag.ok{color:var(--accent)}
+.mine .right{display:flex;gap:10px;align-items:center;flex-shrink:0}
+.mine .cancel{background:none;border:0;padding:0;font:inherit;font-size:.82rem;color:var(--muted);text-decoration:underline;cursor:pointer}
+.mine .cancel:disabled{opacity:.5;cursor:wait}
+.mine-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
 /* My open houses: the agent's own requests and history */
@@ -285,6 +289,8 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
     <div class="status" id="status">
       <h3>Your requests for this home</h3>
       <ul class="mine" id="mine"></ul>
+      <p class="mine-note" id="mineNote">Need a different time? Contact the George &amp; Noonan team. You can cancel a request here until it starts.</p>
+      <p class="fine" id="mineErr" role="alert" hidden style="color:#A12B2B"></p>
       <ol class="track" id="track"></ol>
       <button class="secondary" id="another">Request another day or time</button>
     </div>
@@ -471,8 +477,22 @@ function showStatus(){
   $("form").style.display="none"; $("status").classList.add("on");
   const list = mine();
   const tag = r => r.status==="approved" ? ["ok","Approved"] : ["","Waiting for approval"];
-  $("mine").innerHTML = list.map(r=>{ const [c,t]=tag(r); return `<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="tag ${c}">${t}</span></li>`; }).join("");
+  $("mine").innerHTML = list.map(r=>{ const [c,t]=tag(r); return `<li><span>${DAYS[r.day].label}, ${DAYS[r.day].date}, ${range(r)}</span><span class="right"><span class="tag ${c}">${t}</span><button class="cancel" data-id="${esc(r.id)}" aria-label="Cancel ${DAYS[r.day].label} ${range(r)}">Cancel</button></span></li>`; }).join("");
+  $("mineErr").hidden = true;
+  $("mine").querySelectorAll(".cancel").forEach(b => b.onclick = () => cancelMine(b));
   $("track").innerHTML = trackHTML(list[list.length-1]);
+}
+async function cancelMine(btn){
+  const r0 = mine().find(x => x.id === btn.dataset.id);
+  const what = `${DAYS[r0.day].label}, ${range(r0)}`;
+  if(!confirm(r0.status==="approved" ? `Cancel your open house on ${what}? The team will be notified and the time opens up for others.` : `Withdraw your request for ${what}?`)) return;
+  btn.disabled = true;
+  const r = await fetch("/api/requests/cancel",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:btn.dataset.id})}).catch(()=>null);
+  const d = r ? await r.json().catch(()=>({})) : {};
+  if(!r || (!r.ok && r.status!==502)){ $("mineErr").textContent = d.message || "Could not cancel. Try again."; $("mineErr").hidden=false; btn.disabled=false; return; }
+  const idx = homes.indexOf(cur);
+  await loadListings(); cur = homes[idx];
+  if(mine().length) showStatus(); else showForm();
 }
 $("another").onclick=()=>{ showForm(); $("sheet").scrollTo({top:0,behavior:"smooth"}); };
 function trackHTML(r){

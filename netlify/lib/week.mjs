@@ -7,7 +7,7 @@ const short = (iso) => fmt(iso, { month: "short", day: "numeric" });
 
 export const dayMeta = (iso) => ({ iso, label: label(iso), date: short(iso) });
 
-const FIRST_HOUR = 9, LAST_HOUR = 19;
+export const FIRST_HOUR = 9, LAST_HOUR = 19;
 // Cutoff setting: weekly, optional. day: 0 = Sunday .. 6 = Saturday, time: "HH:MM" Central.
 export const DEFAULT_CUTOFF = { enabled: true, day: 5, time: "17:00" };
 
