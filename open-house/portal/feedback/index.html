@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Your Open House | Synergy Realty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/nav.css">
+<style>
+/* One of the agent's open houses: its details, and once it has ended the feedback form or the feedback they sent. */
+.signed-out .wrap{visibility:hidden}
+.fb{max-width:680px;margin:0 0 56px}
+.fb-home{display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:center;padding:16px;margin-bottom:22px}
+.fb-home .thumb{width:96px;height:72px;border-radius:8px;background:var(--photo);object-fit:cover}
+.fb-home .a{font-family:var(--serif);font-size:1.2rem;font-weight:500;line-height:1.2}
+.fb-home .w{font-size:.92rem;color:var(--muted)}
+.fb-home .st{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.88rem;color:var(--muted)}
+.fb-home .rq{grid-column:1/-1;font-size:.9rem;padding:8px 10px;background:var(--bg);border-radius:8px}
+.fb-home .rq b{display:block;font-size:.78rem;color:var(--muted);font-weight:600}
+.back{margin:22px 0 0;font-size:.92rem}
+.fb-part{padding:20px 22px;margin-bottom:18px}
+.fb-part h2{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:0 0 4px}
+.fb-part .label:first-of-type{margin-top:16px}
+.fb-row{display:flex;gap:18px 28px;flex-wrap:wrap;align-items:flex-start}
+.fb-row .visitors{width:120px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg label{padding:9px 18px;cursor:pointer;font-weight:600;font-size:.93rem;border-left:1px solid var(--line)}
+.seg label:first-child{border-left:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent);color:var(--accent-ink,#fff)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+textarea.field.big{min-height:170px}
+.flag{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:16px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.flag input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--danger)}
+.flag b{font-size:.98rem}
+.flag span{grid-column:2;font-size:.88rem;color:var(--muted)}
+.flag:has(input:checked){border-color:var(--danger);background:var(--danger-soft)}
+.fb-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+#fbErr{color:var(--danger)}
+.fb-done{padding:22px}
+.fb-done h2{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:0 0 6px}
+.fb-done dl{margin:14px 0 0}.fb-done dt{font-size:.82rem;color:var(--muted);margin-top:12px}.fb-done dd{margin:2px 0 0;white-space:pre-wrap}
+footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+@media (max-width:600px){.fb-home{grid-template-columns:72px 1fr}.fb-home .thumb{width:72px;height:54px}.fb-part{padding:18px 16px}}
+</style>
+</head>
+<body class="signed-out" data-page="mine">
+<header class="topnav" id="topnav">
+  <div class="wrap topnav-bar">
+    <a class="topnav-brand" href="/"><img class="logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><span class="topnav-label">Open House Portal</span></a>
+  </div>
+</header>
+<div class="wrap">
+  <p class="back"><a href="/my-open-houses/">← My open houses</a></p>
+  <section class="intro" style="padding-top:10px"><div><h1 id="title">Your open house</h1>
+    <p class="sub" id="lede"></p></div></section>
+  <div class="fb" id="fb"><p class="muted">Loading…</p></div>
+  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+</div>
+
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
+  <div class="gate-card">
+    <img class="logo logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group">
+    <img class="logo logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
+    <h2 id="gateTitle">Sign in to see your open house</h2>
+    <p>Use your Google account. Access is limited to approved Synergy agents.</p>
+    <div id="gBtn"></div>
+    <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
+  </div>
+</div>
+
+<script src="/nav.js"></script>
+<script src="/auth.js"></script>
+<script>
+const CDN = "https://cdn.repliers.io/";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?class=" + size;
+const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
+const id = new URLSearchParams(location.search).get("id") || "";
+const box = $("fb");
+
+const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
+const fmtSent = ms => new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+// Same labels as My open houses.
+function statusPill(o){
+  const ended = Date.now() >= o.endsAt;
+  if (o.cancelRequested && !ended) return ["pending", "Cancellation requested"];
+  if (o.status === "approved") return ended ? ["approved", "Hosted"] : ["approved", "Approved"];
+  return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["","Expired, not answered"], cancelled:["","Cancelled"] })[o.status] || ["", o.status];
+}
+const heading = (title, lede) => { $("title").textContent = title; $("lede").textContent = lede; };
+const homeCard = o => { const [c, t] = statusPill(o); return `<div class="card fb-home">
+    ${o.img ? `<img class="thumb" src="${esc(photoSrc(o.img, "small"))}" alt="" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
+    <div><div class="a">${esc(o.addr)}, ${esc(o.city)}</div><div class="w">${esc(o.day)}, ${esc(o.date)}${o.iso && o.iso.slice(0,4) !== todayIso().slice(0,4) ? `, ${o.iso.slice(0,4)}` : ""} · ${esc(o.time)}</div>
+      <div class="st"><span class="pill ${c}">${esc(t)}</span>${o.status === "approved" && o.decidedBy ? `<span>Approved by ${esc(o.decidedBy)}</span>` : ""}</div></div>
+    ${o.notes ? `<div class="rq"><b>Your note with the request</b>${esc(o.notes)}</div>` : ""}</div>`; };
+
+// justSent: right after submitting ("sent" or "email_failed"); otherwise the agent came back to look at it.
+function showSent(o, f, justSent){
+  heading("Your open house", "The feedback you sent the George & Noonan team after hosting. Only the team sees it.");
+  box.innerHTML = homeCard(o) + `<div class="card fb-done">
+    <h2>${justSent ? "Thanks, your feedback was sent" : "Your feedback"}</h2>
+    <p class="muted" style="margin:0">${justSent === "email_failed" ? "It's saved, and the George &amp; Noonan team will see it in the Admin Console. The email to the team didn't send."
+      : justSent ? "The George &amp; Noonan team got it by email." : `Sent ${esc(fmtSent(f.at))}.`}${f.brokerFlag ? " You flagged it for the broker." : ""}</p>
+    <dl><dt>Visitors</dt><dd>${f.visitors}</dd><dt>Interest</dt><dd>${esc(INTEREST[f.interest])}</dd>
+      <dt>What happened</dt><dd>${esc(f.happened)}</dd><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : "None"}</dd></dl>
+    <p style="margin:18px 0 0"><a href="/my-open-houses/">Back to my open houses</a></p></div>`;
+}
+
+function showForm(o){
+  heading("How did it go?", "Tell the George & Noonan team about the open house you hosted. Only the team sees this.");
+  box.innerHTML = homeCard(o) + `<form id="form" novalidate>
+    <section class="card fb-part">
+      <h2>How it went</h2>
+      <div class="fb-row">
+        <div><label class="label" for="visitors">How many people came?</label>
+          <input class="field visitors" id="visitors" type="number" inputmode="numeric" min="0" max="999" required></div>
+        <div><span class="label" id="interestLabel">Buyer interest</span>
+          <div class="seg" role="radiogroup" aria-labelledby="interestLabel">${Object.entries(INTEREST).map(([k,v]) => `<label><input type="radio" name="interest" value="${k}">${v}</label>`).join("")}</div></div>
+      </div>
+      <label class="label" for="happened">What happened?</label>
+      <textarea class="field big" id="happened" maxlength="5000" required placeholder="How the day went, what visitors said about the home, price, layout, condition, anything that stood out."></textarea>
+    </section>
+    <section class="card fb-part">
+      <h2>Notes for the George &amp; Noonan team</h2>
+      <p class="fine" style="margin:0">Anything about the home or the visit the team should know or take care of. Optional.</p>
+      <label class="label" for="teamNotes">Notes</label>
+      <textarea class="field" id="teamNotes" maxlength="5000" placeholder="For example: two lights out in the upstairs hallway, kitchen wasn't clean, lockbox code didn't work."></textarea>
+      <label class="flag"><input type="checkbox" id="brokerFlag"><b>Flag this for the broker</b>
+        <span>Check this only for something serious that needs the broker's attention right away, like damage to the home, a safety concern, a security problem (a door left unlocked, a missing lockbox) or an incident with a visitor. Describe it in the notes above. Everyday things like a burnt-out bulb don't need a flag.</span></label>
+    </section>
+    <div class="fb-actions"><button class="btn" id="send" type="submit">Send feedback</button><p class="fine" id="fbErr" role="alert" hidden></p></div>
+  </form>`;
+  $("form").onsubmit = async e => {
+    e.preventDefault();
+    const err = msg => { $("fbErr").textContent = msg; $("fbErr").hidden = !msg; };
+    const body = { id, visitors: $("visitors").value === "" ? "" : Number($("visitors").value),
+      interest: (document.querySelector('input[name="interest"]:checked') || {}).value || "",
+      happened: $("happened").value, teamNotes: $("teamNotes").value, brokerFlag: $("brokerFlag").checked };
+    err(""); $("send").disabled = true;
+    const r = await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (r && (r.ok || r.status === 502)) {
+      showSent(o, { ...body, happened: body.happened.trim(), teamNotes: body.teamNotes.trim() }, r.status === 502 ? "email_failed" : "sent");
+      scrollTo(0, 0);
+      return;
+    }
+    err(d.message || "Could not send your feedback. Try again.");
+    $("send").disabled = false;
+  };
+}
+
+async function load(){
+  const r = await fetch("/api/feedback?id=" + encodeURIComponent(id)).catch(() => null);
+  if (!r || !r.ok) { box.innerHTML = `<p class="muted">${r && r.status === 404 ? 'We couldn\'t find that open house on your account. <a href="/my-open-houses/">See your open houses</a>.' : "Could not load this open house. Refresh to try again."}</p>`; return; }
+  const o = await r.json();
+  if (o.feedback) return showSent(o, o.feedback);  // coming back later: it was sent
+  if (!o.open) {
+    heading("Your open house", "");
+    const msg = o.status === "approved" ? "You can leave feedback once this open house ends. We'll email you a link."
+      : o.status === "pending" ? "The George &amp; Noonan team hasn't answered this request yet. You'll get an email when they do."
+      : "This open house didn't take place, so there's nothing to leave feedback on.";
+    box.innerHTML = homeCard(o) + `<p class="muted">${msg}</p>`;
+    return;
+  }
+  showForm(o);
+}
+document.addEventListener("signedin", load);
+</script>
+</body>
+</html>
