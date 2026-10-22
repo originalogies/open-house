@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/nav.css">
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
@@ -36,19 +37,6 @@ button{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
 
 .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
-header.top{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
-.brand{display:flex;flex-direction:column;align-items:center;width:260px;max-width:100%}
-.brand .logo{display:block;width:100%;height:auto;margin-bottom:8px}
-.brand .logo-dark{display:none}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .brand .logo-light{display:none}
-  :root:not([data-theme="light"]) .brand .logo-dark{display:block}
-}
-:root[data-theme="dark"] .brand .logo-light{display:none}
-:root[data-theme="dark"] .brand .logo-dark{display:block}
-.brand .portal-label{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.34em;margin-right:-.34em;color:var(--ink)}
-.who{font-size:.85rem;color:var(--muted);text-align:right}
-.who strong{color:var(--ink);font-weight:600}
 
 .intro{padding:36px 0 28px}
 .intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.5rem);line-height:1.12;margin:0 0 8px;letter-spacing:-.01em}
@@ -154,32 +142,6 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 .mine-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
-/* My open houses: the agent's own requests and history */
-.myoh{padding:8px 0 56px;scroll-margin-top:16px}
-.myoh-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap;margin-bottom:14px}
-.myoh h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.5rem,3vw,1.9rem);margin:0}
-.myoh-stats{display:flex;gap:22px}
-.myoh-stats div{text-align:right}
-.myoh-stats b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:500;line-height:1}
-.myoh-stats span{font-size:.8rem;color:var(--muted)}
-.myoh-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:6px}
-.myoh-tabs button{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:10px 12px;font-weight:600;color:var(--muted);cursor:pointer}
-.myoh-tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
-.myoh-list{list-style:none;margin:0;padding:0}
-.myoh-list li{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
-.myoh-list .thumb{width:72px;height:54px;border-radius:8px;background:var(--photo);object-fit:cover}
-.myoh-list .a{font-family:var(--serif);font-size:1.12rem;font-weight:500;line-height:1.2}
-.myoh-list .w{font-size:.9rem;color:var(--muted)}
-.myoh-list .empty{display:block;color:var(--muted);padding:22px 0}
-.opill{font-size:.78rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;background:var(--taken);color:var(--muted)}
-.opill.pending{color:var(--brass);background:rgba(154,122,58,.12)}
-.opill.approved,.opill.hosted{color:var(--accent);background:var(--accent-soft)}
-.opill.declined{color:#A12B2B;background:rgba(161,43,43,.1)}
-@media (prefers-color-scheme: dark){.opill.declined{color:#E58A8A}}
-.myoh-list .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.myoh-list .cancel{background:none;border:0;padding:0;font:inherit;font-size:.82rem;color:var(--muted);text-decoration:underline;cursor:pointer}
-.myoh-list .cancel:disabled{opacity:.5;cursor:wait}
-@media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .side{grid-column:2;align-items:flex-start}}
 
 @media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
@@ -191,8 +153,6 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .signed-out .wrap{visibility:hidden}
-.who-links{display:flex;gap:12px;justify-content:flex-end;margin-top:2px}
-.who-links a,.who-links button{background:none;border:0;padding:0;font:inherit;font-size:.8rem;color:var(--accent);text-decoration:underline;cursor:pointer}
 .gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg)}
 .gate[hidden]{display:none}
 .gate-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 24px;text-align:center}
@@ -212,12 +172,13 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
 </style>
 </head>
-<body class="signed-out">
+<body class="signed-out" data-page="weekend">
+<header class="topnav" id="topnav">
+  <div class="wrap topnav-bar">
+    <a class="topnav-brand" href="/"><img class="logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><span class="topnav-label">Open House Portal</span></a>
+  </div>
+</header>
 <div class="wrap">
-  <header class="top">
-    <div class="brand"><img class="logo logo-light" src="gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo logo-dark" src="gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><div class="portal-label">Open House Portal</div></div>
-    <div class="who" id="who"></div>
-  </header>
 
   <section class="intro">
     <h1>Host one of our homes this weekend</h1>
@@ -229,19 +190,6 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
   </section>
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
-
-  <section class="myoh" id="my-open-houses" aria-labelledby="myohTitle" hidden>
-    <div class="myoh-head">
-      <h2 id="myohTitle">My open houses</h2>
-      <div class="myoh-stats" id="myohStats"></div>
-    </div>
-    <div class="myoh-tabs" role="tablist">
-      <button role="tab" id="tabUp" aria-selected="true">Upcoming</button>
-      <button role="tab" id="tabPast" aria-selected="false">History</button>
-    </div>
-    <ul class="myoh-list" id="myohList"></ul>
-    <p class="fine" id="myohErr" role="alert" hidden style="color:#A12B2B"></p>
-  </section>
 
   <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
@@ -301,7 +249,8 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
   </div>
 </aside>
 
-<script src="auth.js"></script>
+<script src="/nav.js"></script>
+<script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
 let homes = [], DAYS = {}, FIRST = 9, LAST = 19; // loaded from /api/listings after sign-in
@@ -369,38 +318,8 @@ document.addEventListener("signedin", async () => {
   if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
 });
 
-// My open houses: every request this agent has made, split into upcoming and history.
-let myReqs = [], myTab = "up";
-const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
-const isUpcoming = r => r.iso >= todayIso() && (r.status === "pending" || r.status === "approved");
-function myLabel(r){
-  if (r.cancelRequested && isUpcoming(r)) return ["pending","Cancellation requested"];
-  if (r.status === "approved") return r.iso < todayIso() ? ["hosted","Hosted"] : ["approved","Approved"];
-  return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"], cancelled:["cancelled","Cancelled"] })[r.status] || ["", r.status];
-}
-function renderMine(){
-  const up = myReqs.filter(isUpcoming).sort((a,b) => a.iso.localeCompare(b.iso) || a.from - b.from);
-  const past = myReqs.filter(r => !isUpcoming(r));
-  const hosted = past.filter(r => r.status === "approved").length;
-  $("myohStats").innerHTML = `<div><b>${hosted}</b><span>Hosted</span></div><div><b>${up.filter(r=>r.status==="approved").length}</b><span>Upcoming</span></div>`;
-  $("tabUp").textContent = `Upcoming (${up.length})`; $("tabPast").textContent = `History (${past.length})`;
-  $("tabUp").setAttribute("aria-selected", myTab === "up"); $("tabPast").setAttribute("aria-selected", myTab === "past");
-  const list = myTab === "up" ? up : past;
-  $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
-      ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
-      <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
-      <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}</span></li>`; }).join("")
-    : `<li><span class="empty">${myTab === "up" ? "No upcoming open houses. Pick a home above to request one." : "Your past open houses will show up here."}</span></li>`;
-  $("myohErr").hidden = true;
-  $("myohList").querySelectorAll(".cancel").forEach(b => b.onclick = async () => {
-    const r = myReqs.find(x => x.id === b.dataset.id);
-    b.disabled = true;
-    const sent = await askToCancel(r.id, `${r.addr} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
-    if(!sent) b.disabled = false;
-  });
-}
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
-// or keep the open house. Returns true once the request is sent.
+// or keep the open house. Returns true once the request is sent. (My open houses has the same ask.)
 async function askToCancel(id, what, showError){
   const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
   if(reason === null) return false;
@@ -409,20 +328,10 @@ async function askToCancel(id, what, showError){
   if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
   if(r.status===502) alert(d.message);
   const idx = cur ? homes.indexOf(cur) : -1;
-  await Promise.all([loadListings(), loadMine()]);
+  await loadListings();
   if(idx >= 0) cur = homes[idx];
   return true;
 }
-async function loadMine(){
-  const r = await fetch("/api/requests").catch(() => null);
-  if (!r || !r.ok) return;
-  myReqs = (await r.json()).requests;
-  $("my-open-houses").hidden = false;
-  renderMine();
-}
-$("tabUp").onclick = () => { myTab = "up"; renderMine(); };
-$("tabPast").onclick = () => { myTab = "past"; renderMine(); };
-document.addEventListener("signedin", loadMine);
 
 // Sheet
 let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to} hour blocks, to exclusive

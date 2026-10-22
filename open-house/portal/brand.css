@@ -31,22 +31,14 @@ a{color:var(--accent)}
 .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
 @media (max-width:600px){.wrap{padding:0 16px}}
 
-/* Header with logo and portal label */
-header.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
-.brand{display:flex;flex-direction:column;align-items:center;width:260px;max-width:60%;text-decoration:none}
-.brand .logo{display:block;width:100%;height:auto;margin-bottom:8px}
-.brand .logo-dark{display:none}
+/* Logos: the light version normally, the white one in dark mode. The header is nav.css. */
+.logo-dark{display:none}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .logo-light{display:none}
   :root:not([data-theme="light"]) .logo-dark{display:block}
 }
 :root[data-theme="dark"] .logo-light{display:none}
 :root[data-theme="dark"] .logo-dark{display:block}
-.brand .portal-label{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.34em;margin-right:-.34em;color:var(--ink);white-space:nowrap}
-.who{font-size:.85rem;color:var(--muted);text-align:right}
-.who strong{color:var(--ink);font-weight:600}
-.who-links{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;margin-top:2px}
-.who-links a,.who-links button{background:none;border:0;padding:0;color:var(--accent);font-size:.85rem;text-decoration:underline;cursor:pointer}
 
 /* Page intro */
 .intro{padding:32px 0 22px}

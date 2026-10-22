@@ -78,7 +78,7 @@ async function load() {
   }
   const manual = d.mode === "off" && d.onMls; // a home the team added before it's on the MLS has nothing to enter yet
   el(`<h1>Open house request</h1>${details}
-    ${!d.onMls ? `<p class="muted">This home isn't on the MLS yet. Once it's linked to its MLS listing in the team console, ${d.mode === "off" ? "enter approved open houses on the MLS by hand" : "approved open houses go to the MLS bot"}.</p>`
+    ${!d.onMls ? `<p class="muted">This home isn't on the MLS yet. Once it's linked to its MLS listing in the Admin Console, ${d.mode === "off" ? "enter approved open houses on the MLS by hand" : "approved open houses go to the MLS bot"}.</p>`
       : manual ? '<label class="check"><input type="checkbox" id="mls"> <span>I have entered this open house on the MLS (NTREIS). Required to approve.</span></label>'
       : `<p class="muted">Approving sends this open house to the MLS bot${d.mode === "dry_run" ? " as a <b>dry run</b> (it fills the form but doesn't submit)" : ""}. You'll see the MLS status on this page.</p>`}
     <div class="row"><button class="go" id="approve" ${manual ? "disabled" : ""}>Approve</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);

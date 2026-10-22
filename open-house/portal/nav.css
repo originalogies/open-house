@@ -1,0 +1,50 @@
+/* Top navigation bar (nav.js), shared by the agent portal and the Admin Console: logo and page
+   name, links, and who's signed in. Below 760px the links and account fold into a hamburger menu
+   that slides open and closed. Uses each page's color variables. */
+.topnav{background:var(--surface);border-bottom:1px solid var(--line);position:relative;z-index:20}
+.topnav-bar{display:flex;align-items:center;flex-wrap:wrap;gap:0 32px;min-height:76px}
+.topnav-brand{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 0;text-decoration:none;color:var(--ink);flex-shrink:0}
+.topnav-brand img{display:block;width:176px;max-width:100%;height:auto}
+.topnav-brand .logo-dark{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .topnav-brand .logo-light{display:none}
+  :root:not([data-theme="light"]) .topnav-brand .logo-dark{display:block}
+}
+:root[data-theme="dark"] .topnav-brand .logo-light{display:none}
+:root[data-theme="dark"] .topnav-brand .logo-dark{display:block}
+.topnav-label{font-family:var(--serif);font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.3em;margin-right:-.3em;white-space:nowrap}
+
+.topnav-menu{flex:1;align-self:stretch;display:flex}
+.topnav-menu-inner{flex:1;display:flex;align-items:stretch;gap:24px}
+.topnav-links{display:flex;gap:4px;flex:1}
+.topnav-links a{position:relative;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--muted);text-decoration:none;font-weight:600;font-size:.95rem;white-space:nowrap;transition:color .15s ease}
+.topnav-links a:hover{color:var(--ink)}
+.topnav-links a[aria-current="page"]{color:var(--ink)}
+.topnav-links a[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+.topnav-count{background:var(--brass);color:#fff;font-size:.72rem;font-weight:700;line-height:1.5;border-radius:99px;padding:1px 7px;min-width:20px;text-align:center}
+.topnav-user{display:flex;align-items:center;gap:16px;font-size:.88rem;color:var(--muted);white-space:nowrap}
+.topnav-user strong{color:var(--ink);font-weight:600}
+.topnav-signout{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;color:var(--ink);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer}
+.topnav-signout:hover{border-color:var(--muted)}
+.topnav-toggle{display:none}
+
+@media (max-width:760px){
+  .topnav-bar{min-height:64px;gap:0}
+  .topnav-brand img{width:140px}
+  .topnav-toggle{display:inline-flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:44px;height:44px;margin-left:auto;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer}
+  .topnav-toggle span{display:block;width:20px;height:2px;border-radius:2px;background:var(--ink);transition:transform .25s ease,opacity .2s ease}
+  .topnav.open .topnav-toggle span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  .topnav.open .topnav-toggle span:nth-child(2){opacity:0}
+  .topnav.open .topnav-toggle span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  /* The menu grows from zero height to its content, so it slides rather than jumps. Hidden menus
+     can't be tabbed into. */
+  .topnav-menu{flex-basis:100%;display:grid;grid-template-rows:0fr;opacity:0;visibility:hidden;transition:grid-template-rows .28s ease,opacity .2s ease,visibility 0s linear .28s}
+  .topnav.open .topnav-menu{grid-template-rows:1fr;opacity:1;visibility:visible;transition:grid-template-rows .28s ease,opacity .2s ease,visibility 0s}
+  .topnav-menu-inner{min-height:0;overflow:hidden;flex-direction:column;gap:0}
+  .topnav-links{flex-direction:column;gap:0}
+  .topnav-links a{padding:14px 2px 14px 14px;border-top:1px solid var(--line)}
+  .topnav-links a[aria-current="page"]::after{left:0;right:auto;top:10px;bottom:10px;width:3px;height:auto;border-radius:3px}
+  .topnav-user{justify-content:space-between;gap:12px;padding:14px 2px 18px 14px;border-top:1px solid var(--line)}
+  .topnav-user span{white-space:normal}
+}
+@media (prefers-reduced-motion: reduce){.topnav-menu,.topnav.open .topnav-menu,.topnav-toggle span{transition:none}}

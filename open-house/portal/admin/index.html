@@ -4,20 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Team Console | George &amp; Noonan Open Houses</title>
+<title>Admin Console | George &amp; Noonan Open Houses</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/nav.css">
 <style>
-/* Console layout: tabs under the header, one view at a time. */
-.console-tag{font-family:var(--sans);font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:3px 9px;border-radius:99px;margin-top:6px}
-nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
-nav.tabs::-webkit-scrollbar{display:none}
-nav.tabs a{display:flex;align-items:center;gap:8px;padding:14px 14px 12px;color:var(--muted);text-decoration:none;font-weight:600;font-size:.95rem;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
-nav.tabs a:hover{color:var(--ink)}
-nav.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
-nav.tabs .count{background:var(--brass);color:#fff;font-size:.72rem;font-weight:700;border-radius:99px;padding:1px 7px;min-width:20px;text-align:center}
+/* Admin Console layout: sections in the top navigation bar (nav.js), one view at a time. */
 main{padding-bottom:64px}
 .intro{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
@@ -120,24 +114,12 @@ td .sub{font-size:.84rem;color:var(--muted)}
 </style>
 </head>
 <body>
+<header class="topnav" id="topnav">
+  <div class="wrap topnav-bar">
+    <a class="topnav-brand" href="#requests"><img class="logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><span class="topnav-label">Admin Console</span></a>
+  </div>
+</header>
 <div class="wrap">
-  <header class="top">
-    <a class="brand" href="#requests">
-      <img class="logo logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group">
-      <img class="logo logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
-      <div class="portal-label">Open House Portal</div>
-      <div class="console-tag">Team console</div>
-    </a>
-    <div class="who" id="who"></div>
-  </header>
-
-  <nav class="tabs" id="tabs" aria-label="Console sections" hidden>
-    <a href="#requests" data-view="requests">Requests <span class="count" id="pendingCount" hidden></span></a>
-    <a href="#listings" data-view="listings">Listings</a>
-    <a href="#agents" data-view="agents" data-admin>Agents</a>
-    <a href="#settings" data-view="settings" data-admin>Settings</a>
-  </nav>
-
   <main id="view"></main>
 </div>
 
@@ -145,7 +127,7 @@ td .sub{font-size:.84rem;color:var(--muted)}
   <div class="gate-card">
     <img class="logo logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group">
     <img class="logo logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
-    <h2 id="gateTitle">Team console</h2>
+    <h2 id="gateTitle">Admin Console</h2>
     <p>Sign in with your George &amp; Noonan team Google account.</p>
     <div id="gBtn"></div>
     <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
@@ -153,6 +135,7 @@ td .sub{font-size:.84rem;color:var(--muted)}
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="/nav.js"></script>
 <script src="/admin/console.js"></script>
 </body>
 </html>

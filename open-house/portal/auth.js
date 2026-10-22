@@ -1,27 +1,20 @@
-// Google sign-in gate. The server (/api/*) is the source of truth; this only drives the UI.
+// Google sign-in gate for the agent pages, and their top navigation once signed in (nav.js).
+// The server (/api/*) is the source of truth; this only drives the UI.
 (function () {
   const $ = (id) => document.getElementById(id);
-  const gate = $("gate"), msg = $("gateMsg"), who = $("who");
+  const gate = $("gate"), msg = $("gateMsg");
 
   function say(text) { msg.textContent = text || ""; msg.hidden = !text; }
 
   function showUser(u) {
     document.body.classList.remove("signed-out");
     gate.hidden = true;
-    who.innerHTML = "";
-    const l1 = document.createElement("span"); l1.textContent = "Signed in as";
-    const name = document.createElement("strong"); name.textContent = u.name || u.email;
-    who.append(l1, document.createElement("br"), name);
-    const row = document.createElement("div"); row.className = "who-links";
-    if ($("my-open-houses")) { const a = document.createElement("a"); a.href = "#my-open-houses"; a.textContent = "My open houses"; row.append(a); }
-    if (u.team) { const a = document.createElement("a"); a.href = "/admin/"; a.textContent = "Team console"; row.append(a); }
-    const out = document.createElement("button"); out.type = "button"; out.textContent = "Sign out";
-    out.onclick = async () => {
-      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-      location.reload();
-    };
-    row.append(out);
-    who.append(row);
+    // <body data-page="..."> says which page this is, so its link is marked as the current one.
+    OHNav.mount({ current: document.body.dataset.page, user: u, links: [
+      { key: "weekend", href: "/", label: "This weekend" },
+      { key: "mine", href: "/my-open-houses/", label: "My open houses" },
+      ...(u.team ? [{ key: "admin", href: "/admin/", label: "Admin Console" }] : []),
+    ] });
     document.dispatchEvent(new CustomEvent("signedin", { detail: u }));
   }
 

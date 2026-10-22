@@ -35,10 +35,11 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `/` | Signed-in agents | Browse published listings, request a time. |
-| `/inventory/` | Team | Redirects to the team console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
+| `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings, request a time. |
+| `/my-open-houses/` | Signed-in agents | "My open houses": every request the agent has made, upcoming and history, with "Request cancellation". |
+| `/inventory/` | Team | Redirects to the Admin Console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
 | `/respond/?id=...` | Team | Approve or Decline a request, or answer an agent's cancellation request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
-| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Team console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
+| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
 
 ## Features
 
@@ -49,7 +50,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 **Changes and cancellations**
 - Agents can't cancel on their own. They send a cancellation request for their own pending or approved request until the open house starts (the weekly cutoff doesn't apply). The team gets an email like a new booking and approves the cancellation or keeps the open house. Time changes go through the team.
-- The team can change the date or hours of an approved open house, or cancel it, from the request page (cancel also from the team console). The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
+- The team can change the date or hours of an approved open house, or cancel it, from the request page (cancel also from the Admin Console). The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
 - Every action and every MLS bot result is logged (Netlify Blobs store `open-house-audit`) and shown as History on the request page.
 
 **Requests and email**
@@ -65,7 +66,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - When the cutoff passes, agents see the next weekend. Publishing and Priority reset each weekend; days, instructions and access details stay with the home.
 - Pending requests expire once their weekend's cutoff passes.
 
-**Inventory** (team console, Listings tab)
+**Inventory** (Admin Console, Listings tab)
 - Tabs: All homes, Published and Unpublished, each with its count. Every card has a Published or Unpublished badge.
 - **Publish this weekend** controls which listings agents see; days (Sat/Sun) are chosen per listing.
 - **Priority** puts a listing first and highlights its card (blue border and glow, "Priority" badge, same card size). Resets weekly.
@@ -75,7 +76,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Four listings are built in as a fallback (2006 Nighthawk Court, 6900 Rockingham Court, 69 Cortes Drive, 441 Watermere Drive) and always appear in the inventory list. Live Repliers data replaces them when it returns the same MLS number.
 
 **Design**
-- Logo in the header with "OPEN HOUSE PORTAL" beneath; a white logo variant is used in dark mode.
+- Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My open houses and (for the team) Admin Console; the Admin Console shows Requests, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
 - Mobile responsive; admin settings autosave with toast confirmations.
 
 ## Configuration (Netlify environment variables)

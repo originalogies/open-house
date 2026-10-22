@@ -1,4 +1,4 @@
-// Team console: one page, four views (Requests, Listings, Agents, Settings) chosen by the URL hash.
+// Admin Console: one page, four views (Requests, Listings, Agents, Settings) chosen by the URL hash.
 // The server checks roles on every API call; hiding tabs here is only for a tidy UI.
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -62,10 +62,14 @@
     document.head.append(s);
   }
 
-  function renderWho() {
-    $("who").innerHTML = `<span>Signed in as</span><br><strong>${esc(me.name || me.email)}</strong>
-      <div class="who-links"><a href="/">Agent portal</a><button type="button" id="signOut">Sign out</button></div>`;
-    $("signOut").onclick = async () => { await fetch("/api/auth/logout", { method: "POST" }).catch(() => {}); location.reload(); };
+  // Top navigation (nav.js): the sections this person can use, the agent portal, and Sign out.
+  function renderNav() {
+    const sections = !me.team ? [] : [
+      { key: "requests", href: "#requests", label: "Requests", count: "pendingCount" },
+      { key: "listings", href: "#listings", label: "Listings" },
+      ...(me.admin ? [{ key: "agents", href: "#agents", label: "Agents" }, { key: "settings", href: "#settings", label: "Settings" }] : []),
+    ];
+    OHNav.mount({ user: me, links: [...sections, { key: "portal", href: "/", label: "Agent portal" }] });
   }
 
   const VIEWS = { requests: renderRequests, listings: renderListings, agents: renderAgents, settings: renderSettings };
@@ -77,14 +81,14 @@
     const [hashName, arg] = location.hash.slice(1).split("/");
     let name = hashName || "requests";
     if (name === "agent" && arg) {
-      document.querySelectorAll("#tabs a").forEach((a) => { if (a.dataset.view === (me.admin ? "agents" : "requests")) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+      OHNav.setCurrent(me.admin ? "agents" : "requests");
       view.innerHTML = '<p class="empty">Loading…</p>';
       renderAgent(decodeURIComponent(arg).toLowerCase());
       window.scrollTo(0, 0);
       return;
     }
     if (!VIEWS[name] || ((name === "agents" || name === "settings") && !me.admin)) name = "requests";
-    document.querySelectorAll("#tabs a").forEach((a) => { if (a.dataset.view === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    OHNav.setCurrent(name);
     view.innerHTML = '<p class="empty">Loading…</p>';
     VIEWS[name]();
     window.scrollTo(0, 0);
@@ -105,13 +109,11 @@
     if (r.status === 401) return showGate();
     if (!r.ok) { view.innerHTML = '<p class="empty">Could not reach the server.</p>'; return; }
     me = r.data;
-    renderWho();
+    renderNav();
     if (!me.team) {
-      view.innerHTML = `<section class="intro"><div><h1>Team members only</h1><p class="sub">The console is for the George &amp; Noonan team. You can still request open houses on the <a href="/">agent portal</a>.</p></div></section>`;
+      view.innerHTML = `<section class="intro"><div><h1>Team members only</h1><p class="sub">The Admin Console is for the George &amp; Noonan team. You can still request open houses on the <a href="/">agent portal</a>.</p></div></section>`;
       return;
     }
-    $("tabs").hidden = false;
-    if (!me.admin) document.querySelectorAll("#tabs [data-admin]").forEach((a) => a.remove());
     window.addEventListener("hashchange", route);
     await loadRequests();
     route();

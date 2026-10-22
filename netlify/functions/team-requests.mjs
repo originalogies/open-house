@@ -6,7 +6,7 @@ import { mode } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
 
-// GET /api/team/requests -> every request, newest first, for the team console, with its MLS status
+// GET /api/team/requests -> every request, newest first, for the Admin Console, with its MLS status
 // and any open cancellation request from the agent. Approve and decline go through POST /api/respond;
 // cancel and keep go through POST /api/manage. Access details are never included.
 export default async (req) => {
