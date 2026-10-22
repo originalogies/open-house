@@ -69,14 +69,15 @@ button{font:inherit;color:inherit}
 .dom.fresh{background:#F3E7C9}
 
 /* Sheet */
-.scrim{position:fixed;inset:0;background:rgba(6,10,14,.5);opacity:0;pointer-events:none;transition:opacity .25s}
+/* Above the top navigation bar (z-index 20), below the sign-in gate (100). */
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(6,10,14,.5);opacity:0;pointer-events:none;transition:opacity .25s}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet{position:fixed;z-index:60;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overscroll-behavior:contain;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet.on{transform:none}
 .sheet .hero{position:relative;aspect-ratio:16/10;background:var(--photo)}
 .sheet .hero img{width:100%;height:100%;object-fit:cover}
 .sheet .hero.noimg img{display:none}
-.close{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#16202A;font-size:1.3rem;cursor:pointer}
+.close{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#16202A;font-size:1.4rem;cursor:pointer}
 .body{padding:22px 24px 28px}
 .body h2{font-family:var(--serif);font-weight:500;font-size:1.9rem;line-height:1.1;margin:0}
 .sub{color:var(--muted);margin:4px 0 16px}
@@ -93,7 +94,7 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .day:disabled{opacity:.45;cursor:not-allowed}
 .slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}
 .hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
-.slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;cursor:pointer;font-weight:500;font-size:.88rem}
+.slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;min-height:44px;cursor:pointer;font-weight:500;font-size:.88rem}
 .slot[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
 .slot:disabled{background:var(--taken);color:var(--muted);cursor:not-allowed}
 .slot small{display:block;font-weight:400;font-size:.75rem;text-decoration:none}
@@ -102,6 +103,16 @@ label.note{display:block;font-size:.9rem;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
 .primary{margin-top:18px;width:100%;border:0;border-radius:12px;padding:15px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:1rem;cursor:pointer}
 .primary:disabled{opacity:.4;cursor:not-allowed}
+/* Request steps: each appears once the one before it is done (see update()). */
+.step:not([hidden]){animation:stepIn .25s ease}
+.step{scroll-margin:12px 0 96px} /* room for the request bar pinned to the bottom when a step scrolls into view */
+@keyframes stepIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+#stepSend .fine{margin:8px 0 0}
+/* The request button stays within reach at the bottom of the sheet while the times are on screen. */
+.send{position:sticky;bottom:0;z-index:1;background:var(--surface);margin:16px -24px 0;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.send .primary{margin-top:0}
+.fine.err{color:#A12B2B;margin:0 0 8px}
+html.sheet-open{overflow:hidden}
 .fine{font-size:.8rem;color:var(--muted);margin-top:10px}
 
 /* Status */
@@ -122,7 +133,7 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 .email .eb ul{padding-left:18px;margin:8px 0}
 .email .ics{display:inline-block;margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:.82rem}
 
-.disclose{border:0;background:none;padding:0;margin:0 0 14px;color:var(--accent);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.disclose{border:0;background:none;padding:10px 0;margin:0 0 6px;min-height:44px;color:var(--accent);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .disclose::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .2s}
 .disclose[aria-expanded="true"]::before{transform:rotate(45deg)}
 .mapbox{margin:0 0 22px}
@@ -137,7 +148,7 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 .mine .tag{font-size:.8rem;font-weight:600;color:var(--brass)}
 .mine .tag.ok{color:var(--accent)}
 .mine .right{display:flex;gap:10px;align-items:center;flex-shrink:0}
-.mine .cancel{background:none;border:0;padding:0;font:inherit;font-size:.82rem;color:var(--muted);text-decoration:underline;cursor:pointer}
+.mine .cancel{background:none;border:0;padding:12px 0;font:inherit;font-size:.85rem;color:var(--muted);text-decoration:underline;cursor:pointer}
 .mine .cancel:disabled{opacity:.5;cursor:wait}
 .mine-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
@@ -149,9 +160,21 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   .grid{grid-template-columns:1fr}
   .card .addr,.card .price{font-size:1.3rem}
   .sheet{top:auto;bottom:0;height:92%;width:100%;border-radius:18px 18px 0 0;transform:translateY(100%)}
+  /* Tighter top of the sheet on phones so "Choose a day" is on the first screen. */
+  .sheet .hero{aspect-ratio:auto;height:min(170px,22vh)}
+  .body{padding:16px 18px 24px}
+  .body h2{font-size:1.55rem}
+  .sub{margin:2px 0 10px}
+  .stats{margin-bottom:8px}
+  .stats div{padding:7px 0}
+  .stats b{font-size:1.08rem}
+  .instr{padding:12px 14px;margin-bottom:16px}
+  .instr h3{margin-bottom:6px}
+  .instr .fine{margin-top:6px}
+  .send{margin:16px -18px 0;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}
   .stats{grid-template-columns:repeat(2,1fr)}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .signed-out .wrap{visibility:hidden}
 .gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg)}
 .gate[hidden]{display:none}
@@ -169,7 +192,6 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 #gBtn{display:flex;justify-content:center;min-height:44px}
 .gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
 @media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
-input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
 </style>
 </head>
 <body class="signed-out" data-page="weekend">
@@ -223,19 +245,26 @@ input#phone{width:100%;padding:10px 12px;border:1px solid var(--line);border-rad
       <p class="fine">Gate, lockbox and alarm codes are sent in your confirmation email after approval.</p>
     </section>
 
+    <!-- One step at a time: the time picker appears once a day is chosen, then notes and the request button once a time is. -->
     <div id="form">
-      <h3>Choose a day</h3>
-      <div class="days" id="days"></div>
-      <h3>Choose a time</h3>
-      <div class="slots" id="slots"></div>
-      <p class="hint" id="hint"></p>
-      <label class="note" for="phone">Your phone number (shared with the team)</label>
-      <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 555-5555" maxlength="30">
-      <label class="note" for="notes" style="margin-top:12px">Notes for the listing team (optional)</label>
-      <textarea id="notes" placeholder="Anything they should know, like a co-host or signage plans"></textarea>
-      <p class="fine" id="formErr" role="alert" hidden style="color:#A12B2B"></p>
-      <button class="primary" id="submit" disabled>Request open house</button>
-      <p class="fine">This is a request, not a booking. Nothing goes on the MLS until a George &amp; Noonan team member approves it.</p>
+      <section class="step" id="stepDay">
+        <h3>Choose a day</h3>
+        <div class="days" id="days"></div>
+      </section>
+      <section class="step" id="stepTime" hidden>
+        <h3>Choose a time</h3>
+        <div class="slots" id="slots"></div>
+        <p class="hint" id="hint"></p>
+      </section>
+      <section class="step" id="stepSend" hidden>
+        <label class="note" for="notes">Notes for the listing team (optional)</label>
+        <textarea id="notes" placeholder="Anything they should know, like a co-host or signage plans"></textarea>
+        <p class="fine">This is a request, not a booking. Nothing goes on the MLS until a George &amp; Noonan team member approves it.</p>
+      </section>
+      <div class="send" id="send" hidden>
+        <p class="fine err" id="formErr" role="alert" hidden></p>
+        <button class="primary" id="submit">Request open house</button>
+      </div>
     </div>
 
     <div class="status" id="status">
@@ -350,10 +379,12 @@ function openSheet(i, trigger){
   $("mapLink").href = `https://www.google.com/maps/search/?api=1&query=${where(cur)}`;
   if(mine().length){ showStatus(); } else { showForm(); }
   $("sheet").classList.add("on"); $("scrim").classList.add("on"); $("sheet").setAttribute("aria-hidden","false");
+  document.documentElement.classList.add("sheet-open"); // the page behind doesn't scroll while the sheet is up
   setTimeout(()=>$("close").focus(),50);
 }
 function closeSheet(){
   $("sheet").classList.remove("on"); $("scrim").classList.remove("on"); $("sheet").setAttribute("aria-hidden","true");
+  document.documentElement.classList.remove("sheet-open");
   if(lastFocus) lastFocus.focus();
 }
 $("close").onclick=closeSheet; $("scrim").onclick=closeSheet;
@@ -366,7 +397,7 @@ function renderDays(){
     const b = document.createElement("button");
     b.className="day"; b.setAttribute("aria-pressed", day===k); b.disabled=!offered;
     b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${offered ? fmt(FIRST)+" to "+fmt(LAST) : "Not offered by the seller"}</span>`;
-    b.onclick=()=>{day=k; sel=null; renderDays(); renderSlots();};
+    b.onclick=()=>{day=k; sel=null; renderDays(); renderSlots(); reveal("stepTime");};
     d.appendChild(b);
   });
 }
@@ -381,23 +412,31 @@ function pick(h){
 }
 function renderSlots(){
   const s=$("slots"); s.innerHTML="";
-  if(!day){ s.innerHTML=`<p class="empty">Pick a day to see open times.</p>`; $("hint").textContent=""; update(); return; }
+  if(!day){ $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
   for(let h=FIRST; h<LAST; h++){
     const taken=blocked(day,h), own=isMine(day,h), on=sel && h>=sel.from && h<sel.to;
     const b=document.createElement("button");
     b.className="slot"; b.disabled=taken; b.setAttribute("aria-pressed", !!on);
     b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
     b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already booked"):""}`);
-    b.onclick=()=>pick(h);
+    b.onclick=()=>{ const first=!sel; pick(h); if(first && sel) reveal("stepSend"); };
     s.appendChild(b);
   }
   $("hint").textContent = sel ? `${fmt(sel.from)} to ${fmt(sel.to)} (${sel.to-sel.from} ${sel.to-sel.from===1?"hour":"hours"}). Tap a later time to extend.` : "Tap a start time, then tap the last hour you'll host.";
   update();
 }
 const range = (r=sel) => `${fmt(r.from)} to ${fmt(r.to)}`;
+// Progressive disclosure: each step shows only once the one before it is done.
 function update(){
+  $("stepTime").hidden = !day;
+  $("stepSend").hidden = $("send").hidden = !(day && sel);
   $("submit").disabled = !(day && sel);
   $("submit").textContent = day&&sel ? `Request ${DAYS[day].label}, ${range()}` : "Request open house";
+}
+// Bring a step that just appeared into view; on a phone it's often below the fold.
+function reveal(id){
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  requestAnimationFrame(()=>$(id).scrollIntoView({behavior: reduce ? "auto" : "smooth", block:"nearest"}));
 }
 
 $("mapBtn").onclick=()=>{
@@ -408,8 +447,9 @@ $("mapBtn").onclick=()=>{
   $("mapBtn").textContent = open ? "Hide map" : "View location";
 };
 function showForm(){
-  day=null; sel=null; $("notes").value="";
-  try{ $("phone").value = localStorage.getItem("oh_phone") || ""; }catch(e){}
+  // A home offered on just one day skips straight to choosing a time.
+  const offered = Object.keys(DAYS).filter(k => cur.days.includes(k));
+  day = offered.length === 1 ? offered[0] : null; sel=null; $("notes").value="";
   $("formErr").hidden = true;
   $("form").style.display=""; $("status").classList.remove("on");
   renderDays(); renderSlots();
@@ -441,14 +481,12 @@ function trackHTML(r){
 }
 $("submit").onclick=async ()=>{
   const btn=$("submit"), err=$("formErr"); btn.disabled=true; err.hidden=true;
-  const phone=$("phone").value.trim();
-  try{ localStorage.setItem("oh_phone", phone); }catch(e){}
   const r = await fetch("/api/requests",{method:"POST",headers:{"content-type":"application/json"},
-    body:JSON.stringify({mls:cur.mls,day,from:sel.from,to:sel.to,notes:$("notes").value,phone})}).catch(()=>null);
+    body:JSON.stringify({mls:cur.mls,day,from:sel.from,to:sel.to,notes:$("notes").value})}).catch(()=>null);
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ err.textContent = d.message || "Could not send the request. Try again."; err.hidden=false; update(); return; }
   const idx = homes.indexOf(cur);
-  await loadListings(); cur = homes[idx]; loadMine();
+  await loadListings(); cur = homes[idx];
   if(r.status===502){ err.textContent = d.message; }
   showStatus();
   $("sheet").scrollTo({top:0,behavior:"smooth"});

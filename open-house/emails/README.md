@@ -15,7 +15,7 @@ Listing: `address`, `city`, `zip`, `mls_number`, `list_price`, `photo_url`, `map
 
 Request: `request_id`, `day_name`, `date`, `time_range`, `received_at`, `agent_notes`, `other_requests`, `relative_day` ("tomorrow"), `arrival_time` (start minus 30 minutes)
 
-Agent: `agent_name`, `agent_first_name`, `agent_phone`, `agent_email`
+Agent: `agent_name`, `agent_first_name`, `agent_phone` (only on older requests; the form no longer asks for it), `agent_email`
 
 Approval: `approve_url`, `decline_url`, `approver_name`, `approved_at`, `ics_url`
 
