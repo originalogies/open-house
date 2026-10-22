@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { chicagoNow } from "./time.mjs";
+import { listHomes, asListing, linkSuggestions, photoUrl } from "./homes.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
@@ -115,8 +116,19 @@ async function catalog(week) {
   try { raw = await fetchRaw(); } catch (e) { console.error(e.message); warning = e.message.slice(0, 300); }
   const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week) }));
   for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [] });
+  // Homes the team added that aren't linked to an MLS listing yet (see homes.mjs).
+  let homes = [];
+  try { homes = (await listHomes()).filter((h) => !h.linkedMls); } catch (e) { console.error("team-added homes unavailable", e.message); }
+  for (const h of homes) list.push({ n: asListing(h), openHouses: [], home: h });
   return { list, warning };
 }
+
+// MLS listings only (Repliers plus the built-in ones), for linking a team-added home.
+export const mlsListings = async (week) => (await catalog(week)).list.filter((x) => !x.n.teamAdded).map((x) => x.n);
+
+// How a listing's stored team settings read for a given weekend. Publishing and Priority are per
+// weekend; days, instructions and access details stay with the home from week to week.
+export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access });
 
 // Listings the team has offered for the current weekend. Never includes access details.
 export async function offeredListings(week) {
@@ -130,11 +142,16 @@ export async function offeredListings(week) {
 export async function teamListings(week) {
   const { list, warning } = await catalog(week);
   const info = await allInfo(list.map((x) => x.n.mls));
+  const mls = list.filter((x) => !x.n.teamAdded).map((x) => x.n);
   return {
     warning,
     feedUpdatedOn: await feedUpdatedOn().catch(() => null),
-    listings: list.map((x) => { const i = info[x.n.mls]; return { ...x.n, offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, openHouses: x.openHouses }; })
-      .sort((a, b) => Number(b.priority) - Number(a.priority)),
+    listings: list.map((x) => ({
+      ...x.n, ...teamView(info[x.n.mls], week), openHouses: x.openHouses,
+      // Team-added homes: their photos, and MLS listings at the same address to link to.
+      ...(x.home && { photos: x.home.photos.map((p) => ({ id: p, url: photoUrl(x.home.id, p) })), suggestions: linkSuggestions(x.home, mls).map((l) => l.mls) }),
+    })).sort((a, b) => Number(b.priority) - Number(a.priority)),
+    mlsChoices: mls.map((l) => ({ mls: l.mls, addr: l.addr, city: l.city })),
   };
 }
 
@@ -185,7 +202,7 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
-export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority });
+export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority, teamAdded: !!l.teamAdded });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
-export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img });
+export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img, ...(l.teamAdded && { teamAdded: true }) });

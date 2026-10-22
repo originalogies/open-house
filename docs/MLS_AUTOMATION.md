@@ -19,6 +19,7 @@ Each request stores what the MLS **should** show (an open house while the reques
 - Jobs for the soonest open house go first.
 - Changes made while the bot is working are picked up by a follow-up job. An approval cancelled before the bot runs sends nothing.
 - Requests whose open house has already ended are skipped.
+- Requests on a home the team added before it's on the MLS are skipped until an admin links the home to its MLS listing. Linking moves the requests to the MLS number, and approved ones then go out as `add` jobs.
 
 ## Modes (`MLS_BOOKING_MODE`)
 

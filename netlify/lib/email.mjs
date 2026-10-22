@@ -21,8 +21,9 @@ export function fields(req, extra = {}) {
   const d = dayMeta(req.iso);
   return {
     address: l.addr, city: l.city, zip: l.zip, mls_number: l.mls, list_price: money(l.price),
-    photo_url: `https://cdn.repliers.io/${l.img}?class=medium`,
-    map_url: `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`,
+    // Team-added homes keep photos on this site ("/api/home-photo?...") and have no map coordinates.
+    photo_url: String(l.img || "").startsWith("/") ? `${site(req)}${l.img}` : `https://cdn.repliers.io/${l.img}?class=medium`,
+    map_url: `https://www.google.com/maps/search/?api=1&query=${l.lat && l.lng ? `${l.lat},${l.lng}` : encodeURIComponent(`${l.addr}, ${l.city}, TX ${l.zip}`)}`,
     listing_url: site(req),
     request_id: req.id, day_name: d.label, date: d.date, time_range: fmtRange(req.from, req.to),
     received_at: fmtReceived(req.createdAt), agent_notes: req.notes || "",

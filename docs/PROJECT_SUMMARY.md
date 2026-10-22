@@ -8,7 +8,7 @@ This document records what has been built, how it fits together, how it is confi
 
 A weekly open house request system for George & Noonan Real Estate Group listings at Synergy Realty, LLC.
 
-1. The George & Noonan team chooses which listings are offered for the coming weekend and adds instructions and access details.
+1. The George & Noonan team chooses which listings are published for the coming weekend and adds instructions and access details. Admins can also add homes that aren't on the MLS yet.
 2. Synergy agents sign in with Google, pick a listing, a day (Saturday or Sunday) and an hourly time range between 9:00 AM and 7:00 PM, and submit a request.
 3. The team gets an email with Approve and Decline links. The first approval locks the slot.
 4. The agent and the team get a confirmation email (with access details and a calendar invite). A reminder goes out at 9:00 AM Central the day before.
@@ -35,8 +35,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `/` | Signed-in agents | Browse offered listings, request a time. |
-| `/inventory/` | Team (admins and `TEAM_EMAILS`) | Offer listings for the weekend, set Priority, edit instructions and access details, check Repliers data. (Old `/team/` redirects here.) |
+| `/` | Signed-in agents | Browse published listings, request a time. |
+| `/inventory/` | Team | Redirects to the team console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
 | `/respond/?id=...` | Team | Approve or Decline a request, or answer an agent's cancellation request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
 | `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Team console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
 
@@ -62,12 +62,16 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 **Weekly schedule**
 - The weekend is calculated automatically (next Saturday and Sunday).
 - Request cutoff is an admin setting: a weekly on/off switch with a chosen day and time (Central). Default is on, Friday 5:00 PM. When off, requests stay open until Sunday 7:00 PM and the "Requests close..." message is hidden on the portal.
-- When the cutoff passes, agents see the next weekend. Offers and Priority reset each weekend; instructions and access details are kept.
+- When the cutoff passes, agents see the next weekend. Publishing and Priority reset each weekend; days, instructions and access details stay with the home.
 - Pending requests expire once their weekend's cutoff passes.
 
-**Inventory**
-- **Offer this weekend** controls which listings agents see; days (Sat/Sun) are chosen per listing.
+**Inventory** (team console, Listings tab)
+- Tabs: All homes, Published and Unpublished, each with its count. Every card has a Published or Unpublished badge.
+- **Publish this weekend** controls which listings agents see; days (Sat/Sun) are chosen per listing.
 - **Priority** puts a listing first and highlights its card (blue border and glow, "Priority" badge, same card size). Resets weekly.
+- Changes save automatically (switches right away, text after a short pause) and a toast confirms each save. There is no Save button.
+- **Homes not on the MLS yet** (admins): "Add a home" takes the address, price, bedrooms, bathrooms and square feet, then photos (resized in the browser; the first is the cover). These homes work like any listing (publish, Priority, instructions, access details, requests) and show "Coming soon" to agents. Their requests aren't sent to the MLS bot, and approving one doesn't ask for the "entered on the MLS" tick. Stored in Netlify Blobs (`open-house-homes`, photos in `open-house-home-photos`, served publicly by `/api/home-photo` so emails can show them).
+- **Linking:** once the home is on the MLS, its card suggests the MLS listing at the same address (or the team picks one). Linking moves the home's settings, instructions, access details and requests to the MLS number, and approved open houses then go to the MLS bot (or, with automation off, the team is told which to enter by hand).
 - Four listings are built in as a fallback (2006 Nighthawk Court, 6900 Rockingham Court, 69 Cortes Drive, 441 Watermere Drive) and always appear in the inventory list. Live Repliers data replaces them when it returns the same MLS number.
 
 **Design**
@@ -92,7 +96,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 
@@ -120,4 +124,5 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 - Approve and Decline links open a confirmation page (requiring team sign-in) rather than acting on a plain link click, so email scanners that prefetch links cannot approve a request.
 - The browser never receives access details. Listing instructions are shown to agents; access details are not.
-- Weekly resets (offers, Priority) were chosen so stale settings do not carry into the next weekend.
+- Weekly resets (publishing, Priority) were chosen so stale settings do not carry into the next weekend. Instructions and access details belong to the home and carry over.
+- Team-added homes are linked to their MLS listing by a person (one click on the suggested match), not automatically, because linking moves requests and access details.

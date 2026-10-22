@@ -313,9 +313,15 @@ const mine = () => cur.mine;
 const isTaken = (d,h) => cur.taken.some(t => t.day===d && h>=t.from && h<t.to);
 const isMine = (d,h) => mine().some(r => r.day===d && h>=r.from && h<r.to);
 const blocked = (d,h) => isTaken(d,h) || isMine(d,h);
+// MLS photos are Repliers CDN paths; homes the team added before they're on the MLS have photos on this site.
+const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?class=" + size;
+// Map query: coordinates for MLS listings, the address for team-added homes (they have none).
+const where = h => h.lat && h.lng ? `${h.lat},${h.lng}` : encodeURIComponent(`${h.addr}, ${h.city}, TX ${h.zip}`);
+const domLabel = h => h.teamAdded ? "Coming soon" : `${h.dom} ${h.dom===1?'day':'days'} on market`;
 
 function imgEl(h, el, wrap){
-  el.src = CDN + h.img + "?class=medium";
+  if(!h.img){ el.removeAttribute("src"); wrap.classList.add("noimg"); return; }
+  el.src = photoSrc(h.img, "medium");
   el.alt = "Front of " + h.addr + ", " + h.city;
   el.onerror = () => wrap.classList.add("noimg");
 }
@@ -327,9 +333,9 @@ function renderGrid(){
   homes.forEach((h,i) => {
     const b = document.createElement("button");
     b.className = "card" + (h.priority ? " priority" : "");
-    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${h.dom} days on market. Request an open house.`);
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${domLabel(h)}. Request an open house.`);
     b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-      <span class="dom ${h.dom<=14?'fresh':''}">${h.dom} ${h.dom===1?'day':'days'} on market</span>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
+      <span class="dom ${h.teamAdded||h.dom<=14?'fresh':''}">${domLabel(h)}</span>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
       <div class="meta">
         <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
         <div class="price">${money(h.price)}</div>
@@ -381,7 +387,7 @@ function renderMine(){
   $("tabUp").setAttribute("aria-selected", myTab === "up"); $("tabPast").setAttribute("aria-selected", myTab === "past");
   const list = myTab === "up" ? up : past;
   $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
-      ${r.img ? `<img class="thumb" src="${CDN + esc(r.img)}?class=small" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
+      ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
       <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
       <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}</span></li>`; }).join("")
     : `<li><span class="empty">${myTab === "up" ? "No upcoming open houses. Pick a home above to request one." : "Your past open houses will show up here."}</span></li>`;
@@ -424,15 +430,15 @@ function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
   $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
   $("sTitle").textContent = cur.addr;
-  $("sSub").textContent = `${cur.city}, TX ${cur.zip}  |  MLS# ${cur.mls}`;
+  $("sSub").textContent = `${cur.city}, TX ${cur.zip}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + cur.mls}`;
   $("sStats").innerHTML = `<div><b>${money(cur.price)}</b><span>List price</span></div>
-    <div><b>${cur.dom}</b><span>Days on market</span></div>
+    ${cur.teamAdded ? '<div><b>New</b><span>Coming soon</span></div>' : `<div><b>${cur.dom}</b><span>Days on market</span></div>`}
     <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
     <div><b>${cur.sf.toLocaleString()}</b><span>Sq ft</span></div>`;
   $("instrList").innerHTML = cur.instr.map(t=>`<li>${esc(t)}</li>`).join("");
   $("mapBox").hidden=true; $("mapBtn").setAttribute("aria-expanded","false"); $("mapBtn").textContent="View location";
   $("mapFrame").removeAttribute("src");
-  $("mapLink").href = `https://www.google.com/maps/search/?api=1&query=${cur.lat},${cur.lng}`;
+  $("mapLink").href = `https://www.google.com/maps/search/?api=1&query=${where(cur)}`;
   if(mine().length){ showStatus(); } else { showForm(); }
   $("sheet").classList.add("on"); $("scrim").classList.add("on"); $("sheet").setAttribute("aria-hidden","false");
   setTimeout(()=>$("close").focus(),50);
@@ -487,7 +493,7 @@ function update(){
 
 $("mapBtn").onclick=()=>{
   const open = $("mapBox").hidden;
-  if(open && !$("mapFrame").src) $("mapFrame").src = `https://maps.google.com/maps?q=${cur.lat},${cur.lng}&z=15&output=embed`;
+  if(open && !$("mapFrame").src) $("mapFrame").src = `https://maps.google.com/maps?q=${where(cur)}&z=15&output=embed`;
   $("mapBox").hidden = !open;
   $("mapBtn").setAttribute("aria-expanded", open);
   $("mapBtn").textContent = open ? "Hide map" : "View location";

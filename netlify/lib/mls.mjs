@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import { SITE } from "./email.mjs";
 import { chicagoToUtc } from "./time.mjs";
+import { isMlsNumber } from "./homes.mjs";
 
 // ---- MLS sync: "desired state" model ---------------------------------------
 // Each request carries r.sync = {   (r.mls is the MLS number, so sync state lives in r.sync)
@@ -42,6 +43,7 @@ const ended = (e, now) => !!e && now >= chicagoToUtc(e.iso, e.to).getTime();
 // Should the sync job send something for this request right now?
 export function needsDispatch(r, now = Date.now(), runMode = mode()) {
   if (runMode === "off") return null;
+  if (!isMlsNumber(r.mls)) return null; // a team-added home not linked to its MLS listing yet
   const action = nextAction(r);
   if (!action) return null;
   const m = r.sync || {};

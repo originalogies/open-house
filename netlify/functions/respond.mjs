@@ -5,6 +5,7 @@ import { sendConfirmed, sendDeclined } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { mode, desiredFor, logEvent, listEvents } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
+import { isMlsNumber } from "../lib/homes.mjs";
 
 // GET  /api/respond?id=...   -> request details for the team confirm page
 // POST /api/respond          -> { id, action: approve|decline, mlsEntered }
@@ -23,7 +24,7 @@ export default async (req) => {
       id: r.id, status: r.status, address: `${l.addr}, ${l.city}, TX ${l.zip}`, mls: r.mls,
       when: `${d.label}, ${d.date}, ${fmtRange(r.from, r.to)}`, iso: r.iso, from: r.from, to: r.to, firstHour: FIRST_HOUR, lastHour: LAST_HOUR,
       agent: `${r.agent.name} (${r.agent.email})`, phone: r.phone, notes: r.notes, decidedBy: r.decidedByName || null,
-      cancelledBy: r.cancelledByName || null, mode: mode(),
+      cancelledBy: r.cancelledByName || null, mode: mode(), onMls: isMlsNumber(r.mls),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, byName: r.cancelRequest.byName, reason: r.cancelRequest.reason || "" } : null,
       sync: s && { state: s.state, message: s.message || "", current: s.current, job: s.job && { id: s.job.id, action: s.job.action, sentAt: s.job.sentAt, done: !!s.job.done, result: s.job.result || null, screenshot: !!s.job.screenshot } },
       events: (await listEvents(r.id).catch(() => [])).map((e) => ({ at: e.at, type: e.type, by: e.by, note: e.note || e.message || "" })),
@@ -37,9 +38,10 @@ export default async (req) => {
   if (r.status !== "pending") return json(409, { error: "already_answered", status: r.status, by: r.decidedByName || null });
   if (b.action === "approve" && openCancelRequest(r)) return json(409, { error: "cancel_requested", message: "The agent asked to cancel this request. Approve the cancellation or keep it first." });
 
-  const manual = mode() === "off";
+  // A team-added home isn't on the MLS yet: nothing to enter until it's linked to its MLS listing.
+  const manual = mode() === "off", onMls = isMlsNumber(r.mls);
   if (b.action === "approve") {
-    if (manual && b.mlsEntered !== true) return json(400, { error: "mls_required", message: "Confirm the open house is entered on the MLS first." });
+    if (manual && onMls && b.mlsEntered !== true) return json(400, { error: "mls_required", message: "Confirm the open house is entered on the MLS first." });
     const all = await listRequests();
     if (all.some((x) => x.id !== r.id && x.status === "approved" && overlaps(x, r))) {
       return json(409, { error: "taken", message: "Another request already holds those hours." });
@@ -50,10 +52,11 @@ export default async (req) => {
   r.decidedAt = Date.now(); r.decidedBy = user.email; r.decidedByName = user.name;
   if (r.status === "approved") {
     // Manual mode: the team already entered it, so the MLS matches. Otherwise the bot will add it.
-    r.sync = manual ? { current: desiredFor(r), state: "manual" } : { current: null, state: "idle" };
+    r.sync = !onMls ? { current: null, state: "not_on_mls" } : manual ? { current: desiredFor(r), state: "manual" } : { current: null, state: "idle" };
   }
   await saveRequest(r); // single use: status is no longer pending
-  await logEvent(r.id, r.status, { note: r.status === "approved" ? (manual ? "Entered on the MLS by hand" : "Queued for the MLS bot") : "" }, user.email);
+  const note = r.status !== "approved" ? "" : !onMls ? "Home isn't on the MLS yet" : manual ? "Entered on the MLS by hand" : "Queued for the MLS bot";
+  await logEvent(r.id, r.status, { note }, user.email);
 
   try { await (r.status === "approved" ? sendConfirmed(r) : sendDeclined(r)); }
   catch (e) { console.error("email failed", e.message); return json(502, { error: "email_failed", message: "Saved, but the email to the agent failed to send." }); }
