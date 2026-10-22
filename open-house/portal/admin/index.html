@@ -77,10 +77,15 @@ td .sub{font-size:.84rem;color:var(--muted)}
 .lcard h3{font-family:var(--serif);font-weight:500;font-size:1.25rem;margin:0;display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
 .lcard .badges{display:inline-flex;gap:6px;flex-wrap:wrap;font-family:var(--sans)}
 .intro-actions{display:flex;gap:8px;flex-wrap:wrap}
-.homegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0 12px}
-.homegrid .label:first-child{grid-column:span 2}
-.homegrid .label{margin:10px 0 0;font-weight:500;color:var(--muted)}
-.homegrid .field{margin-top:4px;color:var(--ink)}
+/* Home details: address, city, ZIP on one row; price, bedrooms, bathrooms, square feet on the next. */
+.homegrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px 12px;margin-top:12px}
+.homegrid .label{margin:0;font-weight:500;color:var(--muted);grid-column:span 3}
+.homegrid .label:nth-child(1){grid-column:span 6}
+.homegrid .label:nth-child(2){grid-column:span 4}
+.homegrid .label:nth-child(3){grid-column:span 2}
+.homegrid .field{margin-top:6px;color:var(--ink)}
+@media (max-width:720px){.homegrid{grid-template-columns:repeat(2,minmax(0,1fr))}.homegrid .label,.homegrid .label:nth-child(n){grid-column:span 1}.homegrid .label:nth-child(1){grid-column:span 2}}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:18px}
 .home-edit{margin-top:16px;padding-top:4px;border-top:1px solid var(--line)}
 .home-edit h4{font-size:.95rem;margin:16px 0 4px}
 .photos{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
