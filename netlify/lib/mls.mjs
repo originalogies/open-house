@@ -19,6 +19,11 @@ export const MODES = ["off", "dry_run", "live"];
 // off: nothing is sent; the team enters the MLS by hand (approve page keeps the "entered on MLS" box).
 // dry_run: webhooks are sent with dry_run: true (bot validates, then cancels). live: bot submits.
 export const mode = () => (MODES.includes(process.env.MLS_BOOKING_MODE) ? process.env.MLS_BOOKING_MODE : "off");
+// The AI agent (the MLS bot) can take jobs only when automation is on and its webhook is set.
+export const agentReady = () => mode() !== "off" && !!process.env.GROKBOT_WEBHOOK_URL;
+// On the approve page the team chooses, per request, to enter the open house on the MLS by hand
+// (r.mlsMethod "manual") or to schedule it with the AI agent ("agent"). With automation off, all by hand.
+export const byHand = (r) => mode() === "off" || r.mlsMethod === "manual";
 
 export const OH_TYPE = "Public";
 const STALL_MS = 30 * 60 * 1000;       // no result from the bot in 30 minutes = stalled
@@ -44,6 +49,7 @@ const ended = (e, now) => !!e && now >= chicagoToUtc(e.iso, e.to).getTime();
 export function needsDispatch(r, now = Date.now(), runMode = mode()) {
   if (runMode === "off") return null;
   if (!isMlsNumber(r.mls)) return null; // a team-added home not linked to its MLS listing yet
+  if (r.mlsMethod === "manual") return null; // the team keeps this one in step on the MLS by hand
   const action = nextAction(r);
   if (!action) return null;
   const m = r.sync || {};
@@ -111,14 +117,14 @@ export function verify(ts, sig, body, now = Date.now()) {
   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good));
 }
 
-export async function postWebhook(payload, now = Date.now()) {
+export async function postWebhook(payload, now = Date.now(), timeoutMs = 15000) {
   const url = process.env.GROKBOT_WEBHOOK_URL;
   if (!url) throw new Error("GROKBOT_WEBHOOK_URL is not set");
   const body = JSON.stringify(payload), ts = String(Math.floor(now / 1000));
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", "x-oh-timestamp": ts, "x-oh-signature": sign(ts, body), "idempotency-key": payload.job_id },
-    body, signal: AbortSignal.timeout(15000),
+    body, signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`webhook ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }

@@ -2,7 +2,7 @@ import { json, currentUser } from "../lib/shared.mjs";
 import { listRequests } from "../lib/requests.mjs";
 import { dayMeta } from "../lib/week.mjs";
 import { fmtRange } from "../lib/time.mjs";
-import { mode } from "../lib/mls.mjs";
+import { mode, agentReady, byHand } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
 
@@ -25,10 +25,10 @@ export default async (req) => {
       agent: { name: r.agent.name, email: r.agent.email }, phone: r.phone, notes: r.notes,
       createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
       cancelledBy: r.cancelledByName || null,
-      mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls),
+      mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls), byHand: byHand(r),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
     };
   });
-  return json(200, { requests, mode: mode() });
+  return json(200, { requests, mode: mode(), agentReady: agentReady() });
 };
 export const config = { path: "/api/team/requests" };

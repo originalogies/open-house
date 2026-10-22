@@ -10,15 +10,15 @@
   const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
   // MLS status of approved and cancelled open houses: [pill class, label]. "synced" means the MLS matches.
   const MLS = {
-    manual: ["", "Entered by hand"], idle: ["pending", "Waiting for MLS bot"], booking: ["pending", "MLS bot working"],
+    manual: ["", "Entered by hand"], idle: ["pending", "Waiting for AI agent"], booking: ["pending", "AI agent working"],
     synced: ["approved", "On the MLS"], dry_run_ok: ["approved", "Dry run passed"], failed: ["declined", "MLS update failed"], needs_login: ["declined", "MLS sign-in needed"],
     not_on_mls: ["", "Home not on the MLS yet"],
   };
   const mlsCell = (r) => {
     if (r.status !== "approved" && r.status !== "cancelled") return '<span class="sub">—</span>';
-    let [c, t] = MLS[r.mlsState] || ["", mode === "off" ? "Entered by hand" : "Not sent yet"];
+    let [c, t] = MLS[r.mlsState] || ["", r.byHand ? "Entered by hand" : "Not sent yet"];
     if (r.status === "cancelled" && r.mlsState === "synced") t = "Cancelled on the MLS";
-    if (r.status === "cancelled" && (r.mlsState === "manual" || (!r.mlsState && mode === "off"))) t = "Remove by hand";
+    if (r.status === "cancelled" && (r.mlsState === "manual" || (!r.mlsState && r.byHand))) t = "Remove by hand";
     return `<span class="pill ${c}">${esc(t)}</span><div class="sub"><a href="/respond/?id=${encodeURIComponent(r.id)}">MLS status</a></div>`;
   };
   // Listing photos are Repliers CDN paths; built-in listings may carry a full URL, and homes the team
@@ -28,7 +28,7 @@
 
   let me = null;
   let requests = [];
-  let mode = "off"; // MLS_BOOKING_MODE: off means the team enters the MLS by hand
+  let agentReady = false; // the AI agent can take MLS jobs (MLS_BOOKING_MODE on and the bot connected)
 
   let toastTimer;
   function toast(text, err) {
@@ -96,7 +96,7 @@
 
   async function loadRequests() {
     const r = await api("GET", "/api/team/requests");
-    if (r.ok) { requests = r.data.requests; mode = r.data.mode || "off"; }
+    if (r.ok) { requests = r.data.requests; agentReady = !!r.data.agentReady; }
     const n = requests.filter((x) => x.status === "pending" || asksToCancel(x)).length;
     $("pendingCount").textContent = n; $("pendingCount").hidden = !n;
     return r.ok;
@@ -181,7 +181,7 @@
       </tr>`).join("") : '<tr><td colspan="7" class="empty">No requests match.</td></tr>';
     $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => {
       const r = requests.find((x) => x.id === b.dataset.cancel);
-      if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${mode === "off" ? "; remove it from the MLS by hand" : " and the MLS bot marks it Canceled"}.`)) manageAction(r, "cancel", b);
+      if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${r.byHand ? "; remove it from the MLS by hand" : " and the AI agent marks it Canceled"}.`)) manageAction(r, "cancel", b);
     });
   }
 
@@ -212,7 +212,7 @@
         <div class="btns" style="flex-direction:column"><button class="btn danger small approve">Approve cancellation</button><button class="btn ghost small keep">Keep ${what}</button></div>
       </div>`;
     const approve = c.querySelector(".approve"), keep = c.querySelector(".keep");
-    approve.onclick = () => confirm(`Cancel ${r.agent.name}'s ${what} at ${r.addr}? The agent and team will be emailed${r.status === "approved" && mode !== "off" ? " and the MLS bot marks it Canceled" : ""}.`) && manageAction(r, "cancel", approve);
+    approve.onclick = () => confirm(`Cancel ${r.agent.name}'s ${what} at ${r.addr}? The agent and team will be emailed${r.status === "approved" && !r.byHand ? " and the AI agent marks it Canceled" : ""}.`) && manageAction(r, "cancel", approve);
     keep.onclick = () => manageAction(r, "keep", keep);
     return c;
   }
@@ -230,9 +230,9 @@
       </div>
       <div class="act">
         ${!r.onMls ? '<span class="fine">This home isn\'t on the MLS yet, so there\'s nothing to enter there.</span>'
-          : mode === "off" ? '<label class="check"><input type="checkbox" class="mls"> Entered on the MLS</label>'
-          : `<span class="fine">Approving sends it to the MLS bot${mode === "dry_run" ? " as a dry run" : ""}.</span>`}
-        <div class="btns"><button class="btn small approve" ${mode === "off" && r.onMls ? "disabled" : ""}>Approve</button><button class="btn danger small decline">Decline</button></div>
+          : `<label class="check"><input type="checkbox" class="mls"> Entered on the MLS</label>${agentReady
+            ? `<a class="fine" href="/respond/?id=${encodeURIComponent(r.id)}&action=approve">Or schedule it with the AI agent</a>` : ""}`}
+        <div class="btns"><button class="btn small approve" ${r.onMls ? "disabled" : ""}>Approve</button><button class="btn danger small decline">Decline</button></div>
       </div>`;
     const box = c.querySelector(".mls"), approve = c.querySelector(".approve"), decline = c.querySelector(".decline");
     if (box) box.onchange = () => { approve.disabled = !box.checked; };

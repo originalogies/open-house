@@ -6,7 +6,14 @@ When the George & Noonan team approves, changes or cancels an open house, the po
 
 ## How it works
 
-Each request stores what the MLS **should** show (an open house while the request is approved, nothing otherwise) and what the bot last **confirmed** it shows (`sync.current`). When the two differ, the `mls-sync` scheduled function (every minute) sends one job:
+To confirm a request for a home on the MLS, the team picks one of two options on the confirmation page (`/respond/?id=…`):
+
+- **Submitted manually**: they entered it on the MLS themselves. The request is stored as `mlsMethod: "manual"` and the bot never touches it, including later changes and cancellations (the team keeps the MLS in step by hand).
+- **Schedule Open House with AI Agent** (needs `MLS_BOOKING_MODE` `dry_run` or `live` and `GROKBOT_WEBHOOK_URL`): the button becomes **Start**. Start approves the request (the agent gets the Confirmed email) and sends the job to the bot straight away (`POST /api/manage {action:"start"}`) instead of waiting for the next minute. The page then shows the progress (sent, in line behind another job, bot working, on the MLS, failed with Retry) until the bot reports back.
+
+Once the open house is confirmed (by hand, or when the bot reports success), the page shows "Open house confirmed" and a 5-second countdown, then goes to the Open House Portal (`/`). If an email failed to send, it stays put so the team sees the warning.
+
+Each request stores what the MLS **should** show (an open house while the request is approved, nothing otherwise) and what the bot last **confirmed** it shows (`sync.current`). When the two differ, the `mls-sync` scheduled function (every minute, and right away on Start or Retry) sends one job:
 
 | MLS now (`current`) | MLS should show | Job |
 |---|---|---|
@@ -25,7 +32,7 @@ Each request stores what the MLS **should** show (an open house while the reques
 
 | Mode | What happens |
 |---|---|
-| `off` (default) | Nothing is sent. The approve page keeps the "I have entered this on the MLS" box; changes and cancellations remind the team to update the MLS by hand. |
+| `off` (default) | Nothing is sent. The AI agent option on the confirmation page shows as not available, so the team picks "Submitted manually"; changes and cancellations remind the team to update the MLS by hand. |
 | `dry_run` | Jobs are sent with `"dry_run": true`. The bot fills the form and validates, then cancels. Use this to test. |
 | `live` | The bot submits to the MLS. Switching from `dry_run` to `live` re-sends any job that only had a dry run. |
 
@@ -92,7 +99,7 @@ Callbacks for an unknown, old or already-finished `job_id` are ignored. If no ca
 
 - **Agents** can't cancel on their own. They send a cancellation request for their own pending or approved request from the portal (the home's request panel or My open houses) until the open house starts; the weekly cutoff doesn't apply. Like a new booking, the team gets an email with a link and the request shows in the Admin Console's "Needs a decision" queue. Nothing changes until the team answers: approving cancels it (and the bot cancels the MLS entry), keeping it emails the agent that it's still on. Time changes go through the team.
 - **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house or with an open house already on the MLS per Repliers), cancel it, approve or keep an agent's cancellation request, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
-- **Admin Console** (`/admin/`): each approved or cancelled request shows its MLS status with an "MLS status" link to its request page. Cancellation requests appear next to new requests, and upcoming approved open houses have a Cancel button. With MLS automation on, approving no longer asks for the "Entered on the MLS" tick.
+- **Admin Console** (`/admin/`): each approved or cancelled request shows its MLS status with an "MLS status" link to its request page. Cancellation requests appear next to new requests, and upcoming approved open houses have a Cancel button. Approving there needs the "Entered on the MLS" tick; with the AI agent connected, an "Or schedule it with the AI agent" link opens the confirmation page.
 - Changes send the agent an "Updated" email with a calendar invite that updates the existing event (same UID, higher SEQUENCE) and reset the day-before reminder. Cancellations send a calendar cancellation. The requester's approval email still goes out at approval, not when the MLS booking finishes.
 
 ## Conflict checks

@@ -6,22 +6,24 @@
 <meta name="robots" content="noindex">
 <title>Respond to open house request</title>
 <style>
-:root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--danger:#A12B2B}
-@media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--danger:#E58A8A}}
+:root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--accent-soft:#E7F0EE;--danger:#A12B2B}
+@media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--accent-soft:#1C2E2B;--danger:#E58A8A}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 main{max-width:520px;margin:0 auto;padding:32px 16px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
 h1{font-size:1.35rem;margin:0 0 12px}
+h1:focus{outline:none}
 dl{margin:0 0 16px}dt{color:var(--muted);font-size:.85rem;margin-top:10px}dd{margin:0;word-break:break-word}
 label.check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:.95rem}
 label.check input{margin-top:4px}
 .row{display:flex;gap:10px;flex-wrap:wrap}
-button{padding:12px 20px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;border:2px solid var(--accent)}
-button.go{background:var(--accent);color:var(--accent-ink)}
-button.no{background:none;color:var(--accent)}
+.row.actions{margin-top:16px}
+button,a.btn{padding:12px 20px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;border:2px solid var(--accent);text-decoration:none;display:inline-block;text-align:center}
+button.go,a.btn.go{background:var(--accent);color:var(--accent-ink)}
+button.no,a.btn.no{background:none;color:var(--accent)}
 button:disabled{opacity:.5;cursor:not-allowed}
-#msg{margin-top:14px}#msg.err{color:var(--danger)}
+#msg{margin-top:14px}#msg.err,.err{color:var(--danger)}
 #gbtn{display:flex;justify-content:center;margin-top:12px}
 h2{font-size:1rem;margin:22px 0 8px}
 .pill{display:inline-block;font-size:.8rem;font-weight:700;padding:2px 10px;border-radius:99px;border:1px solid var(--line)}
@@ -36,6 +38,46 @@ ul.log .t{color:var(--muted)}
 .shot{max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px}
 .muted{color:var(--muted);font-size:.9rem}
 .box.ask{border:2px solid var(--danger)}.box.ask h2{margin-top:0;color:var(--danger)}
+/* How the open house goes on the MLS: one of two options, chosen before confirming */
+fieldset.how{border:0;padding:0;margin:20px 0 0;min-width:0}
+fieldset.how legend{font-weight:600;padding:0;margin-bottom:2px}
+label.opt{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:8px;cursor:pointer}
+label.opt input{width:20px;height:20px;margin:2px 0 0;flex:none;accent-color:var(--accent)}
+label.opt > span > b{display:block}
+label.opt .muted{display:block;margin-top:2px}
+label.opt:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:var(--accent-soft)}
+label.opt:has(input:disabled){cursor:not-allowed}
+label.opt:has(input:disabled) b{color:var(--muted)}
+label.opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+#hint{margin:12px 0 0}
+/* AI agent progress */
+ol.steps{list-style:none;padding:0;margin:20px 0 4px}
+ol.steps li{display:grid;grid-template-columns:24px 1fr;column-gap:12px;padding-bottom:18px;position:relative}
+ol.steps li::before{content:"";grid-row:1/3;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:.8rem;font-weight:800;line-height:1}
+ol.steps li:not(:last-child)::after{content:"";position:absolute;left:11px;top:28px;bottom:4px;width:2px;background:var(--line)}
+ol.steps b,ol.steps span{grid-column:2}
+ol.steps span{color:var(--muted);font-size:.9rem}
+ol.steps span:empty{display:none}
+ol.steps li:not(.active):not(.done):not(.wait):not(.bad) b{color:var(--muted);font-weight:500}
+ol.steps li.active::before{border-color:var(--accent);border-right-color:transparent;animation:spin .9s linear infinite}
+ol.steps li.wait::before{border-color:var(--accent);border-style:dashed}
+ol.steps li.done::before{content:"✓";background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+ol.steps li.done:not(:last-child)::after{background:var(--accent)}
+ol.steps li.bad::before{content:"!";border-color:var(--danger);color:var(--danger)}
+ol.steps li.bad span,ol.steps li.warn span{color:var(--danger)}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Confirmed: a 5-second countdown, then the Open House Portal */
+.confirmed{text-align:center}
+.confirmed .tick{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;margin:4px auto 14px}
+.confirmed .tick svg{width:30px;height:30px}
+.confirmed .row{justify-content:center;margin-top:18px}
+.count{margin:20px auto 0;max-width:320px}
+.bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar span{display:block;height:100%;background:var(--accent);transform-origin:left;animation:drain 5s linear forwards}
+.count p{margin:10px 0 0}
+#secs{white-space:nowrap}
+@keyframes drain{to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){ol.steps li.active::before{animation:none;border-right-color:var(--accent)}.bar span{animation:none}}
 </style>
 </head>
 <body>
@@ -46,6 +88,9 @@ const params = new URLSearchParams(location.search);
 const id = params.get("id") || "", preset = params.get("action");
 const el = (html) => { card.innerHTML = html; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const PORTAL = "/"; // where the team goes once an open house is confirmed
+const getReq = () => fetch("/api/respond?id=" + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const post = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
 
 async function signIn() {
   el('<h1>Sign in to respond</h1><p>Use your George &amp; Noonan team Google account.</p><div id="gbtn"></div><p id="msg" class="err" role="alert"></p>');
@@ -76,37 +121,132 @@ async function load() {
   if (d.status !== "pending") {
     return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
   }
-  const manual = d.mode === "off" && d.onMls; // a home the team added before it's on the MLS has nothing to enter yet
+  // A home on the MLS needs one of two choices before it can be confirmed: the team entered it on the
+  // MLS by hand, or the AI agent enters it (Start). A team-added home that isn't on the MLS yet has nothing to enter.
   el(`<h1>Open house request</h1>${details}
-    ${!d.onMls ? `<p class="muted">This home isn't on the MLS yet. Once it's linked to its MLS listing in the Admin Console, ${d.mode === "off" ? "enter approved open houses on the MLS by hand" : "approved open houses go to the MLS bot"}.</p>`
-      : manual ? '<label class="check"><input type="checkbox" id="mls"> <span>I have entered this open house on the MLS (NTREIS). Required to approve.</span></label>'
-      : `<p class="muted">Approving sends this open house to the MLS bot${d.mode === "dry_run" ? " as a <b>dry run</b> (it fills the form but doesn't submit)" : ""}. You'll see the MLS status on this page.</p>`}
-    <div class="row"><button class="go" id="approve" ${manual ? "disabled" : ""}>Approve</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
-  const approve = $("approve"), mls = $("mls");
-  if (mls) mls.onchange = () => (approve.disabled = !mls.checked);
-  if (preset === "approve" && mls) mls.focus();
+    ${!d.onMls ? `<p class="muted">This home isn't on the MLS yet. Once it's linked to its MLS listing in the Admin Console, ${d.mode === "off" ? "enter approved open houses on the MLS by hand" : "approved open houses go to the AI agent"}.</p>`
+      : `<fieldset class="how"><legend>How is this open house going on the MLS?</legend>
+        <p class="muted" style="margin:0">Choose one to confirm the request.</p>
+        <label class="opt"><input type="radio" name="how" value="manual"><span><b>Submitted manually</b><span class="muted">I've entered this open house on the MLS (NTREIS) myself.</span></span></label>
+        <label class="opt"><input type="radio" name="how" value="agent" ${d.agentReady ? "" : "disabled"}><span><b>Schedule Open House with AI Agent</b><span class="muted">${d.agentReady
+          ? `The AI agent enters it on NTREIS for you${d.mode === "dry_run" ? " as a <b>dry run</b> (it fills in the form but doesn't submit)" : ""} and reports back here.`
+          : "Not available yet: the AI agent isn't connected."}</span></span></label>
+      </fieldset><p class="muted" id="hint" hidden></p>`}
+    <div class="row actions"><button class="go" id="approve" ${d.onMls ? "disabled" : ""}>Confirm open house</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
+  const approve = $("approve"), decline = $("decline"), hint = $("hint");
+  const how = () => document.querySelector('input[name="how"]:checked')?.value || null;
+  document.querySelectorAll('input[name="how"]').forEach((i) => (i.onchange = () => {
+    const agent = how() === "agent";
+    approve.disabled = false; approve.textContent = agent ? "Start" : "Confirm open house";
+    hint.hidden = false;
+    hint.textContent = agent
+      ? `Start confirms the open house, emails ${d.agentName} the confirmation, and sends it to the AI agent. You'll see its progress here.`
+      : `Confirming emails ${d.agentName} the confirmation and calendar invite.`;
+  }));
+  if (preset === "approve") document.querySelector('input[name="how"]')?.focus();
   const act = async (action) => {
-    approve.disabled = true; $("decline").disabled = true;
-    const r = await fetch("/api/respond", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, action, mlsEntered: mls ? mls.checked : false }) });
-    const j = await r.json().catch(() => ({}));
-    if (r.ok) return action === "approve" ? load() : el(`<h1>Declined</h1><p>The agent has been notified.</p>`);
+    const method = how();
+    approve.disabled = decline.disabled = true;
+    $("msg").className = ""; $("msg").textContent = action === "approve" ? "Confirming…" : "Declining…";
+    const r = await post("/api/respond", { action, method, mlsEntered: method === "manual" });
+    const j = r ? await r.json().catch(() => ({})) : {};
+    const saved = r && (r.ok || r.status === 502), warn = r && r.status === 502 ? j.message : ""; // 502: saved, but an email failed
+    if (saved && action === "decline") return el(`<h1>Declined</h1><p>The agent has been notified.</p>${warn ? `<p class="err">${esc(warn)}</p>` : ""}`);
+    if (saved && method === "agent") return startAgent(d, details, warn);
+    if (saved) return confirmed(d, { warn, line: !d.onMls ? "This home isn't on the MLS yet, so there's nothing to enter there." : "Entered on the MLS by hand." });
     $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
-    $("decline").disabled = false; approve.disabled = mls ? !mls.checked : false;
+    decline.disabled = false; approve.disabled = d.onMls && !method;
   };
   approve.onclick = () => act("approve"); $("decline").onclick = () => act("decline");
 }
 
+// The open house is confirmed: 5 seconds, then the Open House Portal. If an email failed to send,
+// the page stays put so the team sees it.
+function confirmed(d, { line = "", warn = "" } = {}) {
+  el(`<div class="confirmed">
+    <div class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1 id="doneTitle" tabindex="-1">Open house confirmed</h1>
+    <p style="margin:0">${esc(d.address)}<br>${esc(d.when)}</p>
+    <p class="muted">${esc(line)} ${warn ? "" : `${esc(d.agentName)} has been emailed the confirmation.`}</p>
+    ${warn ? `<p class="err">${esc(warn)} Let ${esc(d.agentName)} know directly.</p>`
+      : `<div class="count"><div class="bar"><span></span></div><p class="muted">Taking you to the Open House Portal in <b id="secs">5 seconds</b>.</p></div>`}
+    <div class="row"><a class="btn go" href="${PORTAL}">${warn ? "Go to the Open House Portal" : "Go now"}</a><button class="no" id="stay">Stay on this page</button></div></div>`);
+  $("doneTitle").focus();
+  let left = 5;
+  const tick = warn ? null : setInterval(() => {
+    left -= 1;
+    if (left > 0) $("secs").textContent = `${left} second${left === 1 ? "" : "s"}`;
+    else { clearInterval(tick); location.assign(PORTAL); }
+  }, 1000);
+  $("stay").onclick = () => { clearInterval(tick); load(); };
+}
+
+// Start: the open house is confirmed, so send it to the AI agent now and follow it until the agent reports back.
+function step(n, cls, text) {
+  const li = $("s" + n); if (!li) return;
+  li.className = cls; li.querySelector("span").textContent = text;
+}
+async function startAgent(d, details, warn) {
+  el(`<h1 id="runTitle" tabindex="-1">Scheduling with the AI agent</h1>${details}
+    <ol class="steps" aria-live="polite">
+      <li id="s1"><b>Confirm the open house</b><span></span></li>
+      <li id="s2"><b>Send it to the AI agent</b><span></span></li>
+      <li id="s3"><b>AI agent enters it on NTREIS</b><span></span></li></ol>
+    <p class="muted" id="leave">You can leave this page. The AI agent keeps working, and the team is emailed if it runs into a problem.</p>
+    <div class="row" id="next"></div>`);
+  $("runTitle").focus();
+  step(1, warn ? "done warn" : "done", warn ? `Confirmed, but the email to ${d.agentName} failed to send. Let them know directly.` : `Confirmed. ${d.agentName} has been emailed.`);
+  step(2, "active", "Sending…");
+  await post("/api/manage", { action: "start" });
+  follow(warn);
+}
+
+const atTime = (ms) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" });
+async function follow(warn) {
+  if (!$("s1")) return; // left the progress view
+  const d = await getReq();
+  if (!$("s1")) return;
+  if (d && d.status !== "approved") return load(); // cancelled in the meantime
+  const s = (d && d.sync) || {}, dry = d && d.mode === "dry_run";
+  const sent = () => step(2, "done", s.job?.sentAt ? `Sent at ${atTime(s.job.sentAt)}${dry ? " as a dry run" : ""}.` : "Sent.");
+  if (!d || s.state === "idle") {
+    step(3, "", "");
+    if (s.delivery?.attempts) step(2, "wait", `Couldn't reach the AI agent. Trying again at ${atTime(s.delivery.nextTryAt)}.`);
+    else if (s.busy) step(2, "wait", "In line: the AI agent is finishing another open house first.");
+    else step(2, "active", "Sending…");
+  } else if (s.state === "booking") {
+    sent(); step(3, "active", "Working on it. This usually takes a few minutes.");
+  } else if (s.state === "synced" || s.state === "dry_run_ok") {
+    const ok = s.state === "synced";
+    sent(); step(3, "done", ok ? "On the MLS ✓" : "Dry run passed. Nothing was submitted.");
+    return setTimeout(() => confirmed(d, { warn, line: ok ? "The AI agent entered it on the MLS (NTREIS)." : "Dry run passed: the AI agent filled in the MLS form but didn't submit it." }), 1200);
+  } else if (s.state === "failed" || s.state === "needs_login") {
+    if (s.job?.result === "delivery_failed") { step(2, "bad", s.message || "Couldn't reach the AI agent."); step(3, "", ""); }
+    else { sent(); step(3, "bad", s.state === "needs_login" ? `The AI agent couldn't sign in to the MLS. ${s.message || ""}` : s.message || "The AI agent couldn't finish."); }
+    $("leave").hidden = true;
+    $("next").innerHTML = `<button class="go" id="retry">Retry</button><a class="btn no" href="${PORTAL}">Go to the Open House Portal</a>`;
+    $("retry").onclick = async () => {
+      $("next").innerHTML = ""; $("leave").hidden = false;
+      step(2, "active", "Sending…"); step(3, "", "");
+      await post("/api/manage", { action: "retry" });
+      follow(warn);
+    };
+    return;
+  }
+  setTimeout(() => follow(warn), 3000);
+}
+
 const fmtH = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
 const STATE = {
-  manual: ["", "Entered by hand"], idle: ["", "Waiting to send to the MLS bot"], booking: ["", "MLS bot is working on it"],
+  manual: ["", "Entered by hand"], idle: ["", "Waiting to send to the AI agent"], booking: ["", "AI agent is working on it"],
   synced: ["ok", "On the MLS ✓"], dry_run_ok: ["ok", "Dry run passed (not submitted)"], failed: ["bad", "MLS update failed"], needs_login: ["bad", "MLS sign-in needed"],
   not_on_mls: ["", "Home not on the MLS yet"],
 };
 const EVENT = {
   approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
-  mls_job_sent: "Sent to MLS bot", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
-  mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "MLS bot failed", mls_needs_login: "MLS sign-in needed",
-  mls_stalled: "MLS bot stalled", mls_delivery_failed: "Couldn't reach MLS bot",
+  mls_job_sent: "Sent to the AI agent", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
+  mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "AI agent failed", mls_needs_login: "MLS sign-in needed",
+  mls_stalled: "AI agent stalled", mls_delivery_failed: "Couldn't reach the AI agent",
   cancel_requested: "Agent asked to cancel", cancel_kept: "Cancellation request turned down", linked: "Linked to the MLS listing",
 };
 const fmtAt = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -114,7 +254,7 @@ const fmtAt = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "Americ
 // POST a team action to /api/manage, then reload the page (a 502 means it saved but an email failed).
 async function postManage(body, btn) {
   btn.disabled = true; $("msg").className = ""; $("msg").textContent = "Saving…";
-  const r = await fetch("/api/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
+  const r = await post("/api/manage", body);
   const j = r ? await r.json().catch(() => ({})) : {};
   if (r && (r.ok || r.status === 502)) { await load(); if (j.message) { $("msg").className = "err"; $("msg").textContent = j.message; } return; }
   $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again."; btn.disabled = false;
@@ -126,7 +266,7 @@ function cancelBox(d) {
   return `<div class="box ask"><h2>Cancellation requested</h2>
     <p style="margin:0">${esc(c.byName || "The agent")} asked on ${esc(fmtAt(new Date(c.at).toISOString()))} to cancel this ${what}.</p>
     ${c.reason ? `<p class="muted"><b>Reason:</b> ${esc(c.reason)}</p>` : ""}
-    <p class="muted">Approving emails the agent and the team${d.status === "approved" && d.mode !== "off" ? ", and the MLS bot marks it Canceled on the listing" : ""}. Keeping it emails the agent that it's still on.</p>
+    <p class="muted">Approving emails the agent and the team${d.status === "approved" && !d.byHand ? ", and the AI agent marks it Canceled on the listing" : ""}. Keeping it emails the agent that it's still on.</p>
     <div class="row"><button class="go" id="approveCancel">Approve cancellation</button><button class="no" id="keep">Keep the ${what}</button></div></div>`;
 }
 function bindCancelBox() {
@@ -140,7 +280,7 @@ function askView(d, details) {
 
 function manage(d, details) {
   const s = d.sync || {}, live = d.status === "approved";
-  let [cls, label] = STATE[s.state] || ["", d.mode === "off" ? "Entered by hand" : "Not sent yet"];
+  let [cls, label] = STATE[s.state] || ["", d.byHand ? "Entered by hand" : "Not sent yet"];
   if (!live && s.state === "synced") label = "Cancelled on the MLS ✓"; // "synced" means the MLS matches, which for a cancellation means it's gone
   if (!live && s.state === "manual") label = "Remove by hand";
   const canRetry = ["failed", "needs_login", "dry_run_ok"].includes(s.state);
@@ -151,7 +291,7 @@ function manage(d, details) {
     <p>${d.decidedBy ? "Approved by " + esc(d.decidedBy) + ". " : ""}${d.cancelledBy ? "Cancelled by " + esc(d.cancelledBy) + "." : ""}</p>
     <h2>MLS</h2>
     <div class="box"><span class="pill ${cls}">${esc(label)}</span>${s.message ? `<p class="muted">${esc(s.message)}</p>` : ""}
-      ${d.mode === "off" ? `<p class="muted">Automatic MLS entry is off. ${live ? "Keep the MLS in step by hand after any change." : "Remove it from the MLS by hand if it's there."}</p>` : ""}
+      ${d.byHand ? `<p class="muted">${d.mode === "off" ? "Automatic MLS entry is off." : "This open house was entered on the MLS by hand."} ${live ? "Keep the MLS in step by hand after any change." : "Remove it from the MLS by hand if it's there."}</p>` : ""}
       ${s.job?.screenshot ? `<img class="shot" alt="MLS confirmation screenshot" src="/api/mls/screenshot?id=${encodeURIComponent(d.id)}">` : ""}
       ${canRetry ? '<div class="row" style="margin-top:10px"><button class="no" id="retry">Retry MLS job</button></div>' : ""}</div>
     ${live ? `<h2>Change the time</h2>
@@ -160,18 +300,17 @@ function manage(d, details) {
       <label>Start<select id="cFrom">${hours(d.from)}</select></label>
       <label>End<select id="cTo">${hours(d.to)}</select></label></div>
       <div class="row" style="margin-top:12px"><button class="go" id="change">Save new time</button></div>
-      <p class="muted">The agent gets an updated calendar invite${d.mode === "off" ? "" : " and the MLS bot updates the listing"}.</p></div>
+      <p class="muted">The agent gets an updated calendar invite${d.byHand ? "" : " and the AI agent updates the listing"}.</p></div>
     <h2>Cancel</h2>
-    <div class="box"><p class="muted" style="margin-top:0">Emails the agent and the team${d.mode === "off" ? "" : ", and the MLS bot marks it Canceled on the listing"}.</p>
+    <div class="box"><p class="muted" style="margin-top:0">Emails the agent and the team${d.byHand ? "" : ", and the AI agent marks it Canceled on the listing"}.</p>
       <div class="row"><button class="no" id="cancel">Cancel this open house</button></div></div>` : ""}
     <p id="msg" role="status"></p>
     <h2>History</h2><ul class="log">${(d.events || []).map((e) => `<li><span class="t">${esc(fmtAt(e.at))}</span> · ${esc(EVENT[e.type] || e.type)}${e.by ? " · " + esc(e.by) : ""}${e.note ? `<br><span class="t">${esc(e.note)}</span>` : ""}</li>`).join("") || '<li class="t">No history yet.</li>'}</ul>`);
 
-  const post = postManage;
   bindCancelBox();
-  if ($("retry")) $("retry").onclick = () => post({ action: "retry" }, $("retry"));
-  if ($("change")) $("change").onclick = () => post({ action: "change", iso: $("cDate").value, from: Number($("cFrom").value), to: Number($("cTo").value) }, $("change"));
-  if ($("cancel")) $("cancel").onclick = () => confirm("Cancel this open house? The agent and team will be emailed.") && post({ action: "cancel" }, $("cancel"));
+  if ($("retry")) $("retry").onclick = () => postManage({ action: "retry" }, $("retry"));
+  if ($("change")) $("change").onclick = () => postManage({ action: "change", iso: $("cDate").value, from: Number($("cFrom").value), to: Number($("cTo").value) }, $("change"));
+  if ($("cancel")) $("cancel").onclick = () => confirm("Cancel this open house? The agent and team will be emailed.") && postManage({ action: "cancel" }, $("cancel"));
 }
 load();
 </script>

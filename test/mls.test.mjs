@@ -36,6 +36,27 @@ test("dispatch rules", () => {
   assert.equal(needsDispatch(req({ sync: { delivery: { key: d.key, attempts: 1, nextTryAt: NOW + 60000 } } }), NOW, "live"), null);
   // past open houses are left alone
   assert.equal(needsDispatch(req({ iso: "2026-10-17" }), NOW, "live"), null);
+  // the team chose to enter this one by hand: never sent, even when it's changed or cancelled later
+  assert.equal(needsDispatch(req({ mlsMethod: "manual" }), NOW, "live"), null);
+  assert.equal(needsDispatch({ ...onMls(req({ mlsMethod: "manual" })), from: 14 }, NOW, "live"), null);
+  assert.equal(needsDispatch(req({ mlsMethod: "agent" }), NOW, "live").action, "add");
+});
+
+test("entered by hand or by the AI agent", async () => {
+  const { byHand, agentReady } = await import("../netlify/lib/mls.mjs");
+  const env = { ...process.env };
+  try {
+    delete process.env.MLS_BOOKING_MODE; process.env.GROKBOT_WEBHOOK_URL = "https://bot.example/hook";
+    assert.equal(agentReady(), false);                                            // automation off
+    assert.equal(byHand(req({ mlsMethod: "agent" })), true);                      // off means everything is by hand
+    process.env.MLS_BOOKING_MODE = "live";
+    assert.equal(agentReady(), true);
+    assert.equal(byHand(req({ mlsMethod: "manual" })), true);
+    assert.equal(byHand(req({ mlsMethod: "agent" })), false);
+    assert.equal(byHand(req()), false);                                           // approved before the choice existed: the bot, as before
+    delete process.env.GROKBOT_WEBHOOK_URL;
+    assert.equal(agentReady(), false);                                            // no bot to send to
+  } finally { process.env = env; }
 });
 
 test("webhook payload", () => {
