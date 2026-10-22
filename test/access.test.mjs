@@ -70,6 +70,8 @@ test("Repliers listing mapping", () => {
     address: { streetNumber: "2006", streetName: "Nighthawk", streetSuffix: "Court", city: "Westlake", zip: "76262-1234" },
     map: { latitude: 32.97, longitude: -97.18 }, details: { numBedrooms: 4, numBathrooms: 6, sqft: "6,331" } });
   assert.deepEqual([n.mls, n.addr, n.zip, n.sf, n.ba, n.img], ["123", "2006 Nighthawk Court", "76262", 6331, 6, "ntreismls/IMG-1.jpg"]);
+  assert.deepEqual([n.lat, n.lng], [32.97, -97.18]);   // the minus sign stays: -97.18 is Texas, 97.18 is China
+  assert.deepEqual([normalize({ map: { latitude: "32.978088", longitude: "-97.18720096" } }).lng, normalize({}).lat], [-97.18720096, 0]);
   const w = getWeek(new Date("2026-10-05T17:00:00Z"));
   // Repliers sends UTC times: 15:00Z on Oct 10 is 10:00 AM Central. Deleted entries are ignored.
   const oh = openHouseBlocks({ openHouse: [

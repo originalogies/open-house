@@ -46,7 +46,11 @@ export async function feedUpdatedOn() {
   return freshness.date;
 }
 
+// Amounts like "$1,295,000" or "6,331": digits only. Never use it for coordinates; it drops the minus sign.
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
+// Map coordinates keep their sign: Texas longitudes are negative (-97.18), and without the minus a
+// home lands in western China.
+const coord = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
 export function normalize(l) {
   const a = l.address || {};
@@ -55,7 +59,7 @@ export function normalize(l) {
     mls: String(l.mlsNumber),
     addr: [street, a.unitNumber && `#${a.unitNumber}`].filter(Boolean).join(" "),
     city: a.city || "", zip: String(a.zip || "").slice(0, 5),
-    lat: num(l.map?.latitude), lng: num(l.map?.longitude),
+    lat: coord(l.map?.latitude), lng: coord(l.map?.longitude),
     price: num(l.listPrice), dom: Math.round(num(l.daysOnMarket ?? l.simpleDaysOnMarket)),
     bd: num(l.details?.numBedrooms), ba: num(l.details?.numBathrooms), sf: Math.round(num(l.details?.sqft)),
     img: (l.images && l.images[0]) || "",
