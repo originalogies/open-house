@@ -50,6 +50,13 @@ tr.fbrow dl.fb{margin:0}
 .homecell{display:flex;gap:12px;align-items:center}
 .homecell .thumb{width:64px;height:48px;border-radius:8px;background:var(--photo);object-fit:cover;flex:none}
 .lfb{font-size:.88rem;margin-top:6px}
+.fbphotos{display:flex;gap:8px;flex-wrap:wrap}
+.fbphotos img{width:96px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--photo)}
+.said{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.said .card{padding:16px 18px}
+.said h3{font-family:var(--serif);font-weight:500;font-size:1.1rem;margin:0 0 6px}
+.said ul{margin:0;padding:0 0 0 18px}.said li{margin:8px 0;white-space:pre-wrap}
+@media (max-width:720px){.said{grid-template-columns:1fr}}
 .req .act{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:190px}
 .req .act .btns{display:flex;gap:8px}
 .req .act .btns .btn{flex:1}

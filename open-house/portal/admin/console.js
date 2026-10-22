@@ -27,12 +27,19 @@
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
   // The agent's feedback after hosting: a line under the status, and the full text on demand.
   const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
+  const PRICE = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" };
   const fbLine = (r) => r.feedback ? `<div class="sub">${r.feedback.brokerFlag ? '<b class="flagged">⚠ Flagged for broker</b> · ' : ""}<button class="link" data-fb="${esc(r.id)}">Feedback</button></div>`
     : r.feedbackDue ? '<div class="sub">Waiting on feedback</div>' : "";
-  const fbText = (f) => `<dl class="fb">
+  // Feedback sent before the guest questions existed has "What happened" in their place.
+  const fbText = (f) => { const none = '<span class="sub">Nothing noted</span>'; return `<dl class="fb">
       <div><dt>Visitors</dt><dd>${f.visitors}</dd></div><div><dt>Interest</dt><dd>${esc(INTEREST[f.interest] || f.interest)}</dd></div>
-      <div class="wide"><dt>What happened</dt><dd>${esc(f.happened)}</dd></div>
-      <div class="wide"><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : '<span class="sub">None</span>'}</dd></div></dl>`;
+      ${f.price ? `<div><dt>Price</dt><dd>${esc(PRICE[f.price])}</dd></div>` : ""}
+      ${f.happened != null ? `<div class="wide"><dt>What happened</dt><dd>${esc(f.happened)}</dd></div>` : `
+      <div class="wide"><dt>What guests liked</dt><dd>${f.liked ? esc(f.liked) : none}</dd></div>
+      <div class="wide"><dt>What guests didn't like or would change</dt><dd>${f.disliked ? esc(f.disliked) : none}</dd></div>
+      ${f.forSeller ? `<div class="wide"><dt>Additional feedback</dt><dd>${esc(f.forSeller)}</dd></div>` : ""}`}
+      <div class="wide"><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : '<span class="sub">None</span>'}</dd></div>
+      ${(f.photos || []).length ? `<div class="wide"><dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd></div>` : ""}</dl>`; };
 
   let me = null;
   let requests = [];
@@ -295,13 +302,17 @@
     return c;
   }
 
+  // Feedback columns shared by both exports. Older feedback's "What happened" goes in the liked column.
+  const fbCsv = (f) => !f ? ["", "", "", "", "", "", "", "", ""] : [f.visitors, INTEREST[f.interest] || "", PRICE[f.price] || "", f.liked ?? f.happened, f.disliked || "",
+    f.forSeller || "", f.teamNotes, (f.photos || []).length ? (f.photos || []).map((u) => location.origin + u).join(" ") : "", f.brokerFlag ? "Yes" : "No"];
+
   function exportCsv(list = filtered(), name = "open-house-requests") {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const head = ["Date", "Day", "Time", "Address", "City", "MLS", "Agent", "Agent email", "Phone", "Status", "Decided by", "Decided at", "Requested at", "Notes",
-      "Visitors", "Interest", "What happened", "Notes for the team", "Flagged for broker"];
+      "Visitors", "Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
     const rows = list.map((r) => { const f = r.feedback || {}; return [r.iso, r.day, r.time, r.addr, r.city, r.mls, r.agent.name, r.agent.email, r.phone, STATUS[r.status] || r.status,
       r.decidedBy, r.decidedAt ? new Date(r.decidedAt).toISOString() : "", new Date(r.createdAt).toISOString(), r.notes,
-      f.visitors, INTEREST[f.interest] || "", f.happened, f.teamNotes, r.feedback ? (f.brokerFlag ? "Yes" : "No") : ""]; });
+      ...fbCsv(r.feedback)]; });
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
     URL.revokeObjectURL(a.href);
@@ -347,6 +358,7 @@
   const homeLink = (h, label) => `<a href="#home/${encodeURIComponent(h.key)}">${esc(label)}</a>`;
   // Older open houses show their year: the history goes back further than this season.
   const withYear = (o) => `${o.day}, ${o.date}${o.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${o.iso.slice(0, 4)}` : ""}`;
+  const priceMix = (h) => Object.entries(PRICE).filter(([k]) => k !== "none" && h.price[k]).map(([k, v]) => `${v} ${h.price[k]}`).join(" · ") || "—";
   const interestMix = (h) => Object.entries(INTEREST).filter(([k]) => h.interest[k]).map(([k, v]) => `${v} ${h.interest[k]}`).join(" · ") || "—";
   let fbSearch = "";
 
@@ -403,10 +415,11 @@
         <button class="btn ghost small" id="csv">Export CSV</button></section>
       <div class="stats">
         <div class="card stat"><b>${h.hosted}</b><span>Open houses hosted</span></div>
-        <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Visitors reported</span></div>
-        <div class="card stat"><b class="words">${esc(interestMix(h))}</b><span>Buyer interest</span></div>
-        <div class="card stat"><b>${h.flags}</b><span>Flagged for broker</span></div>
+        <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Visitors reported${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged</b>` : ""}</span></div>
+        <div class="card stat"><b class="words">${esc(interestMix(h))}</b><span>Guest interest</span></div>
+        <div class="card stat"><b class="words">${esc(priceMix(h))}</b><span>What guests thought of the price</span></div>
       </div>
+      ${sellerSummary(h)}
       <h2 class="section">Every open house, newest first</h2>
       <div class="queue">${h.openHouses.map((o) => `<article class="card req fbentry${o.feedback?.brokerFlag ? " flag" : ""}">
         <div>
@@ -417,11 +430,24 @@
     $("csv").onclick = () => exportFeedbackCsv([h], `feedback-${h.addr.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
   }
 
+  // What guests liked and didn't like, across every open house at the home: what the seller needs to hear.
+  function sellerSummary(h) {
+    const said = (k) => h.openHouses.filter((o) => o.feedback?.[k]).map((o) =>
+      `<li>${esc(o.feedback[k])}<div class="sub">${esc(withYear(o))} · ${esc(o.agent.name)}</div></li>`).join("");
+    const liked = said("liked"), disliked = said("disliked");
+    if (!liked && !disliked) return "";
+    return `<h2 class="section">For the seller</h2>
+      <div class="said">
+        <div class="card"><h3>What guests didn't like</h3>${disliked ? `<ul>${disliked}</ul>` : '<p class="sub">Nothing noted yet.</p>'}</div>
+        <div class="card"><h3>What guests liked</h3>${liked ? `<ul>${liked}</ul>` : '<p class="sub">Nothing noted yet.</p>'}</div>
+      </div>`;
+  }
+
   function exportFeedbackCsv(homes, name) {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email", "Visitors", "Interest", "What happened", "Notes for the team", "Flagged for broker"];
-    const rows = homes.flatMap((h) => h.openHouses.map((o) => { const f = o.feedback || {}; return [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time,
-      o.agent.name, o.agent.email, f.visitors, INTEREST[f.interest] || "", f.happened, f.teamNotes, o.feedback ? (f.brokerFlag ? "Yes" : "No") : ""]; }));
+    const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email",
+      "Visitors", "Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
+    const rows = homes.flatMap((h) => h.openHouses.map((o) => [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time, o.agent.name, o.agent.email, ...fbCsv(o.feedback)]));
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
     URL.revokeObjectURL(a.href);

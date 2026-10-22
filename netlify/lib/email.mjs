@@ -216,14 +216,18 @@ export const sendFeedbackToTeam = (req) => {
   const l = req.listing, f = req.feedback, esc = Handlebars.escapeExpression;
   const para = (s) => esc(s).replace(/\n/g, "<br>");
   const interest = { lots: "Lots", some: "Some", little: "Little" }[f.interest] || f.interest;
+  const price = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" }[f.price] || "";
+  const block = (label, text) => `<b>${label}</b><br>${text ? para(text) : "Nothing noted"}<br><br>`;
+  const photos = (f.photos || []).length;
   return send({
     to: TEAM_TO(), replyTo: req.agent.email,
     subject: `${f.brokerFlag ? "⚠ Flagged for broker: " : "Open house feedback: "}${l.addr}, ${dayMeta(req.iso).label} ${dayMeta(req.iso).date}`,
     html: plain(`${f.brokerFlag ? `<b style="color:#A12B2B;">⚠ ${esc(req.agent.name)} flagged this for the broker.</b><br><br>` : ""}
       <b>${esc(req.agent.name)}</b> hosted the open house at ${esc(l.addr)} (MLS# ${esc(req.mls)}) on ${esc(when(req.iso, req.from, req.to))}.<br><br>
-      <b>Visitors:</b> ${f.visitors}<br><b>Interest:</b> ${esc(interest)}<br><br>
-      <b>What happened</b><br>${para(f.happened)}<br><br>
+      <b>Visitors:</b> ${f.visitors}<br><b>Guest interest:</b> ${esc(interest)}<br><b>Price:</b> ${esc(price)}<br><br>
+      ${block("What guests liked", f.liked)}${block("What guests didn't like", f.disliked)}${f.forSeller ? block("Additional feedback", f.forSeller) : ""}
       <b>Notes for the team</b><br>${f.teamNotes ? para(f.teamNotes) : "None"}<br><br>
+      ${photos ? `${photos} photo${photos === 1 ? "" : "s"} attached. See them in the Admin Console under Feedback.<br><br>` : ""}
       Reply to this email to reach ${esc((req.agent.name || "").split(" ")[0])}.`),
   });
 };

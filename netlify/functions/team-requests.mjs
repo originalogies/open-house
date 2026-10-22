@@ -5,7 +5,7 @@ import { fmtRange } from "../lib/time.mjs";
 import { mode } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
-import { feedbackOpen } from "../lib/feedback.mjs";
+import { feedbackOpen, withPhotoUrls } from "../lib/feedback.mjs";
 
 // GET /api/team/requests -> every request, newest first, for the Admin Console, with its MLS status
 // any open cancellation request from the agent, and the agent's feedback after hosting. Approve and decline go through POST /api/respond;
@@ -28,7 +28,7 @@ export default async (req) => {
       cancelledBy: r.cancelledByName || null,
       mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
-      feedback: r.feedback || null, feedbackDue: !r.feedback && feedbackOpen(r),
+      feedback: r.feedback ? withPhotoUrls(r) : null, feedbackDue: !r.feedback && feedbackOpen(r),
     };
   });
   return json(200, { requests, mode: mode() });

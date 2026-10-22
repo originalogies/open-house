@@ -31,25 +31,32 @@ test("ask an hour after, remind once a day later, then stop", () => {
 });
 
 test("feedback form rules", () => {
-  const ok = { visitors: 12, interest: "some", happened: " Busy afternoon. ", teamNotes: "", brokerFlag: false };
-  const { feedback } = cleanFeedback(ok, 5);
-  assert.deepEqual(feedback, { at: 5, visitors: 12, interest: "some", happened: "Busy afternoon.", teamNotes: "", brokerFlag: false });
-  assert.equal(cleanFeedback({ ...ok, visitors: 0 }).feedback.visitors, 0);
+  const ok = { visitors: 12, interest: "some", price: "high", liked: " Big kitchen. ", disliked: "Dated baths", forSeller: "", teamNotes: "", brokerFlag: false };
+  const { feedback } = cleanFeedback(ok, 5, ["aaaaaaaaaaaa"]);
+  assert.deepEqual(feedback, { at: 5, visitors: 12, interest: "some", price: "high", liked: "Big kitchen.", disliked: "Dated baths", forSeller: "", teamNotes: "", brokerFlag: false, photos: ["aaaaaaaaaaaa"] });
   assert.match(cleanFeedback({ ...ok, visitors: "" }).error, /how many/);
   assert.match(cleanFeedback({ ...ok, visitors: -1 }).error, /how many/);
   assert.match(cleanFeedback({ ...ok, visitors: 2.5 }).error, /how many/);
   assert.match(cleanFeedback({ ...ok, interest: "huge" }).error, /interest/);
-  assert.match(cleanFeedback({ ...ok, happened: "   " }).error, /what happened/);
-  assert.match(cleanFeedback({ ...ok, happened: "x".repeat(5001) }).error, /too long/);
+  assert.match(cleanFeedback({ ...ok, price: "" }).error, /price/);
+  // Visitors came: the seller needs to hear what they said, good or bad.
+  assert.match(cleanFeedback({ ...ok, liked: " ", disliked: "" }).error, /liked or didn't like/);
+  assert.ok(cleanFeedback({ ...ok, liked: "" }).feedback);
+  assert.ok(cleanFeedback({ ...ok, disliked: "" }).feedback);
+  // Nobody came: nothing to report.
+  assert.equal(cleanFeedback({ ...ok, visitors: 0, price: "none", liked: "", disliked: "" }).feedback.visitors, 0);
+  assert.match(cleanFeedback({ ...ok, disliked: "x".repeat(5001) }).error, /too long/);
+  assert.match(cleanFeedback({ ...ok, forSeller: "x".repeat(5001) }).error, /too long/);
   assert.match(cleanFeedback({ ...ok, brokerFlag: true }).error, /broker/);          // a flag needs a note
   assert.equal(cleanFeedback({ ...ok, brokerFlag: true, teamNotes: "Back door was open" }).feedback.brokerFlag, true);
   assert.equal(cleanFeedback({ ...ok, brokerFlag: "yes" }).feedback.brokerFlag, false); // only a real true counts
+  assert.equal(cleanFeedback(ok, 5, Array(12).fill("aaaaaaaaaaaa")).feedback.photos.length, 10);
 });
 
 test("feedback is grouped by home, across MLS numbers, newest open house first", () => {
   const agent = { name: "Pat Lee", email: "pat@synergyrealtors.com" };
   const home = (mls, addr, extra = {}) => r({ id: mls + extra.iso, mls, agent, listing: { addr, city: "Grapevine", zip: "76051", img: null }, ...extra });
-  const fb = (visitors, interest, brokerFlag = false) => ({ at: 1, visitors, interest, happened: "x", teamNotes: brokerFlag ? "Door open" : "", brokerFlag });
+  const fb = (visitors, interest, brokerFlag = false) => ({ at: 1, visitors, interest, price: "high", liked: "x", disliked: "", teamNotes: brokerFlag ? "Door open" : "", brokerFlag, photos: ["bbbbbbbbbbbb"] });
   const all = [
     home("111", "1704 Overlook Drive", { iso: "2026-10-10", feedback: fb(8, "lots") }),
     home("222", "1704 Overlook Dr.", { iso: "2026-10-17", feedback: fb(3, "some", true) }), // relisted: new MLS number, same home
@@ -70,6 +77,8 @@ test("feedback is grouped by home, across MLS numbers, newest open house first",
   assert.equal(a.flags, 1);
   assert.deepEqual(a.openHouses.map((o) => o.iso), ["2026-10-18", "2026-10-17", "2026-10-10"]);
   assert.equal(a.openHouses[0].feedback, null);
+  assert.deepEqual(a.price, { high: 2, right: 0, value: 0, none: 0 });
+  assert.match(a.openHouses[1].feedback.photos[0], /^\/api\/feedback-photo\?id=.+&p=bbbbbbbbbbbb$/); // photos come as private links
   assert.equal(b.addr, "6900 Rockingham Court");
   assert.equal(b.lastIso, "2026-10-24");
   assert.ok(!("access" in a) && !("notes" in a.openHouses[0])); // nothing private goes to the console
