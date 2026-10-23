@@ -9,7 +9,15 @@
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
   const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
   // The Requests list shows the MLS only when it needs the team (the request's page has the full MLS status).
+  // A request being approved with the AI agent waits until it's on the MLS; a dry run never gets it there.
   const MLS_ALERT = { failed: "MLS update failed", needs_login: "MLS sign-in needed" };
+  const mlsNote = (r) => {
+    if (r.approving) {
+      const bad = MLS_ALERT[r.mlsState] || (r.mlsState === "dry_run_ok" ? "Dry run only: not on the MLS" : "");
+      return bad ? `<div class="sub alert">${bad}</div>` : '<div class="sub">AI agent adding it to the MLS</div>';
+    }
+    return r.status === "approved" && MLS_ALERT[r.mlsState] ? `<div class="sub alert">${MLS_ALERT[r.mlsState]}</div>` : "";
+  };
   const requestPage = (r) => `/respond/?id=${encodeURIComponent(r.id)}`;
   // Listing photos are Repliers CDN paths; built-in listings may carry a full URL, and homes the team
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
@@ -249,7 +257,7 @@
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
         <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(r.addr)}</a><div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
-        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${MLS_ALERT[r.mlsState] ? `<div class="sub alert">${MLS_ALERT[r.mlsState]}</div>` : ""}</td>
+        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;

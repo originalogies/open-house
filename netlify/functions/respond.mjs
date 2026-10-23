@@ -1,6 +1,6 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { dayMeta, FIRST_HOUR, LAST_HOUR } from "../lib/week.mjs";
-import { getRequest, saveRequest, listRequests, overlaps, isTeam } from "../lib/requests.mjs";
+import { getRequest, saveRequest, listRequests, overlaps, isTeam, holdsSlot } from "../lib/requests.mjs";
 import { sendConfirmed, sendDeclined } from "../lib/email.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { mode, agentReady, byHand, desiredFor, logEvent, listEvents, getInflight } from "../lib/mls.mjs";
@@ -27,6 +27,7 @@ export default async (req) => {
       agent: `${r.agent.name} (${r.agent.email})`, agentName: r.agent.name, phone: r.phone, notes: r.notes, decidedBy: r.decidedByName || null,
       cancelledBy: r.cancelledByName || null, mode: mode(), onMls: isMlsNumber(r.mls),
       agentReady: agentReady(), method: r.mlsMethod || null, byHand: byHand(r),
+      approving: r.approving ? { at: r.approving.at, byName: r.approving.byName } : null, emailFailed: !!r.confirmEmailFailed,
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, byName: r.cancelRequest.byName, reason: r.cancelRequest.reason || "" } : null,
       sync: s && { state: s.state, message: s.message || "", current: s.current, job: s.job && { id: s.job.id, action: s.job.action, sentAt: s.job.sentAt, done: !!s.job.done, result: s.job.result || null, screenshot: !!s.job.screenshot },
         delivery: s.delivery ? { attempts: s.delivery.attempts, nextTryAt: s.delivery.nextTryAt } : null,
@@ -41,6 +42,9 @@ export default async (req) => {
   if (!r || !["approve", "decline"].includes(b.action)) return json(400, { error: "invalid_request" });
   if (r.status !== "pending") return json(409, { error: "already_answered", status: r.status, by: r.decidedByName || null });
   if (b.action === "approve" && openCancelRequest(r)) return json(409, { error: "cancel_requested", message: "The agent asked to cancel this request. Approve the cancellation or keep it first." });
+  // Being approved with the AI agent: the team can still enter it by hand or decline, but not while the
+  // AI agent is in the middle of a job, and it isn't sent to the AI agent twice.
+  if (r.approving && r.sync?.state === "booking") return json(409, { error: "agent_working", message: "The AI agent is working on this one. Wait for its result." });
 
   // A team-added home isn't on the MLS yet: nothing to enter until it's linked to its MLS listing.
   const onMls = isMlsNumber(r.mls);
@@ -49,21 +53,32 @@ export default async (req) => {
     if (onMls && !method) return json(400, { error: "method_required", message: "Choose how this open house goes on the MLS first." });
     if (onMls && method === "manual" && b.mlsEntered !== true) return json(400, { error: "mls_required", message: "Confirm the open house is entered on the MLS first." });
     if (onMls && method === "agent" && !agentReady()) return json(409, { error: "agent_unavailable", message: "The AI agent isn't connected yet. Enter this open house on the MLS by hand." });
+    if (onMls && method === "agent" && r.approving) return json(409, { error: "already_approving", message: "This request is already being approved with the AI agent." });
     const all = await listRequests();
-    if (all.some((x) => x.id !== r.id && x.status === "approved" && overlaps(x, r))) {
+    if (all.some((x) => x.id !== r.id && holdsSlot(x) && overlaps(x, r))) {
       return json(409, { error: "taken", message: "Another request already holds those hours." });
+    }
+    // AI agent: the request keeps waiting (its hours held) until the AI agent reports the open house is
+    // on the MLS; then it's approved and the agent emailed (mls-callback.mjs). Start sends the job.
+    if (onMls && method === "agent") {
+      r.mlsMethod = "agent"; r.approving = { at: Date.now(), by: user.email, byName: user.name };
+      r.sync = { current: null, state: "idle" };
+      await saveRequest(r);
+      await logEvent(r.id, "approving", { note: `Approved once the AI agent has it on the MLS${mode() === "dry_run" ? ". Dry run: it fills in the form but doesn't submit, so it won't be approved this way" : ""}. ${r.agent.name} is emailed then.` }, user.email);
+      return json(200, { ok: true, status: "pending", approving: true });
     }
   }
 
   r.status = b.action === "approve" ? "approved" : "declined";
   r.decidedAt = Date.now(); r.decidedBy = user.email; r.decidedByName = user.name;
+  const wasApproving = !!r.approving; delete r.approving; // entered by hand, or declined, after trying the AI agent
   if (r.status === "approved") {
-    // By hand: the team already entered it, so the MLS matches. AI agent: the sync job adds it.
+    // By hand: the team already entered it, so the MLS matches. A home not on the MLS yet has nothing to enter.
     if (onMls) r.mlsMethod = method;
-    r.sync = !onMls ? { current: null, state: "not_on_mls" } : method === "manual" ? { current: desiredFor(r), state: "manual" } : { current: null, state: "idle" };
-  }
+    r.sync = !onMls ? { current: null, state: "not_on_mls" } : { current: desiredFor(r), state: "manual" };
+  } else if (wasApproving) r.sync = { current: r.sync?.current || null, state: "idle" }; // the AI agent's failure no longer matters
   await saveRequest(r); // single use: status is no longer pending
-  const note = r.status !== "approved" ? "" : !onMls ? "Home isn't on the MLS yet" : method === "manual" ? "Entered on the MLS by hand" : "Scheduled with the AI agent";
+  const note = r.status !== "approved" ? (wasApproving ? "Declined after trying the AI agent" : "") : !onMls ? "Home isn't on the MLS yet" : wasApproving ? "Entered on the MLS by hand instead of the AI agent" : "Entered on the MLS by hand";
   await logEvent(r.id, r.status, { note }, user.email);
 
   try { await (r.status === "approved" ? sendConfirmed(r) : sendDeclined(r)); }

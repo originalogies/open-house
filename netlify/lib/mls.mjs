@@ -30,8 +30,10 @@ export const OH_TYPE = "Public";
 const STALL_MS = 30 * 60 * 1000;       // no result from the bot in 30 minutes = stalled
 const MAX_DELIVERY = 3;                 // webhook delivery attempts before giving up
 
-// What the MLS should show for this request: an open house while approved, nothing otherwise.
-export const desiredFor = (r) => (r.status === "approved" ? { iso: r.iso, from: r.from, to: r.to, type: OH_TYPE } : null);
+// What the MLS should show for this request: an open house while approved or being approved with the
+// AI agent (r.approving: the request waits until the AI agent reports it's on the MLS), nothing otherwise.
+export const desiredFor = (r) => (r.status === "approved" || (r.status === "pending" && r.approving)
+  ? { iso: r.iso, from: r.from, to: r.to, type: OH_TYPE } : null);
 export const keyOf = (e) => (e ? `${e.iso}|${e.from}|${e.to}|${e.type}` : "none");
 
 // Job needed to make the MLS match, or null when it already matches.
@@ -101,6 +103,13 @@ export function applyResult(r, { job_id, result, message }, now = Date.now()) {
   else if (result === "dry_run") m.state = "dry_run_ok";
   else if (result === "needs_login") m.state = "needs_login";
   else m.state = "failed";
+  // Being approved with the AI agent: it's approved only now that it's on the MLS. A dry run submits
+  // nothing, so it doesn't count; the request keeps waiting for a retry, entry by hand, or a decline.
+  if (r.status === "pending" && r.approving && m.state === "synced") {
+    Object.assign(r, { status: "approved", decidedAt: now, decidedBy: r.approving.by, decidedByName: r.approving.byName });
+    delete r.approving;
+    return { state: m.state, approved: true };
+  }
   return { state: m.state };
 }
 
@@ -134,7 +143,8 @@ export function verifyCallbackToken(jobId, token) {
 // (GROKBOT_WEBHOOK_TOKEN), and answers { success, runUuid }. The signature headers are sent as well,
 // for a receiver that can check them. Returns Cursor's run ID, if any, so the job can be traced there.
 export async function postWebhook(payload, now = Date.now(), timeoutMs = 15000) {
-  const url = process.env.GROKBOT_WEBHOOK_URL, token = process.env.GROKBOT_WEBHOOK_TOKEN;
+  // The token alone ("crsr_…"): if Cursor's whole "Bearer crsr_…" header was pasted into Netlify, the prefix is dropped.
+  const url = process.env.GROKBOT_WEBHOOK_URL, token = String(process.env.GROKBOT_WEBHOOK_TOKEN || "").trim().replace(/^bearer\s+/i, "");
   if (!url) throw new Error("GROKBOT_WEBHOOK_URL is not set");
   const body = JSON.stringify({ items: [payload] }), ts = String(Math.floor(now / 1000));
   const res = await fetch(url, {

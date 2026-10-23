@@ -1,4 +1,4 @@
-import { overlaps } from "./requests.mjs";
+import { overlaps, holdsSlot } from "./requests.mjs";
 import { FIRST_HOUR, LAST_HOUR } from "./week.mjs";
 import { chicagoToUtc } from "./time.mjs";
 
@@ -25,7 +25,7 @@ export function checkChange(r, next, all, now = Date.now(), external = []) {
   if (now >= chicagoToUtc(iso, from).getTime()) return "That time has already passed.";
   if (iso === r.iso && from === r.from && to === r.to) return "That's the same time it already has.";
   const moved = { ...r, iso, from, to };
-  if (all.some((x) => x.id !== r.id && x.status === "approved" && overlaps(x, moved))) return "Another approved open house already holds those hours.";
+  if (all.some((x) => x.id !== r.id && holdsSlot(x) && overlaps(x, moved))) return "Another approved open house already holds those hours.";
   const own = [r.sync?.current, { iso: r.iso, from: r.from, to: r.to }];
   const clash = external.find((e) => !own.some((o) => sameBlock(o, e)) && e.iso === iso && e.from < to && from < e.to);
   if (clash) return `That overlaps an open house already on the MLS (${fmtH(clash.from)} to ${fmtH(clash.to)}).`;

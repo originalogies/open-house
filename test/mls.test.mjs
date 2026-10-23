@@ -74,6 +74,10 @@ test("jobs go to Grokbot's Cursor webhook as { items: [job] } with its token", a
     assert.deepEqual(JSON.parse(sent.body), { items: [job] });
     assert.equal(sent.headers.authorization, "Bearer crsr_test");
     assert.ok(verify(sent.headers["x-oh-timestamp"], sent.headers["x-oh-signature"], sent.body, NOW)); // signed over what was sent
+    process.env.GROKBOT_WEBHOOK_TOKEN = " Bearer crsr_test\n"; answer(200, '{"success":true}');     // Cursor's whole header pasted into Netlify
+    await postWebhook(job, NOW);
+    assert.equal(sent.headers.authorization, "Bearer crsr_test");
+    process.env.GROKBOT_WEBHOOK_TOKEN = "crsr_test";
     answer(200, '{"success":false}');
     await assert.rejects(postWebhook(job, NOW), /refused/);                         // Cursor took the call but not the job: retried
     answer(401, "unauthorized");
@@ -101,6 +105,32 @@ test("webhook payload", () => {
   assert.equal(pc.callback_url, "https://open-house.synergyrealtors.com/api/mls/callback");      // no site recorded: production
   const local = req({ site: "http://localhost:8888" });
   assert.equal(buildPayload(local, needsDispatch(local, NOW, "live"), "job_3").callback_url, "http://localhost:8888/api/mls/callback");
+});
+
+test("approving with the AI agent: approved only once it's on the MLS", async () => {
+  const { holdsSlot } = await import("../netlify/lib/requests.mjs");
+  const approving = () => req({ status: "pending", mlsMethod: "agent", decidedBy: undefined, decidedAt: undefined,
+    approving: { at: NOW, by: "team@georgeandnoonan.com", byName: "Team Member" } });
+  const a = approving();
+  assert.ok(holdsSlot(a) && !holdsSlot(req({ status: "pending" })));           // the time is held while it's being approved
+  assert.deepEqual(desiredFor(a), { iso: "2026-10-24", from: 13, to: 16, type: "Public" });
+  assert.equal(desiredFor(req({ status: "pending" })), null);
+  const d = needsDispatch(a, NOW, "live");
+  assert.equal(d.action, "add");
+  const sendJob = (r, id) => { r.sync = { state: "booking", job: { id, key: d.key, from: d.from, to: d.to, done: false } }; };
+
+  sendJob(a, "job_a");                                                          // on the MLS: approved now, by whoever approved it
+  assert.deepEqual(applyResult(a, { job_id: "job_a", result: "booked" }, NOW + 5), { state: "synced", approved: true });
+  assert.deepEqual([a.status, a.decidedByName, a.decidedAt, a.approving], ["approved", "Team Member", NOW + 5, undefined]);
+  assert.equal(nextAction(a), null);
+
+  for (const result of ["dry_run", "failed", "needs_login"]) {                  // nothing submitted, or it couldn't: still waiting
+    const b = approving(); sendJob(b, "job_b");
+    const out = applyResult(b, { job_id: "job_b", result });
+    assert.equal(out.approved, undefined);
+    assert.equal(b.status, "pending");
+    assert.ok(b.approving);
+  }
 });
 
 test("bot results update the MLS state", () => {

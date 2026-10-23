@@ -24,6 +24,7 @@ export default async (req) => {
       agent: { name: r.agent.name, email: r.agent.email }, phone: r.phone, notes: r.notes,
       createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
       cancelledBy: r.cancelledByName || null, imported: !!r.imported, // from the G&N calendar, not requested here
+      approving: !!r.approving, // waiting for the AI agent to put it on the MLS before it's approved
       mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls), byHand: byHand(r),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
     };

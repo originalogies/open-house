@@ -130,6 +130,7 @@ async function load() {
   const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (${d.mls ? `MLS# ${esc(d.mls)}` : "MLS# not found"})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
     <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
   if (d.status === "pending" && d.cancelRequest) return askView(d, details);
+  if (d.status === "pending" && d.approving) return approvingView(d, details);
   if (d.status === "approved" || d.status === "cancelled") return manage(d, details);
   if (d.status !== "pending") {
     return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
@@ -142,7 +143,7 @@ async function load() {
         <p class="muted" style="margin:0">Choose one to confirm the request.</p>
         <label class="opt"><input type="radio" name="how" value="manual"><span><b>Submitted manually</b><span class="muted">I've entered this open house on the MLS (NTREIS) myself.</span></span></label>
         <label class="opt"><input type="radio" name="how" value="agent" ${d.agentReady ? "" : "disabled"}><span><b>Schedule Open House with AI Agent</b><span class="muted">${d.agentReady
-          ? `The AI agent enters it on NTREIS for you${d.mode === "dry_run" ? " as a <b>dry run</b> (it fills in the form but doesn't submit)" : ""} and reports back here.`
+          ? `The AI agent enters it on NTREIS for you and reports back here. It's approved once it's on the MLS.${d.mode === "dry_run" ? " Right now it runs as a <b>dry run</b>: it fills in the form but doesn't submit, so the request isn't approved this way." : ""}`
           : "Not available yet: the AI agent isn't connected."}</span></span></label>
       </fieldset><p class="muted" id="hint" hidden></p>`}
     <div class="row actions"><button class="go" id="approve" ${d.onMls ? "disabled" : ""}>Confirm open house</button><button class="no" id="decline">Decline</button></div><p id="msg" role="status"></p>`);
@@ -153,7 +154,7 @@ async function load() {
     approve.disabled = false; approve.textContent = agent ? "Start" : "Confirm open house";
     hint.hidden = false;
     hint.textContent = agent
-      ? `Start confirms the open house, emails ${d.agentName} the confirmation, and sends it to the AI agent. You'll see its progress here.`
+      ? `Start sends it to the AI agent and holds the time. Once the AI agent has it on the MLS, it's approved and ${d.agentName} is emailed the confirmation. You'll see its progress here.`
       : `Confirming emails ${d.agentName} the confirmation and calendar invite.`;
   }));
   if (preset === "approve") document.querySelector('input[name="how"]')?.focus();
@@ -165,7 +166,7 @@ async function load() {
     const j = r ? await r.json().catch(() => ({})) : {};
     const saved = r && (r.ok || r.status === 502), warn = r && r.status === 502 ? j.message : ""; // 502: saved, but an email failed
     if (saved && action === "decline") return el(`<h1>Declined</h1><p>The agent has been notified.</p>${warn ? `<p class="err">${esc(warn)}</p>` : ""}`);
-    if (saved && method === "agent") return startAgent(d, details, warn);
+    if (saved && method === "agent") return approvingView(d, details, true);
     if (saved) return confirmed(d, { warn, line: !d.onMls ? "This home isn't on the MLS yet, so there's nothing to enter there." : "Entered on the MLS by hand." });
     $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
     decline.disabled = false; approve.disabled = d.onMls && !method;
@@ -194,59 +195,86 @@ function confirmed(d, { line = "", warn = "" } = {}) {
   $("stay").onclick = () => { clearInterval(tick); load(); };
 }
 
-// Start: the open house is confirmed, so send it to the AI agent now and follow it until the agent reports back.
+// AI agent: the request keeps waiting, its hours held, until the AI agent reports the open house is on the
+// MLS; only then is it approved and the agent emailed. Start sends the job now; the page follows it. If the
+// AI agent can't get it on the MLS (or only ran a dry run), the team retries, enters it by hand, or declines.
 function step(n, cls, text) {
   const li = $("s" + n); if (!li) return;
   li.className = cls; li.querySelector("span").textContent = text;
 }
-async function startAgent(d, details, warn) {
-  el(`<h1 id="runTitle" tabindex="-1">Scheduling with the AI agent</h1>${details}
+async function approvingView(d, details, start = false) {
+  el(`<h1 id="runTitle" tabindex="-1">Approving with the AI agent</h1>${details}
     <ol class="steps" aria-live="polite">
-      <li id="s1"><b>Confirm the open house</b><span></span></li>
-      <li id="s2"><b>Send it to the AI agent</b><span></span></li>
-      <li id="s3"><b>AI agent enters it on NTREIS</b><span></span></li></ol>
-    <p class="muted" id="leave">You can leave this page. The AI agent keeps working, and the team is emailed if it runs into a problem.</p>
-    <div class="row" id="next"></div>`);
+      <li id="s1"><b>Send it to the AI agent</b><span></span></li>
+      <li id="s2"><b>AI agent enters it on NTREIS</b><span></span></li>
+      <li id="s3"><b>Approve and email ${esc(d.agentName)}</b><span></span></li></ol>
+    <p class="muted" id="leave">You can leave this page. The request stays in Waiting until the AI agent has it on the MLS, and the team is emailed if it runs into a problem.</p>
+    <div class="row" id="next"></div><p id="msg" role="status"></p>`);
   $("runTitle").focus();
-  step(1, warn ? "done warn" : "done", warn ? `Confirmed, but the email to ${d.agentName} failed to send. Let them know directly.` : `Confirmed. ${d.agentName} has been emailed.`);
-  step(2, "active", "Sending…");
-  await post("/api/manage", { action: "start" });
-  follow(warn);
+  if (start) { step(1, "active", "Sending…"); await post("/api/manage", { action: "start" }); }
+  follow();
 }
 
 const atTime = (ms) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" });
-async function follow(warn) {
+async function follow() {
   if (!$("s1")) return; // left the progress view
   const d = await getReq();
   if (!$("s1")) return;
-  if (d && d.status !== "approved") return load(); // cancelled in the meantime
-  const s = (d && d.sync) || {}, dry = d && d.mode === "dry_run";
-  const sent = () => step(2, "done", s.job?.sentAt ? `Sent at ${atTime(s.job.sentAt)}${dry ? " as a dry run" : ""}.` : "Sent.");
-  if (!d || s.state === "idle") {
-    step(3, "", "");
-    if (s.delivery?.attempts) step(2, "wait", `Couldn't reach the AI agent. Trying again at ${atTime(s.delivery.nextTryAt)}.`);
-    else if (s.busy) step(2, "wait", "In line: the AI agent is finishing another open house first.");
-    else step(2, "active", "Sending…");
-  } else if (s.state === "booking") {
-    sent(); step(3, "active", "Working on it. This usually takes a few minutes.");
-  } else if (s.state === "synced" || s.state === "dry_run_ok") {
-    const ok = s.state === "synced";
-    sent(); step(3, "done", ok ? "On the MLS ✓" : "Dry run passed. Nothing was submitted.");
-    return setTimeout(() => confirmed(d, { warn, line: ok ? "The AI agent entered it on the MLS (NTREIS)." : "Dry run passed: the AI agent filled in the MLS form but didn't submit it." }), 1200);
-  } else if (s.state === "failed" || s.state === "needs_login") {
-    if (s.job?.result === "delivery_failed") { step(2, "bad", s.message || "Couldn't reach the AI agent."); step(3, "", ""); }
-    else { sent(); step(3, "bad", s.state === "needs_login" ? `The AI agent couldn't sign in to the MLS. ${s.message || ""}` : s.message || "The AI agent couldn't finish."); }
-    $("leave").hidden = true;
-    $("next").innerHTML = `<button class="go" id="retry">Retry</button><a class="btn no" href="${PORTAL}">Go to the Open House Portal</a>`;
-    $("retry").onclick = async () => {
-      $("next").innerHTML = ""; $("leave").hidden = false;
-      step(2, "active", "Sending…"); step(3, "", "");
-      await post("/api/manage", { action: "retry" });
-      follow(warn);
-    };
-    return;
+  if (!d) return setTimeout(follow, 3000);
+  if (d.status === "approved") { // the AI agent put it on the MLS, so it's approved
+    step(1, "done", "Sent."); step(2, "done", "On the MLS ✓");
+    step(3, d.emailFailed ? "done warn" : "done", d.emailFailed ? `Approved, but the email to ${d.agentName} didn't send.` : `Approved. ${d.agentName} has been emailed.`);
+    return setTimeout(() => confirmed(d, { warn: d.emailFailed ? `The confirmation email to ${d.agentName} didn't send.` : "", line: "The AI agent entered it on the MLS (NTREIS)." }), 1200);
   }
-  setTimeout(() => follow(warn), 3000);
+  if (d.status !== "pending" || !d.approving) return load(); // declined, cancelled or entered by hand meanwhile
+  const s = d.sync || {}, dry = d.mode === "dry_run";
+  const sent = () => step(1, "done", s.job?.sentAt ? `Sent at ${atTime(s.job.sentAt)}${dry ? " as a dry run" : ""}.` : "Sent.");
+  step(3, "", "");
+  if (!s.state || s.state === "idle") {
+    step(2, "", "");
+    if (s.delivery?.attempts) step(1, "wait", `Couldn't reach the AI agent. Trying again at ${atTime(s.delivery.nextTryAt)}.`);
+    else if (s.busy) step(1, "wait", "In line: the AI agent is finishing another open house first.");
+    else step(1, "active", "Sending…");
+  } else if (s.state === "booking") {
+    sent(); step(2, "active", "Working on it. This usually takes a few minutes.");
+  } else if (["failed", "needs_login", "dry_run_ok"].includes(s.state)) {
+    if (s.job?.result === "delivery_failed") { step(1, "bad", s.message || "Couldn't reach the AI agent."); step(2, "", ""); }
+    else {
+      sent();
+      step(2, "bad", s.state === "dry_run_ok" ? "Dry run passed, but nothing was submitted, so it isn't on the MLS."
+        : s.state === "needs_login" ? `The AI agent couldn't sign in to the MLS. ${s.message || ""}` : s.message || "The AI agent couldn't finish.");
+    }
+    step(3, "bad", `Not approved yet. ${d.agentName} hasn't been emailed.`);
+    return stuck(d);
+  }
+  setTimeout(follow, 3000);
+}
+// The AI agent couldn't put it on the MLS: try again, enter it by hand (that approves it now), or decline.
+function stuck(d) {
+  $("leave").hidden = true;
+  $("next").innerHTML = `<button class="go" id="retry">${d.mode === "dry_run" ? "Run the dry run again" : "Retry"}</button>
+    <button class="no" id="byHand">I entered it on the MLS by hand</button><button class="no" id="declineA">Decline</button>`;
+  $("retry").onclick = async () => {
+    $("next").innerHTML = ""; $("leave").hidden = false;
+    step(1, "active", "Sending…"); step(2, "", ""); step(3, "", "");
+    await post("/api/manage", { action: "retry" });
+    follow();
+  };
+  $("byHand").onclick = () => answer(d, "approve");
+  $("declineA").onclick = () => answer(d, "decline");
+}
+async function answer(d, action) {
+  if (!confirm(action === "approve" ? `Approve it as entered on the MLS by hand? ${d.agentName} will be emailed the confirmation.` : `Decline this request? ${d.agentName} will be emailed.`)) return;
+  $("next").querySelectorAll("button").forEach((b) => (b.disabled = true));
+  const r = await post("/api/respond", { action, method: action === "approve" ? "manual" : null, mlsEntered: action === "approve" });
+  const j = r ? await r.json().catch(() => ({})) : {};
+  const warn = r && r.status === 502 ? j.message : ""; // 502: saved, but an email failed
+  if (r && (r.ok || r.status === 502)) {
+    return action === "approve" ? confirmed(d, { warn, line: "Entered on the MLS by hand." })
+      : el(`<h1>Declined</h1><p>The agent has been notified.</p>${warn ? `<p class="err">${esc(warn)}</p>` : ""}`);
+  }
+  $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again.";
+  $("next").querySelectorAll("button").forEach((b) => (b.disabled = false));
 }
 
 const fmtH = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
@@ -257,6 +285,7 @@ const STATE = {
 };
 const EVENT = {
   approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
+  approving: "Approving with the AI agent", mls_manual: "Switched to entered by hand",
   mls_job_sent: "Sent to the AI agent", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
   mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "AI agent failed", mls_needs_login: "MLS sign-in needed",
   mls_stalled: "AI agent stalled", mls_delivery_failed: "Couldn't reach the AI agent",

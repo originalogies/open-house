@@ -1,6 +1,6 @@
 import { json } from "../lib/shared.mjs";
 import { getRequest, saveRequest } from "../lib/requests.mjs";
-import { sendTeamAlert } from "../lib/email.mjs";
+import { sendTeamAlert, sendConfirmed } from "../lib/email.mjs";
 import { verify, verifyCallbackToken, applyResult, RESULTS, getInflight, clearInflight, logEvent, saveScreenshot } from "../lib/mls.mjs";
 
 // POST /api/mls/callback, called by the MLS bot when a job finishes.
@@ -32,6 +32,16 @@ export default async (req) => {
   if (inflight?.jobId === b.job_id) await clearInflight(); // lets the next job go out
 
   await logEvent(r.id, `mls_${b.result}`, { jobId: b.job_id, action: r.sync.job.action, screenshot: r.sync.job.screenshot || null, note: r.sync.message });
+  // Approved with the AI agent: now that it's on the MLS, it's approved and the agent gets the confirmation.
+  if (out.approved) {
+    await logEvent(r.id, "approved", { note: `On the MLS, so it's approved. ${r.agent.name} was emailed the confirmation.` }, r.decidedBy);
+    try { await sendConfirmed(r); }
+    catch (e) {
+      console.error("email failed", e.message);
+      r.confirmEmailFailed = true; await saveRequest(r); // the request page tells the team to let the agent know
+      await sendTeamAlert(r, "confirmation email failed", `It's on the MLS and approved, but the email to ${r.agent.name} didn't send. Let them know directly.`).catch(() => {});
+    }
+  }
   if (out.state === "failed" || out.state === "needs_login") {
     await sendTeamAlert(r, out.state === "needs_login" ? "sign-in needed" : "booking failed", r.sync.message || b.result)
       .catch((e) => console.error("alert failed", e.message));

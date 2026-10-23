@@ -1,6 +1,6 @@
 import { json, currentUser } from "../lib/shared.mjs";
 import { offeredListings, publicListing } from "../lib/listings.mjs";
-import { listRequests } from "../lib/requests.mjs";
+import { listRequests, holdsSlot } from "../lib/requests.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 
@@ -20,7 +20,7 @@ export default async (req) => {
     ...publicListing(l),
     // Hours locked by someone else's approved request, or already on the MLS.
     taken: [
-      ...all.filter((r) => r.mls === l.mls && r.status === "approved" && r.agent.email !== user.email).map((r) => ({ day: dayKey(r.iso), from: r.from, to: r.to })),
+      ...all.filter((r) => r.mls === l.mls && holdsSlot(r) && r.agent.email !== user.email).map((r) => ({ day: dayKey(r.iso), from: r.from, to: r.to })),
       ...l.external,
     ],
     mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status, cancelRequested: openCancelRequest(r) })),

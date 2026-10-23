@@ -10,6 +10,10 @@ const store = () => getStore("open-house-requests");
 export const newId = () => crypto.randomBytes(16).toString("hex");
 export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from < b.to && b.from < a.to;
 
+// The time is spoken for: approved, or being approved with the AI agent (still waiting until the AI agent
+// reports it's on the MLS; see respond.mjs). Nobody else can request or be approved for those hours.
+export const holdsSlot = (r) => r.status === "approved" || (r.status === "pending" && !!r.approving);
+
 // An agent's open requests: waiting or approved, for open houses that haven't happened yet (today counts).
 // Past open houses, including the history imported from the G&N calendar, don't count toward the limit.
 export const openRequestsOf = (all, email, today) =>
