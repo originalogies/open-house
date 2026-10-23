@@ -9,9 +9,9 @@ import { currentWeek } from "../lib/settings.mjs";
 // POST /api/requests -> submit a new request
 export default async (req) => {
   if (req.method === "GET") {
-    const user = await currentUser(req);
+    const [user, all] = await Promise.all([currentUser(req), listRequests()]); // read together
     if (!user) return json(401, { error: "signed_out" });
-    return json(200, { requests: historyFor(await listRequests(), user.email) });
+    return json(200, { requests: historyFor(all, user.email) });
   }
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);

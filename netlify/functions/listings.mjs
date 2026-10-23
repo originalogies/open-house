@@ -5,14 +5,15 @@ import { currentWeek } from "../lib/settings.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 
 export default async (req) => {
-  const user = await currentUser(req);
+  // Independent reads run together; the requests are read while the listings load.
+  const [user, week] = await Promise.all([currentUser(req), currentWeek()]);
   if (!user) return json(401, { error: "signed_out" });
-  const week = await currentWeek();
+  const requests = listRequests();
   let offered;
   try { offered = await offeredListings(week); }
-  catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable" }); }
+  catch (e) { console.error(e.message); requests.catch(() => {}); return json(502, { error: "listings_unavailable" }); }
 
-  const all = (await listRequests()).filter((r) => Object.values(week.days).some((d) => d.iso === r.iso));
+  const all = (await requests).filter((r) => Object.values(week.days).some((d) => d.iso === r.iso));
   const live = (r) => r.status === "pending" || r.status === "approved";
   const dayKey = (iso) => Object.keys(week.days).find((k) => week.days[k].iso === iso);
   const listings = offered.map((l) => ({

@@ -10,12 +10,11 @@ import { isMlsNumber } from "../lib/homes.mjs";
 // and any open cancellation request from the agent. Approve and decline go through POST /api/respond;
 // cancel and keep go through POST /api/manage. Access details are never included.
 export default async (req) => {
-  const user = await currentUser(req);
+  if (req.method !== "GET") return json(405, { error: "method_not_allowed" });
+  const [user, all] = await Promise.all([currentUser(req), listRequests()]); // read together
   if (!user) return json(401, { error: "signed_out" });
   if (!user.team) return json(403, { error: "team_only" });
-  if (req.method !== "GET") return json(405, { error: "method_not_allowed" });
 
-  const all = await listRequests();
   const requests = all.sort((a, b) => b.createdAt - a.createdAt).map((r) => {
     const d = dayMeta(r.iso), l = r.listing || {};
     return {

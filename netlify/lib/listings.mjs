@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { chicagoNow } from "./time.mjs";
 import { listHomes, asListing, linkSuggestions, photoUrl } from "./homes.mjs";
+import { readAll } from "./readall.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
@@ -103,10 +104,9 @@ const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], ins
 export const getInfo = async (mls) => ({ ...blank, ...((await infoStore().get(`mls/${mls}`, { type: "json" }).catch(() => null)) || {}) });
 export const saveInfo = (mls, info) => infoStore().setJSON(`mls/${mls}`, info);
 
-export async function allInfo(mlsList) {
-  const entries = await Promise.all(mlsList.map(async (m) => [m, await getInfo(m)]));
-  return Object.fromEntries(entries);
-}
+// Every listing's stored team settings ("mls/<MLS# or home id>"), read in one go so it can run alongside the catalog.
+const storedInfo = async () => new Map((await readAll(infoStore(), "open-house-listing-info", "mls/")).map(([k, v]) => [k.slice(4), v]));
+const infoFor = (mlsList, stored) => Object.fromEntries(mlsList.map((m) => [m, { ...blank, ...(stored.get(m) || {}) }]));
 
 // Homes that always appear, even if Repliers doesn't return them. Live Repliers data wins when present.
 const MANUAL = [
@@ -117,13 +117,14 @@ const MANUAL = [
 ];
 
 async function catalog(week) {
-  let raw = [], warning = null;
-  try { raw = await fetchRaw(); } catch (e) { console.error(e.message); warning = e.message.slice(0, 300); }
+  let warning = null;
+  // Repliers and the team-added homes (those not linked to an MLS listing yet; see homes.mjs) load together.
+  const [raw, homes] = await Promise.all([
+    fetchRaw().catch((e) => { console.error(e.message); warning = e.message.slice(0, 300); return []; }),
+    listHomes().then((all) => all.filter((h) => !h.linkedMls)).catch((e) => { console.error("team-added homes unavailable", e.message); return []; }),
+  ]);
   const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week) }));
   for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [] });
-  // Homes the team added that aren't linked to an MLS listing yet (see homes.mjs).
-  let homes = [];
-  try { homes = (await listHomes()).filter((h) => !h.linkedMls); } catch (e) { console.error("team-added homes unavailable", e.message); }
   for (const h of homes) list.push({ n: asListing(h), openHouses: [], home: h });
   return { list, warning };
 }
@@ -137,20 +138,20 @@ export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, 
 
 // Listings the team has offered for the current weekend. Never includes access details.
 export async function offeredListings(week) {
-  const { list } = await catalog(week);
-  const info = await allInfo(list.map((x) => x.n.mls));
+  const [{ list }, stored] = await Promise.all([catalog(week), storedInfo()]);
+  const info = infoFor(list.map((x) => x.n.mls), stored);
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
     .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, vacant: !!info[x.n.mls].vacant, external: x.openHouses }))
     .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
 }
 
 export async function teamListings(week) {
-  const { list, warning } = await catalog(week);
-  const info = await allInfo(list.map((x) => x.n.mls));
+  const [{ list, warning }, stored, updatedOn] = await Promise.all([catalog(week), storedInfo(), feedUpdatedOn().catch(() => null)]);
+  const info = infoFor(list.map((x) => x.n.mls), stored);
   const mls = list.filter((x) => !x.n.teamAdded).map((x) => x.n);
   return {
     warning,
-    feedUpdatedOn: await feedUpdatedOn().catch(() => null),
+    feedUpdatedOn: updatedOn,
     listings: list.map((x) => ({
       ...x.n, ...teamView(info[x.n.mls], week), openHouses: x.openHouses,
       // Team-added homes: their photos, and MLS listings at the same address to link to.

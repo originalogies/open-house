@@ -120,8 +120,10 @@ async function askToCancel(id, what, showError){
   await loadMine();
   return true;
 }
+// The first load is asked for right away, alongside the sign-in check, instead of after it.
+let firstLoad = fetch("/api/requests").catch(() => null);
 async function loadMine(){
-  const r = await fetch("/api/requests").catch(() => null);
+  const r = await (firstLoad || fetch("/api/requests").catch(() => null)); firstLoad = null;
   if (!r || !r.ok) { $("myohList").innerHTML = '<li><span class="empty">Could not load your open houses. Refresh to try again.</span></li>'; return; }
   myReqs = (await r.json()).requests;
   renderMine();

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
+import { readAll } from "./readall.mjs";
 
 // ---- Team-added homes -------------------------------------------------------
 // Homes the George & Noonan team adds before they're on the MLS. Each one is used everywhere a
@@ -47,10 +48,8 @@ export const asListing = (h) => ({
 });
 
 export async function listHomes() {
-  const s = homeStore();
-  const { blobs } = await s.list({ prefix: "home/" });
-  const all = await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })));
-  return all.filter(Boolean).sort((a, b) => a.createdAt - b.createdAt);
+  const all = (await readAll(homeStore(), "open-house-homes", "home/")).map(([, h]) => h);
+  return all.sort((a, b) => a.createdAt - b.createdAt);
 }
 export const getHome = async (id) => (isHomeId(id) ? homeStore().get(`home/${id}`, { type: "json" }) : null);
 export const saveHome = (h) => homeStore().setJSON(`home/${h.id}`, h);

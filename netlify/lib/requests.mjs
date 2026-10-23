@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { adminEmails, parseList } from "./shared.mjs";
 import { dayMeta } from "./week.mjs";
 import { fmtRange } from "./time.mjs";
+import { readAll } from "./readall.mjs";
 
 const store = () => getStore("open-house-requests");
 
@@ -12,12 +13,7 @@ export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from <
 // Team members who may approve: admins plus optional TEAM_EMAILS.
 export const isTeam = (email) => [...adminEmails(), ...parseList(process.env.TEAM_EMAILS)].includes(String(email).toLowerCase());
 
-export async function listRequests() {
-  const s = store();
-  const { blobs } = await s.list({ prefix: "req/" });
-  const all = await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })));
-  return all.filter(Boolean);
-}
+export const listRequests = async () => (await readAll(store(), "open-house-requests", "req/")).map(([, r]) => r);
 // One agent's own requests, every weekend and status, newest open house first.
 // Built field by field so nothing private (access details, other agents) can slip through.
 export const historyFor = (all, email) => {

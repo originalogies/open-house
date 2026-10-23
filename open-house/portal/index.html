@@ -339,8 +339,10 @@ function renderGrid(){
   });
 }
 
+// The first load is asked for right away, alongside the sign-in check, instead of after it.
+let firstLoad = fetch("/api/listings").catch(() => null);
 async function loadListings(){
-  const r = await fetch("/api/listings").catch(() => null);
+  const r = await (firstLoad || fetch("/api/listings").catch(() => null)); firstLoad = null;
   if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
   const d = await r.json();
   window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; FIRST = d.firstHour; LAST = d.lastHour;

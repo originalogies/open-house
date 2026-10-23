@@ -101,8 +101,11 @@
     window.scrollTo(0, 0);
   }
 
+  // The first list is fetched alongside the sign-in check (start) and used by the first view that needs it.
+  let primed = null;
   async function loadRequests() {
-    const r = await api("GET", "/api/team/requests");
+    const p = primed || api("GET", "/api/team/requests"); primed = null;
+    const r = await p;
     if (r.ok) requests = r.data.requests;
     const n = requests.filter((x) => x.status === "pending" || asksToCancel(x)).length;
     $("pendingCount").textContent = n; $("pendingCount").hidden = !n;
@@ -112,6 +115,7 @@
   const asksToCancel = (r) => !!r.cancelRequest && r.iso >= todayIso();
 
   async function start() {
+    primed = api("GET", "/api/team/requests");
     const r = await api("GET", "/api/me");
     if (r.status === 401) return showGate();
     if (!r.ok) { view.innerHTML = '<p class="empty">Could not reach the server.</p>'; return; }
@@ -122,8 +126,8 @@
       return;
     }
     window.addEventListener("hashchange", route);
-    await loadRequests();
     route();
+    if (primed) loadRequests(); // views that don't list requests still show the waiting count
   }
 
   // ---- Requests ------------------------------------------------------------
