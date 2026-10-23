@@ -1,19 +1,21 @@
 import { json } from "../lib/shared.mjs";
 import { getRequest, saveRequest } from "../lib/requests.mjs";
 import { sendTeamAlert } from "../lib/email.mjs";
-import { verify, applyResult, RESULTS, getInflight, clearInflight, logEvent, saveScreenshot } from "../lib/mls.mjs";
+import { verify, verifyCallbackToken, applyResult, RESULTS, getInflight, clearInflight, logEvent, saveScreenshot } from "../lib/mls.mjs";
 
 // POST /api/mls/callback, called by the MLS bot when a job finishes.
-// Signed like our webhooks: X-OH-Timestamp + X-OH-Signature (HMAC-SHA256 of `${ts}.${body}`).
-// Body: { request_id, job_id, result, message?, screenshot_base64? }
+// Body: { request_id, job_id, callback_token, result, message?, screenshot_base64? }
 // result: booked | updated | cancelled | already_done | dry_run | needs_login | failed
+// Proven either by callback_token (sent with the job; how Grokbot does it) or by signing like our
+// webhooks: X-OH-Timestamp + X-OH-Signature (HMAC-SHA256 of `${ts}.${body}`).
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   const raw = await req.text();
   if (raw.length > 6 * 1024 * 1024) return json(413, { error: "too_large" }); // Netlify rejects request bodies over 6 MB anyway
-  if (!verify(req.headers.get("x-oh-timestamp"), req.headers.get("x-oh-signature"), raw)) return json(401, { error: "bad_signature" });
 
   const b = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+  const proven = verifyCallbackToken(b?.job_id, b?.callback_token) || verify(req.headers.get("x-oh-timestamp"), req.headers.get("x-oh-signature"), raw);
+  if (!proven) return json(401, { error: "unauthorized", message: "Send the job's callback_token with the result." });
   if (!b || !RESULTS.includes(b.result)) return json(400, { error: "invalid_body" });
   const r = await getRequest(String(b.request_id || ""));
   if (!r) return json(404, { error: "not_found" });

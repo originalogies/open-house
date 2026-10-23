@@ -10,7 +10,9 @@
 @media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--accent-soft:#1C2E2B;--danger:#E58A8A}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:520px;margin:0 auto;padding:32px 16px}
+main{max-width:520px;margin:0 auto;padding:20px 16px 32px}
+a.back{display:inline-block;padding:10px 0;margin-bottom:6px;color:var(--accent);font-weight:600;text-decoration:none}
+a.back:hover{text-decoration:underline}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
 h1{font-size:1.35rem;margin:0 0 12px}
 h1:focus{outline:none}
@@ -81,9 +83,18 @@ ol.steps li.bad span,ol.steps li.warn span{color:var(--danger)}
 </style>
 </head>
 <body>
-<main><div class="card" id="card"><p>Loading…</p></div></main>
+<main><a class="back" id="back" href="/admin/#requests">← Back to Requests</a><div class="card" id="card"><p>Loading…</p></div></main>
 <script>
 const $ = (id) => document.getElementById(id), card = $("card");
+// Back returns to the page that opened this one (the Admin Console keeps its filters), or to the
+// Admin Console's Requests list when this page was opened from an email.
+(() => {
+  let ref = null;
+  try { ref = document.referrer ? new URL(document.referrer) : null; } catch {}
+  if (!ref || ref.origin !== location.origin || ref.pathname.startsWith("/respond")) return;
+  if (!ref.pathname.startsWith("/admin")) $("back").textContent = "← Back";
+  $("back").onclick = (e) => { if (history.length > 1) { e.preventDefault(); history.back(); } };
+})();
 const params = new URLSearchParams(location.search);
 const id = params.get("id") || "", preset = params.get("action");
 const el = (html) => { card.innerHTML = html; };

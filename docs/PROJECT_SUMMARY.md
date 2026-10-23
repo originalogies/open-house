@@ -38,8 +38,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings, request a time. |
 | `/my-open-houses/` | Signed-in agents | "My open houses": every request the agent has made, upcoming and history, with "Request cancellation". |
 | `/inventory/` | Team | Redirects to the Admin Console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
-| `/respond/?id=...` | Team | The confirmation page: confirm or decline a request, or answer an agent's cancellation request. Confirming a home on the MLS needs one of two choices: "Submitted manually" or "Schedule Open House with AI Agent" (Start, then live progress; needs MLS automation on). Once confirmed, a 5-second countdown goes to the Open House Portal. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. |
-| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
+| `/respond/?id=...` | Team | The confirmation page: confirm or decline a request, or answer an agent's cancellation request. Confirming a home on the MLS needs one of two choices: "Submitted manually" or "Schedule Open House with AI Agent" (Start, then live progress; needs MLS automation on). Once confirmed, a 5-second countdown goes to the Open House Portal. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. "← Back" returns to the page that opened it (or the Admin Console's Requests list, when opened from an email). |
+| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console. Requests: a time frame by open house date (This week by default, This month, This year, All time, or a custom range with date pickers) sets the stat cards (Requests, Waiting for a decision, Approved, Agents) and the list. Requests and cancellation requests waiting for a decision are pinned at the top of the one list whatever the time frame, with a Review button; status chips and search narrow the list. Filters are kept for the browser tab. Every request shows its MLS status and an "MLS status" link; Cancel for upcoming approved open houses. Also weekend listings, agent access, weekly request cutoff. |
 
 ## Features
 
@@ -92,8 +92,9 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `TEAM_EMAIL` | No | Team inbox(es) that receive request emails. Defaults to `team@georgeandnoonan.com`. |
 | `TEAM_EMAILS` | No | Extra people allowed to use `/inventory/` and approve requests. |
 | `MLS_BOOKING_MODE` | No | `off` (default), `dry_run` or `live`. See `docs/MLS_AUTOMATION.md`. |
-| `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent. |
-| `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters shared with the bot; signs webhooks and callbacks. Mark as secret. |
+| `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent: Grokbot's Cursor automation webhook. |
+| `GROKBOT_WEBHOOK_TOKEN` | For MLS automation | The `crsr_…` Bearer token for that webhook. Mark as secret. |
+| `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters; stays on Netlify. Makes each job's one-time callback token and signs outgoing jobs. Mark as secret. |
 
 ## API routes
 

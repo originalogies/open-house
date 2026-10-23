@@ -30,21 +30,31 @@ h2.section{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:28px
 .stat span{font-size:.85rem;color:var(--muted)}
 @media (max-width:720px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-/* Pending request cards */
-.queue{display:grid;gap:12px}
-.req{display:grid;grid-template-columns:96px 1fr auto;gap:16px;padding:14px;align-items:start}
-.req .thumb{width:96px;height:72px;border-radius:10px;background:var(--photo);object-fit:cover}
-.req h3{font-family:var(--serif);font-weight:500;font-size:1.15rem;margin:0}
-.req .when{font-weight:600;margin:2px 0}
-.req .meta{font-size:.88rem;color:var(--muted)}
-.req .notes{font-size:.9rem;margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:8px}
-.req .act{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:190px}
-.req .act .btns{display:flex;gap:8px}
-.req .act .btns .btn{flex:1}
+/* Time frame (by open house date): sets the stat cards and the requests list */
+.timeframe{display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap;margin:18px 0 14px}
+.timeframe label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;font-weight:600;color:var(--muted)}
+.timeframe .field{width:auto;height:44px;color:var(--ink)}
+.timeframe select.field{min-width:170px}
+.tf-dates{display:flex;gap:10px;flex-wrap:wrap}
+.tf-dates[hidden]{display:none}
+.tf-label{color:var(--muted);font-size:.92rem;padding-bottom:11px}
+.stat.wait b{color:var(--brass)}
+
+/* Requests list: waiting rows pinned at the top, then the time frame's requests */
+tr.group th{background:var(--bg);text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--ink)}
+tr.group th span{color:var(--muted);font-weight:500;margin-left:4px}
+tr.wait{background:var(--brass-soft)}
+tr.wait td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
+/* Keep each row's action (Review, Cancel) in view when a narrow window scrolls the table sideways */
+table.reqs td:last-child{position:sticky;right:0;background:var(--surface)}
+table.reqs tr.wait td:last-child{background:var(--brass-soft)}
 @media (max-width:720px){
-  .req{grid-template-columns:72px 1fr}
-  .req .thumb{width:72px;height:56px}
-  .req .act{grid-column:1/-1;min-width:0}
+  table.reqs td:last-child{position:static;background:none}
+  table.reqs td .btn.small{min-height:44px;padding:10px 22px}
+  table.stack tr.group{padding:0}
+  table.stack tr.group th{display:block}
+  table.stack tr.wait{box-shadow:inset 3px 0 0 var(--brass)}
+  table.stack tr.wait td:first-child{box-shadow:none}
 }
 
 /* Tables */

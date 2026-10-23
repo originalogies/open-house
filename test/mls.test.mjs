@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 process.env.MLS_WEBHOOK_SECRET = "s".repeat(40);
-const { nextAction, needsDispatch, buildPayload, applyResult, sign, verify, desiredFor } = await import("../netlify/lib/mls.mjs");
+const { nextAction, needsDispatch, buildPayload, applyResult, sign, verify, verifyCallbackToken, desiredFor } = await import("../netlify/lib/mls.mjs");
 const { checkChange, checkCancel, checkCancelRequest, openCancelRequest } = await import("../netlify/lib/changes.mjs");
 const { ics } = await import("../netlify/lib/email.mjs");
 
@@ -54,9 +54,34 @@ test("entered by hand or by the AI agent", async () => {
     assert.equal(byHand(req({ mlsMethod: "manual" })), true);
     assert.equal(byHand(req({ mlsMethod: "agent" })), false);
     assert.equal(byHand(req()), false);                                           // approved before the choice existed: the bot, as before
-    delete process.env.GROKBOT_WEBHOOK_URL;
+    process.env.MLS_WEBHOOK_SECRET = "short";
+    assert.equal(agentReady(), false);                                            // no usable secret for callback tokens
+    process.env.MLS_WEBHOOK_SECRET = "s".repeat(40); delete process.env.GROKBOT_WEBHOOK_URL;
     assert.equal(agentReady(), false);                                            // no bot to send to
   } finally { process.env = env; }
+});
+
+test("jobs go to Grokbot's Cursor webhook as { items: [job] } with its token", async () => {
+  const { postWebhook } = await import("../netlify/lib/mls.mjs");
+  const env = { ...process.env }, realFetch = globalThis.fetch;
+  const job = { request_id: "a".repeat(32), job_id: "job_1", action: "add" };
+  let sent;
+  const answer = (status, body) => { globalThis.fetch = async (url, init) => { sent = { url, ...init }; return new Response(body, { status }); }; };
+  try {
+    process.env.GROKBOT_WEBHOOK_URL = "https://api2.cursor.sh/automations/webhook/test"; process.env.GROKBOT_WEBHOOK_TOKEN = "crsr_test";
+    answer(200, '{"success":true,"runUuid":"run-1"}');
+    assert.deepEqual(await postWebhook(job, NOW), { runId: "run-1" });
+    assert.deepEqual(JSON.parse(sent.body), { items: [job] });
+    assert.equal(sent.headers.authorization, "Bearer crsr_test");
+    assert.ok(verify(sent.headers["x-oh-timestamp"], sent.headers["x-oh-signature"], sent.body, NOW)); // signed over what was sent
+    answer(200, '{"success":false}');
+    await assert.rejects(postWebhook(job, NOW), /refused/);                         // Cursor took the call but not the job: retried
+    answer(401, "unauthorized");
+    await assert.rejects(postWebhook(job, NOW), /webhook 401/);
+    delete process.env.GROKBOT_WEBHOOK_TOKEN; answer(202, "");
+    assert.deepEqual(await postWebhook(job, NOW), { runId: null });                 // any other receiver: no token, no run ID
+    assert.equal(sent.headers.authorization, undefined);
+  } finally { process.env = env; globalThis.fetch = realFetch; }
 });
 
 test("webhook payload", () => {
@@ -65,6 +90,7 @@ test("webhook payload", () => {
   assert.equal(p.action, "update");
   assert.deepEqual([p.date, p.start, p.end, p.type], ["2026-10-24", "14:00", "17:00", "Public"]);
   assert.deepEqual([p.original_date, p.original_start, p.original_end], ["2026-10-24", "13:00", "16:00"]);
+  assert.deepEqual([p.start_time, p.end_time, p.original_start_time, p.original_end_time], ["2:00 PM", "5:00 PM", "1:00 PM", "4:00 PM"]);
   assert.equal(p.mls_number, "21413668");
   assert.equal(p.address, "1704 Overlook Drive, Grapevine, TX 76051");
   assert.equal(p.callback_url, "https://open-house.synergyrealtors.com/api/mls/callback");
@@ -102,6 +128,18 @@ test("webhook signatures", () => {
   assert.ok(!verify(ts, sign(ts, body), '{"a":2}', NOW));                       // tampered body
   assert.ok(!verify(ts, sign(ts, body), body, NOW + 6 * 60000));                // replayed after 5 minutes
   assert.ok(!verify(ts, "nope", body, NOW));
+});
+
+test("callback tokens prove a result without the bot holding the secret", () => {
+  const p = buildPayload(req(), needsDispatch(req(), NOW, "live"), "job_1");
+  assert.match(p.callback_token, /^[a-f0-9]{64}$/);
+  assert.ok(verifyCallbackToken("job_1", p.callback_token));
+  assert.ok(!verifyCallbackToken("job_2", p.callback_token));                     // only fits its own job
+  assert.ok(!verifyCallbackToken("job_1", p.callback_token.replace(/^./, (c) => (c === "a" ? "b" : "a"))));
+  assert.ok(!verifyCallbackToken("job_1", "") && !verifyCallbackToken("job_1", "x".repeat(64)) && !verifyCallbackToken("", p.callback_token));
+  const env = { ...process.env };
+  try { process.env.MLS_WEBHOOK_SECRET = "t".repeat(40); assert.ok(!verifyCallbackToken("job_1", p.callback_token)); } // a new secret retires old tokens
+  finally { process.env = env; }
 });
 
 test("team change rules", () => {

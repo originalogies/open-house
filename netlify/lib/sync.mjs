@@ -50,10 +50,12 @@ export async function runSync({ timeoutMs } = {}) {
 
   const payload = buildPayload(r, d, jobId);
   try {
-    await postWebhook(payload, now, timeoutMs);
+    const { runId } = await postWebhook(payload, now, timeoutMs);
     r.sync.delivery = null;
+    if (runId) r.sync.job.runId = runId; // the Cursor run working on it, for looking it up there
     await saveRequest(r);
-    await logEvent(r.id, "mls_job_sent", { jobId, action: d.action, dryRun: payload.dry_run, note: `${d.action}${payload.dry_run ? " (dry run)" : ""} sent to the AI agent` });
+    await logEvent(r.id, "mls_job_sent", { jobId, runId, action: d.action, dryRun: payload.dry_run,
+      note: `${d.action}${payload.dry_run ? " (dry run)" : ""} sent to the AI agent${runId ? ` (Cursor run ${runId})` : ""}` });
   } catch (e) {
     // Delivery failed: nothing reached the bot, so it is safe to send again later.
     const attempts = (r.sync.delivery?.key === d.key ? r.sync.delivery.attempts : 0) + 1;

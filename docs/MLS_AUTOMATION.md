@@ -38,45 +38,57 @@ Each request stores what the MLS **should** show (an open house while the reques
 
 ## Webhook (portal → bot)
 
-`POST GROKBOT_WEBHOOK_URL`, JSON body:
+Grokbot runs as a Cursor automation, so `GROKBOT_WEBHOOK_URL` is its Cursor webhook (`https://api2.cursor.sh/automations/webhook/…`) and `GROKBOT_WEBHOOK_TOKEN` is the `crsr_…` token Cursor gave for it.
+
+`POST GROKBOT_WEBHOOK_URL` with `Authorization: Bearer <GROKBOT_WEBHOOK_TOKEN>`, JSON body with one job in `items`:
 
 ```json
 {
-  "request_id": "9f1c…32 hex",
-  "job_id": "job_4be0c2a1d9f37e55",
-  "action": "update",
-  "mls_number": "21413668",
-  "address": "1704 Overlook Drive, Grapevine, TX 76051",
-  "type": "Public",
-  "date": "2026-10-25",
-  "start": "14:00",
-  "end": "16:00",
-  "timezone": "America/Chicago",
-  "original_date": "2026-10-24",
-  "original_start": "13:00",
-  "original_end": "16:00",
-  "original_type": "Public",
-  "approved_by": "team@georgeandnoonan.com",
-  "approved_at": "2026-10-21T14:02:00.000Z",
-  "dry_run": false,
-  "callback_url": "https://open-house.synergyrealtors.com/api/mls/callback"
+  "items": [{
+    "request_id": "9f1c…32 hex",
+    "job_id": "job_4be0c2a1d9f37e55",
+    "action": "update",
+    "mls_number": "21413668",
+    "address": "1704 Overlook Drive, Grapevine, TX 76051",
+    "type": "Public",
+    "date": "2026-10-25",
+    "start": "14:00",
+    "end": "16:00",
+    "start_time": "2:00 PM",
+    "end_time": "4:00 PM",
+    "timezone": "America/Chicago",
+    "original_date": "2026-10-24",
+    "original_start": "13:00",
+    "original_end": "16:00",
+    "original_start_time": "1:00 PM",
+    "original_end_time": "4:00 PM",
+    "original_type": "Public",
+    "approved_by": "team@georgeandnoonan.com",
+    "approved_at": "2026-10-21T14:02:00.000Z",
+    "dry_run": false,
+    "callback_url": "https://open-house.synergyrealtors.com/api/mls/callback",
+    "callback_token": "64 hex characters, for this job only"
+  }]
 }
 ```
 
-- Times are 24-hour Central. `original_*` appear on `update` and `cancel`. For `cancel`, `date/start/end` repeat the entry being cancelled and `remove_method` is `"cancel"` (set Status to Canceled, keep the record).
+- `action` is `add` (a new open house; Grokbot's own test calls this `new`), `update` or `cancel`. There is always exactly one item.
+- Times are Central, both 24-hour (`start`, `end`) and 12-hour (`start_time`, `end_time`). `original_*` appear on `update` and `cancel`. For `cancel`, `date/start/end` repeat the entry being cancelled and `remove_method` is `"cancel"` (set Status to Canceled, keep the record).
 - Access details (gate, lockbox, alarm) are never sent.
-- Headers: `X-OH-Timestamp` (Unix seconds), `X-OH-Signature` (hex HMAC-SHA256 of `` `${timestamp}.${rawBody}` `` with `MLS_WEBHOOK_SECRET`), `Idempotency-Key` (= `job_id`).
-- **The bot should:** verify the signature, reject timestamps more than 5 minutes old, answer `2xx` within 15 seconds (then do the work), never run the same `job_id` twice, and run one job at a time.
-- If the webhook call fails (non-2xx, timeout), the portal retries after 2 and 4 minutes, then marks it failed and emails the team. Nothing is retried once the bot has accepted a job.
+- Headers also carry `X-OH-Timestamp` (Unix seconds), `X-OH-Signature` (hex HMAC-SHA256 of `` `${timestamp}.${rawBody}` `` with `MLS_WEBHOOK_SECRET`) and `Idempotency-Key` (= `job_id`), for a receiver that can check them; Cursor checks the Bearer token instead.
+- Cursor answers `{"success": true, "runUuid": "…"}`. The run ID is kept on the job and shown in the request's history, so the run can be found in Cursor.
+- **The bot should:** never run the same `job_id` twice, run one job at a time, and always send the callback below when it finishes, whatever happened.
+- If the webhook call fails (non-2xx, `"success": false`, or no answer in time), the portal retries after 2 and 4 minutes, then marks it failed and emails the team. Nothing is retried once the bot has accepted a job.
 
 ## Callback (bot → portal)
 
-`POST /api/mls/callback`, signed the same way (same secret, same headers), JSON body:
+`POST` to the job's `callback_url` (`/api/mls/callback`), JSON body, copying `request_id`, `job_id` and `callback_token` from the job:
 
 ```json
 {
   "request_id": "9f1c…",
   "job_id": "job_4be0c2a1d9f37e55",
+  "callback_token": "the job's callback_token",
   "result": "updated",
   "message": "Entry saved as Active in Open Houses; OH icon pending",
   "screenshot_base64": "<PNG or JPEG, up to 4 MB>"
@@ -93,13 +105,21 @@ Each request stores what the MLS **should** show (an open house while the reques
 
 Keep `screenshot_base64` to an image of 4 MB or less. A larger image is dropped (the result still counts), and one much over 4 MB pushes the callback past Netlify's 6 MB request limit, so Netlify rejects the whole callback before the portal sees it and the job stalls.
 
+**How the portal knows the result is real.** `callback_token` is made from `MLS_WEBHOOK_SECRET`, which stays on Netlify, and the job ID, so it fits only that job. The bot holds no secret and signs nothing; it copies the token back. Once a job has its result, more callbacks for it are ignored, so a token can't be reused. (A receiver that has the secret may instead sign the callback with the `X-OH-Timestamp`/`X-OH-Signature` headers described above.) The portal answers `200 {"ok":true,"state":"synced"}`, or `401` if the token doesn't match the job.
+
+For example, with the result in `result.json`:
+
+```bash
+curl -X POST "<callback_url>" -H "Content-Type: application/json" --data @result.json
+```
+
 Callbacks for an unknown, old or already-finished `job_id` are ignored. If no callback arrives within **30 minutes**, the job is marked stalled and the team is emailed. A late callback after that is ignored; when the team clicks Retry, the bot's duplicate check reports `already_done` if the first run did post.
 
 ## Team and agent actions
 
 - **Agents** can't cancel on their own. They send a cancellation request for their own pending or approved request from the portal (the home's request panel or My open houses) until the open house starts; the weekly cutoff doesn't apply. Like a new booking, the team gets an email with a link and the request shows in the Admin Console's "Needs a decision" queue. Nothing changes until the team answers: approving cancels it (and the bot cancels the MLS entry), keeping it emails the agent that it's still on. Time changes go through the team.
 - **Team** (`/respond/?id=…`, the same link as the approve email): change the date/hours of an approved open house (Saturday or Sunday, 9 AM to 7 PM, no overlap with another approved open house or with an open house already on the MLS per Repliers), cancel it, approve or keep an agent's cancellation request, retry a failed MLS job, see the MLS status, the bot's screenshot and the full history.
-- **Admin Console** (`/admin/`): each approved or cancelled request shows its MLS status with an "MLS status" link to its request page. Cancellation requests appear next to new requests, and upcoming approved open houses have a Cancel button. Approving there needs the "Entered on the MLS" tick; with the AI agent connected, an "Or schedule it with the AI agent" link opens the confirmation page.
+- **Admin Console** (`/admin/`): one Requests list. New requests and cancellation requests waiting for a decision are pinned at the top with a **Review** button that opens the confirmation page, where the team decides (Submitted manually or AI agent). Each approved or cancelled request shows its MLS status with an "MLS status" link to its request page, and upcoming approved open houses have a Cancel button. The request page's "← Back" returns to the list.
 - Changes send the agent an "Updated" email with a calendar invite that updates the existing event (same UID, higher SEQUENCE) and reset the day-before reminder. Cancellations send a calendar cancellation. The requester's approval email still goes out at approval, not when the MLS booking finishes.
 
 ## Conflict checks
@@ -123,13 +143,14 @@ Overlapping open houses are caught in two places:
 | Variable | Purpose |
 |---|---|
 | `MLS_BOOKING_MODE` | `off`, `dry_run` or `live`. Default `off`. |
-| `GROKBOT_WEBHOOK_URL` | Where jobs are sent. |
-| `MLS_WEBHOOK_SECRET` | 32+ random characters, shared with the bot, signs both directions. Mark as secret. |
+| `GROKBOT_WEBHOOK_URL` | Where jobs are sent: Grokbot's Cursor automation webhook. |
+| `GROKBOT_WEBHOOK_TOKEN` | The `crsr_…` token for that webhook, sent as `Authorization: Bearer …`. Mark as secret. |
+| `MLS_WEBHOOK_SECRET` | 32+ random characters (`openssl rand -base64 32`). Stays on Netlify: it makes each job's `callback_token` and signs outgoing jobs. Grokbot doesn't need it. Required for the AI agent option. Mark as secret. |
 | `MLS_CALLBACK_URL` | Optional. By default the bot calls back the site the request was made on. Set this to a tunnel's `/api/mls/callback` address to test a local copy with the real bot. Leave it unset in production. |
 
 ## Rollout
 
 1. Deploy with `MLS_BOOKING_MODE=off` (no behaviour change except agent cancellation requests and team change/cancel).
-2. Build the bot's webhook receiver and callback against this contract. Set the URL and secret.
+2. Set `GROKBOT_WEBHOOK_URL`, `GROKBOT_WEBHOOK_TOKEN` and `MLS_WEBHOOK_SECRET` on Netlify, and tell Grokbot to send each result to the job's `callback_url` with its `callback_token`. Grokbot runs in Cursor's cloud and can't reach `localhost`, so test against the deployed site, or a local copy behind a tunnel with `MLS_CALLBACK_URL` set.
 3. Switch to `dry_run` and approve a test request. Check the bot's dry-run result, screenshot and history on the request page.
 4. Switch to `live`.

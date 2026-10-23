@@ -28,7 +28,6 @@
 
   let me = null;
   let requests = [];
-  let agentReady = false; // the AI agent can take MLS jobs (MLS_BOOKING_MODE on and the bot connected)
 
   let toastTimer;
   function toast(text, err) {
@@ -96,7 +95,7 @@
 
   async function loadRequests() {
     const r = await api("GET", "/api/team/requests");
-    if (r.ok) { requests = r.data.requests; agentReady = !!r.data.agentReady; }
+    if (r.ok) requests = r.data.requests;
     const n = requests.filter((x) => x.status === "pending" || asksToCancel(x)).length;
     $("pendingCount").textContent = n; $("pendingCount").hidden = !n;
     return r.ok;
@@ -120,28 +119,51 @@
   }
 
   // ---- Requests ------------------------------------------------------------
-  let reqFilter = "all", reqSearch = "";
+  // One list. Requests waiting for a decision (new ones and agents' cancellation requests) are pinned at
+  // the top whatever the time frame; Review opens the request's page to decide. The time frame (by open
+  // house date) sets the stat cards and the rest of the list; status chips and search narrow the list only.
+  // Filters are kept for this tab, so Back from a request's page returns to the same view.
+  const RANGES = { week: "This week", month: "This month", year: "This year", all: "All time", custom: "Custom range" };
+  let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "";
+  try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "" } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
+  if (!RANGES[reqRange]) reqRange = "week";
+  const saveFilters = () => { try { sessionStorage.setItem("oh.requests", JSON.stringify({ reqFilter, reqSearch, reqRange, reqFrom, reqTo })); } catch {} };
+  const waits = (r) => r.status === "pending" || asksToCancel(r);
+
+  // The time frame as [first, last] open house dates ("" = open-ended). Weeks run Monday to Sunday,
+  // so "This week" holds this weekend's open houses.
+  const shiftIso = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  function rangeBounds() {
+    const t = todayIso(), [y, m] = t.split("-").map(Number);
+    if (reqRange === "week") { const mon = shiftIso(t, -((new Date(`${t}T12:00:00Z`).getUTCDay() + 6) % 7)); return [mon, shiftIso(mon, 6)]; }
+    if (reqRange === "month") return [t.slice(0, 8) + "01", new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)];
+    if (reqRange === "year") return [`${y}-01-01`, `${y}-12-31`];
+    if (reqRange === "custom") return reqFrom && reqTo && reqFrom > reqTo ? [reqTo, reqFrom] : [reqFrom, reqTo];
+    return ["", ""];
+  }
+  const inRange = (r, [a, b]) => (!a || r.iso >= a) && (!b || r.iso <= b);
+  const fmtIso = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+  function rangeLabel() {
+    const [a, b] = rangeBounds();
+    if (a && b) return `${fmtIso(a)} – ${fmtIso(b)}`;
+    return a ? `From ${fmtIso(a)}` : b ? `Through ${fmtIso(b)}` : "Every open house";
+  }
 
   async function renderRequests() {
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
-    const today = todayIso();
-    const pending = requests.filter((r) => r.status === "pending");
-    const asks = requests.filter(asksToCancel);
-    const upcoming = requests.filter((r) => r.status === "approved" && r.iso >= today);
-    const agents = new Set(requests.map((r) => r.agent.email));
-
     view.innerHTML = `
       <section class="intro"><div><h1>Open house requests</h1>
-        <p class="sub">Approve or decline requests from Synergy agents. The first approval locks the time, and the agent gets the confirmation email with access details. Agents can't cancel on their own; their cancellation requests show up here too.</p></div></section>
-      <div class="stats">
-        <div class="card stat"><b>${pending.filter((r) => !r.cancelRequest).length + asks.length}</b><span>Waiting for a decision</span></div>
-        <div class="card stat"><b>${upcoming.length}</b><span>Upcoming approved</span></div>
-        <div class="card stat"><b>${requests.filter((r) => r.status === "approved").length}</b><span>Approved all time</span></div>
-        <div class="card stat"><b>${agents.size}</b><span>Agents who requested</span></div>
+        <p class="sub">Requests from Synergy agents. Anything waiting for a decision, including an agent's cancellation request, stays at the top; Review opens it to approve or decline. The first approval locks the time.</p></div></section>
+      <div class="timeframe">
+        <label class="tf-pick"><span>Time frame</span><select class="field" id="range">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === reqRange ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+        <span class="tf-dates" id="custom" ${reqRange === "custom" ? "" : "hidden"}>
+          <label><span>From</span><input class="field" type="date" id="from" value="${esc(reqFrom)}"></label>
+          <label><span>To</span><input class="field" type="date" id="to" value="${esc(reqTo)}"></label>
+        </span>
+        <span class="tf-label" id="rangeLabel"></span>
       </div>
-      <h2 class="section">Needs a decision</h2>
-      <div class="queue" id="queue"></div>
-      <h2 class="section">All requests</h2>
+      <div class="stats" id="stats"></div>
+      <h2 class="section">Requests</h2>
       <div class="toolbar">
         <div class="chips" id="chips">${["all", "pending", "approved", "declined", "expired", "cancelled"].map((s) =>
           `<button class="chip" data-s="${s}" aria-pressed="${s === reqFilter}">${s === "all" ? "All" : STATUS[s]}</button>`).join("")}</div>
@@ -149,105 +171,78 @@
         <span class="spacer"></span>
         <button class="btn ghost small" id="csv">Export CSV</button>
       </div>
-      <div class="card table-wrap"><table class="stack"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>`;
+      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
-    const q = $("queue");
-    const waiting = [...asks, ...pending.filter((r) => !r.cancelRequest)];
-    if (!waiting.length) q.innerHTML = '<div class="card empty">Nothing waiting. New requests and cancellation requests show up here.</div>';
-    waiting.sort((a, b) => a.iso.localeCompare(b.iso) || a.from - b.from).forEach((r) => q.append(r.cancelRequest ? cancelCard(r) : pendingCard(r)));
-
-    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); fillRows(); };
-    $("search").oninput = (e) => { reqSearch = e.target.value; fillRows(); };
+    const refresh =() => { saveFilters(); $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); };
+    $("range").onchange = (e) => {
+      if (e.target.value === "custom" && !reqFrom && !reqTo) [reqFrom, reqTo] = rangeBounds(); // start from the range picked before
+      reqRange = e.target.value;
+      $("custom").hidden = reqRange !== "custom";
+      $("from").value = reqFrom; $("to").value = reqTo;
+      refresh();
+    };
+    $("from").onchange = (e) => { reqFrom = e.target.value; refresh(); };
+    $("to").onchange = (e) => { reqTo = e.target.value; refresh(); };
+    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); saveFilters(); fillRows(); };
+    $("search").oninput = (e) => { reqSearch = e.target.value; saveFilters(); fillRows(); };
     $("csv").onclick = () => exportCsv();
-    fillRows();
+    refresh();
   }
 
-  function filtered() {
-    const s = reqSearch.trim().toLowerCase();
-    return requests.filter((r) => (reqFilter === "all" || r.status === reqFilter)
-      && (!s || [r.agent.name, r.agent.email, r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s)));
+  // Stat cards: waiting counts everything pinned at the top; the rest count the time frame.
+  function fillStats() {
+    const frame = requests.filter((r) => inRange(r, rangeBounds()));
+    $("stats").innerHTML = `
+      <div class="card stat"><b>${frame.length}</b><span>Requests</span></div>
+      <div class="card stat wait"><b>${requests.filter(waits).length}</b><span>Waiting for a decision</span></div>
+      <div class="card stat"><b>${frame.filter((r) => r.status === "approved").length}</b><span>Approved</span></div>
+      <div class="card stat"><b>${new Set(frame.map((r) => r.agent.email.toLowerCase())).size}</b><span>Agents</span></div>`;
   }
+
+  // Waiting requests (soonest first, any date), then the time frame's others (newest open house first).
+  // The "Waiting" chip shows everything that needs a decision.
+  function listParts() {
+    const s = reqSearch.trim().toLowerCase(), bounds = rangeBounds();
+    const match = (r) => (reqFilter === "all" || (reqFilter === "pending" ? waits(r) : r.status === reqFilter))
+      && (!s || [r.agent.name, r.agent.email, r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s));
+    return {
+      waiting: requests.filter((r) => waits(r) && match(r)).sort((a, b) => a.iso.localeCompare(b.iso) || a.from - b.from),
+      rest: requests.filter((r) => !waits(r) && inRange(r, bounds) && match(r)).sort((a, b) => b.iso.localeCompare(a.iso) || a.from - b.from),
+    };
+  }
+  const filtered = () => { const { waiting, rest } = listParts(); return [...waiting, ...rest]; };
 
   function fillRows() {
-    const list = filtered().slice().sort((a, b) => b.iso.localeCompare(a.iso) || a.from - b.from);
-    $("rows").innerHTML = list.length ? list.map((r) => `<tr>
+    const { waiting, rest } = listParts();
+    const group = (label, n) => `<tr class="group"><th colspan="7">${esc(label)} <span>${n}</span></th></tr>`;
+    const row = (r, wait) => `<tr${wait ? ' class="wait"' : ""}>
         <td data-l="Open house"><b>${esc(r.day)}, ${esc(r.date)}</b><div class="sub">${esc(r.time)}</div></td>
         <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · MLS# ${esc(r.mls)}</div></td>
         <td data-l="Agent">${agentLink(r.agent.email, r.agent.name)}<div class="sub">${esc(r.agent.email)}</div></td>
         <td data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}</td>
         <td data-l="Decided">${r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>` : '<span class="sub">—</span>'}</td>
         <td data-l="MLS">${mlsCell(r)}</td>
-        <td data-l="">${r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
-      </tr>`).join("") : '<tr><td colspan="7" class="empty">No requests match.</td></tr>';
+        <td data-l="">${wait ? `<a class="btn small" href="/respond/?id=${encodeURIComponent(r.id)}">Review</a>`
+          : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
+      </tr>`;
+    $("rows").innerHTML = !waiting.length && !rest.length ? '<tr><td colspan="7" class="empty">No requests match.</td></tr>'
+      : (waiting.length ? group("Waiting for a decision", waiting.length) + waiting.map((r) => row(r, true)).join("") : "")
+        + (reqFilter === "pending" ? "" : group(`${RANGES[reqRange]} · ${rangeLabel()}`, rest.length) // the Waiting chip has nothing below
+          + (rest.length ? rest.map((r) => row(r, false)).join("") : '<tr><td colspan="7" class="empty">No other requests in this time frame.</td></tr>'));
     $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => {
       const r = requests.find((x) => x.id === b.dataset.cancel);
       if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${r.byHand ? "; remove it from the MLS by hand" : " and the AI agent marks it Canceled"}.`)) manageAction(r, "cancel", b);
     });
   }
 
-  // Team actions after a request was made: cancel (or approve the agent's cancellation request) and keep.
+  // Cancel an approved open house from the list (agent and team are emailed).
   async function manageAction(r, action, btn) {
     btn.disabled = true;
     const res = await api("POST", "/api/manage", { id: r.id, action });
-    const done = action === "keep" ? "Kept. The agent was told it's still on." : "Cancelled. The agent and team were emailed.";
-    if (res.ok) toast(res.data.message || done);
+    if (res.ok) toast(res.data.message || "Cancelled. The agent and team were emailed.");
     else if (res.data.error === "email_failed") toast(res.data.message || "Saved, but the email failed to send.", true);
     else { toast(res.data.message || "Could not save. Try again.", true); btn.disabled = false; return; }
     renderRequests();
-  }
-
-  function cancelCard(r) {
-    const c = document.createElement("article"); c.className = "card req";
-    const what = r.status === "approved" ? "open house" : "request";
-    c.innerHTML = `
-      ${r.img ? `<img class="thumb" src="${esc(photo(r.img))}" alt="">` : '<div class="thumb"></div>'}
-      <div>
-        <h3>${esc(r.addr)}, ${esc(r.city)} <span class="pill declined">Cancellation requested</span></h3>
-        <div class="when">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}</div>
-        <div class="meta">${agentLink(r.agent.email, r.agent.name)} asked ${esc(fmtDate(r.cancelRequest.at))} to cancel this ${r.status === "approved" ? "approved open house" : "request"} · MLS# ${esc(r.mls)}</div>
-        ${r.cancelRequest.reason ? `<div class="notes">${esc(r.cancelRequest.reason)}</div>` : ""}
-        ${r.status === "approved" ? `<div class="meta"><a href="/respond/?id=${encodeURIComponent(r.id)}">MLS status</a></div>` : ""}
-      </div>
-      <div class="act">
-        <div class="btns" style="flex-direction:column"><button class="btn danger small approve">Approve cancellation</button><button class="btn ghost small keep">Keep ${what}</button></div>
-      </div>`;
-    const approve = c.querySelector(".approve"), keep = c.querySelector(".keep");
-    approve.onclick = () => confirm(`Cancel ${r.agent.name}'s ${what} at ${r.addr}? The agent and team will be emailed${r.status === "approved" && !r.byHand ? " and the AI agent marks it Canceled" : ""}.`) && manageAction(r, "cancel", approve);
-    keep.onclick = () => manageAction(r, "keep", keep);
-    return c;
-  }
-
-  function pendingCard(r) {
-    const c = document.createElement("article"); c.className = "card req";
-    c.innerHTML = `
-      ${r.img ? `<img class="thumb" src="${esc(photo(r.img))}" alt="">` : '<div class="thumb"></div>'}
-      <div>
-        <h3>${esc(r.addr)}, ${esc(r.city)}</h3>
-        <div class="when">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}</div>
-        <div class="meta">${agentLink(r.agent.email, r.agent.name)} · <a href="mailto:${esc(r.agent.email)}">${esc(r.agent.email)}</a>${r.phone ? ` · ${esc(r.phone)}` : ""}</div>
-        <div class="meta">Requested ${esc(fmtDate(r.createdAt))} · MLS# ${esc(r.mls)}</div>
-        ${r.notes ? `<div class="notes">${esc(r.notes)}</div>` : ""}
-      </div>
-      <div class="act">
-        ${!r.onMls ? '<span class="fine">This home isn\'t on the MLS yet, so there\'s nothing to enter there.</span>'
-          : `<label class="check"><input type="checkbox" class="mls"> Entered on the MLS</label>${agentReady
-            ? `<a class="fine" href="/respond/?id=${encodeURIComponent(r.id)}&action=approve">Or schedule it with the AI agent</a>` : ""}`}
-        <div class="btns"><button class="btn small approve" ${r.onMls ? "disabled" : ""}>Approve</button><button class="btn danger small decline">Decline</button></div>
-      </div>`;
-    const box = c.querySelector(".mls"), approve = c.querySelector(".approve"), decline = c.querySelector(".decline");
-    if (box) box.onchange = () => { approve.disabled = !box.checked; };
-    const act = async (action) => {
-      if (action === "decline" && !confirm(`Decline ${r.agent.name}'s request for ${r.addr}? They'll get an email.`)) return;
-      approve.disabled = decline.disabled = true;
-      const res = await api("POST", "/api/respond", { id: r.id, action, mlsEntered: action === "approve" ? !!(box && box.checked) : undefined });
-      if (res.ok) toast(action === "approve" ? "Approved. Confirmation sent to the agent and team." : "Declined. The agent was notified.");
-      else if (res.data.error === "email_failed") toast(`${action === "approve" ? "Approved" : "Declined"}, but the email failed to send.`, true);
-      else { toast(res.data.message || (res.data.error === "already_answered" ? `Already ${res.data.status} by ${res.data.by || "someone else"}.` : "Could not save. Try again."), true); }
-      renderRequests();
-    };
-    approve.onclick = () => act("approve");
-    decline.onclick = () => act("decline");
-    return c;
   }
 
   function exportCsv(list = filtered(), name = "open-house-requests") {
