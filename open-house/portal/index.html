@@ -122,6 +122,7 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
 .slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;min-height:44px;cursor:pointer;font-weight:500;font-size:.88rem}
 .slot[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.slot.in{border-color:var(--accent);background:var(--accent-soft)} /* times between the start and end */
 .slot:disabled{background:var(--taken);color:var(--muted);cursor:not-allowed}
 .slot small{display:block;font-weight:400;font-size:.75rem;text-decoration:none}
 .empty{color:var(--muted);font-size:.9rem;margin:0 0 20px}
@@ -393,7 +394,7 @@ async function askToCancel(id, what, showError){
 }
 
 // Sheet
-let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to} hour blocks, to exclusive
+let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to,end}: start and end times on the hour; end = the end time was tapped
 function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
   $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
@@ -438,28 +439,38 @@ function renderDays(){
     d.appendChild(b);
   });
 }
+// The buttons are clock times from FIRST to LAST. The first tap is the start time (one hour until an end
+// is picked) and a later tap is the end time, so 12:00 then 3:00 is three hours. After that, a tap starts over;
+// tapping the end time again lets you pick a different one.
+const free = (from,to) => { for(let x=from;x<to;x++) if(blocked(day,x)) return false; return true; };
+const choosingEnd = () => !!sel && !sel.end;
 function pick(h){
-  if(!sel || sel.to-sel.from>1 || h<sel.from){ sel={from:h,to:h+1}; }
-  else if(h===sel.from){ sel=null; }
-  else {
-    for(let x=sel.from;x<=h;x++){ if(blocked(day,x)){ sel={from:h,to:h+1}; renderSlots(); return; } }
-    sel={from:sel.from,to:h+1};
-  }
+  if(choosingEnd() && h>sel.from && free(sel.from,h)) sel={from:sel.from,to:h,end:true};
+  else if(choosingEnd() && h===sel.from) sel=null;
+  else if(sel && sel.end && h===sel.to) sel={from:sel.from,to:sel.from+1,end:false};
+  else if(h<LAST && !blocked(day,h)) sel={from:h,to:h+1,end:false};
   renderSlots();
 }
 function renderSlots(){
   const s=$("slots"); s.innerHTML="";
   if(!day){ $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
-  for(let h=FIRST; h<LAST; h++){
-    const taken=blocked(day,h), own=isMine(day,h), on=sel && h>=sel.from && h<sel.to;
+  for(let h=FIRST; h<=LAST; h++){
+    const asEnd = choosingEnd() && h>sel.from && free(sel.from,h); // ending here is fine even if the next hour is booked
+    const isStart = !!sel && h===sel.from, isEnd = !!sel && sel.end && h===sel.to;
+    const taken = h<LAST && blocked(day,h) && !asEnd && !isEnd, own = isMine(day,h);
     const b=document.createElement("button");
-    b.className="slot"; b.disabled=taken; b.setAttribute("aria-pressed", !!on);
+    b.className = "slot" + (sel && sel.end && h>sel.from && h<sel.to ? " in" : "");
+    b.disabled = !(asEnd || isStart || isEnd || (h<LAST && !blocked(day,h)));
+    b.setAttribute("aria-pressed", isStart || isEnd);
     b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
-    b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already booked"):""}`);
+    b.setAttribute("aria-label", fmt(h) + (isStart ? ", start time" : isEnd ? ", end time" : asEnd ? ", choose as end time" : taken ? (own ? ", your request" : ", already booked") : ""));
     b.onclick=()=>{ const first=!sel; pick(h); if(first && sel) reveal("stepSend"); };
     s.appendChild(b);
   }
-  $("hint").textContent = sel ? `${fmt(sel.from)} to ${fmt(sel.to)} (${sel.to-sel.from} ${sel.to-sel.from===1?"hour":"hours"}). Tap a later time to extend.` : "Tap a start time, then tap the last hour you'll host.";
+  const hrs = sel && sel.to-sel.from;
+  $("hint").textContent = !sel ? "Tap the start time, then the end time."
+    : sel.end ? `${range()} (${hrs} ${hrs===1?"hour":"hours"}). Tap a time to start over.`
+    : `Starts ${fmt(sel.from)}. Now tap the end time.`;
   update();
 }
 const range = (r=sel) => `${fmt(r.from)} to ${fmt(r.to)}`;

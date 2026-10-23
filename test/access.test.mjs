@@ -31,7 +31,16 @@ test("session cookie signing", () => {
   assert.equal(readSession(req("e30." + v.split(".")[1])), null);    // body swapped
 });
 
-import { overlaps } from "../netlify/lib/requests.mjs";
+import { overlaps, openRequestsOf } from "../netlify/lib/requests.mjs";
+
+test("open requests count only open houses that haven't happened yet", () => {
+  const me = "kelly@x.com", r = (iso, status, email = me) => ({ iso, status, agent: { email } });
+  const all = [
+    ...Array.from({ length: 30 }, (_, i) => r(`2025-0${(i % 9) + 1}-10`, "approved")), // imported history
+    r("2026-10-23", "approved"), r("2026-10-25", "pending"), r("2026-10-25", "declined"), r("2026-10-31", "pending", "other@x.com"),
+  ];
+  assert.deepEqual(openRequestsOf(all, me, "2026-10-23").map((x) => x.iso), ["2026-10-23", "2026-10-25"]); // today still counts
+});
 import { fmtArrival, fmtRange, addDays, chicagoToUtc, fmtReceived } from "../netlify/lib/time.mjs";
 
 test("overlap rules", () => {

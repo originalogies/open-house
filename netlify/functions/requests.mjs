@@ -1,8 +1,8 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { offeredListings, snapshot } from "../lib/listings.mjs";
-import { listRequests, saveRequest, newId, overlaps, historyFor } from "../lib/requests.mjs";
+import { listRequests, saveRequest, newId, overlaps, historyFor, openRequestsOf } from "../lib/requests.mjs";
 import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs";
-import { fmtRange } from "../lib/time.mjs";
+import { fmtRange, chicagoNow } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
 // GET  /api/requests -> the signed-in agent's own requests (history and status)
@@ -36,7 +36,7 @@ export default async (req) => {
   }
 
   const all = await listRequests();
-  const mineLive = all.filter((r) => r.agent.email === user.email && (r.status === "pending" || r.status === "approved"));
+  const mineLive = openRequestsOf(all, user.email, chicagoNow().date);
   if (mineLive.length >= 12) return json(429, { error: "too_many", message: "Too many open requests. Wait for some to be answered." });
   if (mineLive.some((r) => overlaps(r, candidate))) return json(409, { error: "overlap", message: "You already have a request that overlaps those hours." });
   if (all.some((r) => r.status === "approved" && overlaps(r, candidate))) return json(409, { error: "taken", message: "Those hours were just taken. Pick another time." });

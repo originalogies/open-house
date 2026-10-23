@@ -10,6 +10,11 @@ const store = () => getStore("open-house-requests");
 export const newId = () => crypto.randomBytes(16).toString("hex");
 export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from < b.to && b.from < a.to;
 
+// An agent's open requests: waiting or approved, for open houses that haven't happened yet (today counts).
+// Past open houses, including the history imported from the G&N calendar, don't count toward the limit.
+export const openRequestsOf = (all, email, today) =>
+  all.filter((r) => r.agent?.email === email && (r.status === "pending" || r.status === "approved") && r.iso >= today);
+
 // Team members who may approve: admins plus optional TEAM_EMAILS.
 export const isTeam = (email) => [...adminEmails(), ...parseList(process.env.TEAM_EMAILS)].includes(String(email).toLowerCase());
 
