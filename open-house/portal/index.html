@@ -65,8 +65,20 @@ button{font:inherit;color:inherit}
 .card .city{font-size:.92rem;opacity:.85}
 .card .price{font-family:var(--serif);font-size:1.55rem;font-weight:500;text-align:right;grid-row:1;grid-column:2}
 .card .facts{font-size:.85rem;opacity:.85;text-align:right;grid-column:2}
-.dom{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.92);color:#16202A;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:999px}
+.card .tl{position:absolute;top:14px;left:14px;right:130px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.dom{background:rgba(255,255,255,.92);color:#16202A;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:999px}
 .dom.fresh{background:#F3E7C9}
+
+/* Vacant tag: on the photo card (hover shows what it means) and in the details panel (hover, keyboard focus or tap) */
+.vac{display:inline-flex;align-items:center;gap:5px;background:#E3EEEA;color:#1E5B4F;font-size:.8rem;font-weight:700;padding:5px 10px;border-radius:999px;line-height:1.2}
+.tip{position:relative;display:inline-flex}
+.tip-i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1.5px solid currentColor;font-size:.64rem;font-weight:800;font-style:normal;line-height:1}
+.tip-text{position:absolute;left:0;top:calc(100% + 8px);z-index:30;width:max-content;max-width:min(240px,75vw);padding:8px 11px;border-radius:8px;background:#16202A;color:#fff;font-size:.82rem;font-weight:500;line-height:1.4;text-align:left;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tip.open .tip-text,.tip:has(:focus-visible) .tip-text{opacity:1;visibility:visible}
+@media (hover:hover){.tip:hover .tip-text{opacity:1;visibility:visible}}
+button.vac{border:0;cursor:pointer;position:relative}
+button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger target for thumbs */
+.sub .tip{vertical-align:middle;margin-left:8px}
 
 /* Sheet */
 /* Above the top navigation bar (z-index 20), below the sign-in gate (100). */
@@ -296,6 +308,8 @@ const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?
 // Map query: coordinates for MLS listings, the address for team-added homes (they have none).
 const where = h => h.lat && h.lng ? `${h.lat},${h.lng}` : encodeURIComponent(`${h.addr}, ${h.city}, TX ${h.zip}`);
 const domLabel = h => h.teamAdded ? "Coming soon" : `${h.dom} ${h.dom===1?'day':'days'} on market`;
+// What the "Vacant" tag means (the Admin Console's Vacant box says the same).
+const VACANT_TIP = "No one is living in this home, so there are no occupants.";
 
 function imgEl(h, el, wrap){
   if(!h.img){ el.removeAttribute("src"); wrap.classList.add("noimg"); return; }
@@ -311,9 +325,9 @@ function renderGrid(){
   homes.forEach((h,i) => {
     const b = document.createElement("button");
     b.className = "card" + (h.priority ? " priority" : "");
-    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${domLabel(h)}. Request an open house.`);
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${domLabel(h)}.${h.vacant?" Vacant: "+VACANT_TIP:""} Request an open house.`);
     b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-      <span class="dom ${h.teamAdded||h.dom<=14?'fresh':''}">${domLabel(h)}</span>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
+      <div class="tl"><span class="dom ${h.teamAdded||h.dom<=14?'fresh':''}">${domLabel(h)}</span>${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
       <div class="meta">
         <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
         <div class="price">${money(h.price)}</div>
@@ -368,7 +382,8 @@ function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
   $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
   $("sTitle").textContent = cur.addr;
-  $("sSub").textContent = `${cur.city}, TX ${cur.zip}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + cur.mls}`;
+  $("sSub").innerHTML = `${esc(cur.city)}, TX ${esc(cur.zip)}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + esc(cur.mls)}`
+    + (cur.vacant ? `<span class="tip"><button type="button" class="vac" aria-describedby="vacTip">Vacant <i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="vacTip">${VACANT_TIP}</span></span>` : "");
   $("sStats").innerHTML = `<div><b>${money(cur.price)}</b><span>List price</span></div>
     ${cur.teamAdded ? '<div><b>New</b><span>Coming soon</span></div>' : `<div><b>${cur.dom}</b><span>Days on market</span></div>`}
     <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
@@ -389,6 +404,12 @@ function closeSheet(){
 }
 $("close").onclick=closeSheet; $("scrim").onclick=closeSheet;
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("sheet").classList.contains("on")) closeSheet(); });
+// Tooltips show on hover and keyboard focus; on phones a tap opens or closes one, and a tap elsewhere closes it.
+document.addEventListener("click",e=>{
+  const t = e.target.closest(".tip button")?.parentElement;
+  document.querySelectorAll(".tip.open").forEach(x=>{ if(x!==t) x.classList.remove("open"); });
+  if(t) t.classList.toggle("open");
+});
 
 function renderDays(){
   const d = $("days"); d.innerHTML="";

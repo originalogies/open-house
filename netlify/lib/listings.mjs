@@ -97,7 +97,8 @@ export async function mlsOpenHouses(mls) {
 
 // ---- Team-managed details (not in MLS data) ------------------------------
 const infoStore = () => getStore("open-house-listing-info");
-const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "" };
+// vacant: no one lives in the home (no occupants). Shown to agents as a "Vacant" tag.
+const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "", vacant: false };
 
 export const getInfo = async (mls) => ({ ...blank, ...((await infoStore().get(`mls/${mls}`, { type: "json" }).catch(() => null)) || {}) });
 export const saveInfo = (mls, info) => infoStore().setJSON(`mls/${mls}`, info);
@@ -131,15 +132,15 @@ async function catalog(week) {
 export const mlsListings = async (week) => (await catalog(week)).list.filter((x) => !x.n.teamAdded).map((x) => x.n);
 
 // How a listing's stored team settings read for a given weekend. Publishing and Priority are per
-// weekend; days, instructions and access details stay with the home from week to week.
-export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access });
+// weekend; days, instructions, access details and Vacant stay with the home from week to week.
+export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, vacant: !!i.vacant });
 
 // Listings the team has offered for the current weekend. Never includes access details.
 export async function offeredListings(week) {
   const { list } = await catalog(week);
   const info = await allInfo(list.map((x) => x.n.mls));
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
-    .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, external: x.openHouses }))
+    .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, vacant: !!info[x.n.mls].vacant, external: x.openHouses }))
     .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
 }
 
@@ -206,7 +207,7 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
-export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority, teamAdded: !!l.teamAdded });
+export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
 export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img, ...(l.teamAdded && { teamAdded: true }) });

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const { cleanHome, isHomeId, isMlsNumber, asListing, addressKey, linkSuggestions, mergeInfo, newHomeId } = await import("../netlify/lib/homes.mjs");
-const { teamView } = await import("../netlify/lib/listings.mjs");
+const { teamView, publicListing } = await import("../netlify/lib/listings.mjs");
 const { needsDispatch } = await import("../netlify/lib/mls.mjs");
 
 const good = { addr: " 1704  Overlook Drive ", city: "Grapevine", zip: "76051", price: "495000", bd: "3", ba: "2.5", sf: "1745" };
@@ -40,21 +40,29 @@ test("MLS listings at the same address are suggested for linking", () => {
   assert.equal(addressKey("2800 North Kimball Avenue", "76092"), addressKey("2800 N Kimball Ave", "76092"));
 });
 
-test("linking keeps the home's instructions and access details", () => {
-  const home = { offeredWeek: "2026-10-24", priorityWeek: null, days: ["sun"], instr: ["Shoes off"], access: "Lockbox 1234" };
-  const fresh = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "" };
+test("linking keeps the home's instructions, access details and Vacant", () => {
+  const home = { offeredWeek: "2026-10-24", priorityWeek: null, days: ["sun"], instr: ["Shoes off"], access: "Lockbox 1234", vacant: true };
+  const fresh = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "", vacant: false };
   assert.deepEqual(mergeInfo(home, fresh), home);
   // A home with nothing set yet doesn't wipe what the MLS listing already had.
-  const blankHome = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "" };
-  const mlsHad = { offeredWeek: null, priorityWeek: null, days: ["sat"], instr: ["Use side door"], access: "Gate 99" };
+  const blankHome = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "", vacant: false };
+  const mlsHad = { offeredWeek: null, priorityWeek: null, days: ["sat"], instr: ["Use side door"], access: "Gate 99", vacant: true };
   assert.deepEqual(mergeInfo(blankHome, mlsHad), mlsHad);
 });
 
-test("instructions and access details carry into the next week", () => {
-  const info = { offeredWeek: "2026-10-24", priorityWeek: "2026-10-24", days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234" };
-  assert.deepEqual(teamView(info, { satIso: "2026-10-24" }), { offered: true, priority: true, days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234" });
+test("instructions, access details and Vacant carry into the next week", () => {
+  const info = { offeredWeek: "2026-10-24", priorityWeek: "2026-10-24", days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234", vacant: true };
+  assert.deepEqual(teamView(info, { satIso: "2026-10-24" }), { offered: true, priority: true, days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234", vacant: true });
   // Next weekend: publishing and Priority start over; everything else stays with the home.
-  assert.deepEqual(teamView(info, { satIso: "2026-10-31" }), { offered: false, priority: false, days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234" });
+  assert.deepEqual(teamView(info, { satIso: "2026-10-31" }), { offered: false, priority: false, days: ["sat"], instr: ["Shoes off"], access: "Lockbox 1234", vacant: true });
+  assert.equal(teamView({ ...info, vacant: undefined }, { satIso: "2026-10-24" }).vacant, false); // saved before Vacant existed
+});
+
+test("agents see Vacant, never access details", () => {
+  const l = { mls: "21297798", addr: "2006 Nighthawk Court", days: ["sat"], instr: [], access: "Gate 1234", vacant: true };
+  assert.equal(publicListing(l).vacant, true);
+  assert.equal(publicListing({ ...l, vacant: undefined }).vacant, false);
+  assert.ok(!("access" in publicListing(l)));
 });
 
 test("open houses on a home that isn't on the MLS yet aren't sent to the MLS bot", () => {

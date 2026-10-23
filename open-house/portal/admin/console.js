@@ -25,6 +25,8 @@
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
   const photo = (img, size = "small") => !img ? "" : /^(https?:|\/)/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
+  // What "Vacant" means; agents see the same sentence on the portal.
+  const VACANT_TIP = "No one is living in this home, so there are no occupants.";
 
   let me = null;
   let requests = [];
@@ -341,7 +343,7 @@
     const stale = d.feedUpdatedOn && Math.floor((Date.now() - new Date(d.feedUpdatedOn + "T12:00:00Z")) / 86400000);
     view.innerHTML = `
       <section class="intro"><div><h1>Publish this weekend's homes</h1>
-        <p class="sub">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, instructions and access details stay with the home.</p></div>
+        <p class="sub">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
         <div class="intro-actions">${me.admin ? '<button class="btn small" id="addHomeBtn">Add a home</button>' : ""}<a class="btn ghost small" href="/" target="_blank" rel="noopener">Preview agent portal</a></div></section>
       ${me.admin ? `<div class="card panel" id="addHome" hidden>
         <h3>Add a home that isn't on the MLS yet</h3>
@@ -408,6 +410,8 @@
           <label class="check"><input type="checkbox" data-f="sat" ${l.days.includes("sat") ? "checked" : ""}> Saturday</label>
           <label class="check"><input type="checkbox" data-f="sun" ${l.days.includes("sun") ? "checked" : ""}> Sunday</label>
           <label class="check"><input type="checkbox" data-f="priority" ${l.priority ? "checked" : ""}> Priority</label>
+          <label class="check tip"><input type="checkbox" data-f="vacant" ${l.vacant ? "checked" : ""} aria-describedby="vacTip-${esc(l.mls)}"> Vacant <span class="tip-i" aria-hidden="true">i</span>
+            <span class="tip-text" role="tooltip" id="vacTip-${esc(l.mls)}">${esc(VACANT_TIP)} Agents see a Vacant tag on this listing.</span></label>
         </div>
         <div class="two">
           <div><label class="label">Instructions for agents (one per line)</label><textarea class="field" data-f="instr">${esc(l.instr.join("\n"))}</textarea></div>
@@ -417,17 +421,17 @@
         ${editable ? homeEditor(l, d) : ""}
       </div>`;
 
-    // Publishing, days, Priority, instructions and access details save as they change.
+    // Publishing, days, Priority, Vacant, instructions and access details save as they change.
     const q = (f) => c.querySelector(`[data-f="${f}"]`);
     const settings = autosave(async () => {
       const days = ["sat", "sun"].filter((x) => q(x).checked), instr = q("instr").value.split("\n"), access = q("access").value;
-      const res = await api("PUT", "/api/inventory/listings", { mls: l.mls, offered: q("offered").checked, priority: q("priority").checked, days, instr, access });
+      const res = await api("PUT", "/api/inventory/listings", { mls: l.mls, offered: q("offered").checked, priority: q("priority").checked, vacant: q("vacant").checked, days, instr, access });
       if (!res.ok) {
         // Put the switches back to what's saved; typed text stays so nothing is lost.
-        q("offered").checked = l.offered; q("priority").checked = l.priority; ["sat", "sun"].forEach((x) => { q(x).checked = l.days.includes(x); });
+        q("offered").checked = l.offered; q("priority").checked = l.priority; q("vacant").checked = l.vacant; ["sat", "sun"].forEach((x) => { q(x).checked = l.days.includes(x); });
         return toast(res.data.message || "Couldn't save. Your change was not applied.", true);
       }
-      Object.assign(l, { offered: q("offered").checked, priority: q("priority").checked, days, instr: instr.map((s) => s.trim()).filter(Boolean), access });
+      Object.assign(l, { offered: q("offered").checked, priority: q("priority").checked, vacant: q("vacant").checked, days, instr: instr.map((s) => s.trim()).filter(Boolean), access });
       c.classList.toggle("pri", l.priority);
       c.querySelector(".badges").innerHTML = badges();
       toast(`Saved ${l.addr}.`);

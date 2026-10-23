@@ -3,7 +3,7 @@ import { teamListings, getInfo, saveInfo, rawSample, probe } from "../lib/listin
 import { currentWeek } from "../lib/settings.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
-// PUT { mls, offered, days, instr[], access } saves one listing. GET ?raw=1 shows one raw Repliers
+// PUT { mls, offered, priority, days, instr[], access, vacant } saves one listing. GET ?raw=1 shows one raw Repliers
 // listing (no description) for checking field mapping.
 export default async (req) => {
   const user = await currentUser(req);
@@ -28,8 +28,9 @@ export default async (req) => {
     const access = String(b.access ?? cur.access).slice(0, 500);
     const priorityWeek = b.priority === true ? week.satIso : b.priority === false ? null : cur.priorityWeek;
     const offeredWeek = b.offered === true ? week.satIso : b.offered === false ? null : cur.offeredWeek;
+    const vacant = typeof b.vacant === "boolean" ? b.vacant : !!cur.vacant;
     if (offeredWeek && !days.length) return json(400, { error: "no_days", message: "Pick at least one day to offer." });
-    await saveInfo(b.mls, { offeredWeek, priorityWeek, days, instr, access });
+    await saveInfo(b.mls, { offeredWeek, priorityWeek, days, instr, access, vacant });
     return json(200, { ok: true });
   }
   return json(405, { error: "method_not_allowed" });

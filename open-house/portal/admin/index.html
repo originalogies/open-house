@@ -100,6 +100,12 @@ td .sub{font-size:.84rem;color:var(--muted)}
 .suggest{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-top:8px;background:var(--accent-soft);border-radius:8px;font-size:.93rem}
 .link.danger{color:var(--danger)}
 .lcard .toggles{display:flex;gap:10px 20px;flex-wrap:wrap;margin:12px 0 2px;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+/* Tooltip: shows on hover or keyboard focus (e.g. what "Vacant" means) */
+.tip{position:relative}
+.tip-i{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--muted);color:var(--muted);font-size:.68rem;font-weight:700;font-style:normal;line-height:1}
+.tip-text{position:absolute;left:0;top:calc(100% + 8px);z-index:20;width:max-content;max-width:min(260px,80vw);padding:8px 11px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:.82rem;font-weight:500;line-height:1.4;box-shadow:0 6px 18px rgba(0,0,0,.18);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tip:has(:focus-visible) .tip-text{opacity:1;visibility:visible}
+@media (hover:hover){.tip:hover .tip-text{opacity:1;visibility:visible}}
 .lcard .two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
 .lcard .foot{display:flex;gap:12px;align-items:center;margin-top:14px}
 .lcard .mls-oh{font-size:.85rem;color:var(--brass);margin-top:4px}

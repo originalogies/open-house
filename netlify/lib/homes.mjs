@@ -82,7 +82,7 @@ export const addressKey = (addr, zip) => `${String(addr || "").toLowerCase().rep
 export const linkSuggestions = (home, mlsListings) => mlsListings.filter((l) => addressKey(l.addr, l.zip) === addressKey(home.addr, home.zip));
 
 // Team settings for the MLS listing after linking: the home's own, falling back to what the MLS
-// listing already had. Instructions and access details carry over with the home.
+// listing already had. Instructions, access details and Vacant carry over with the home.
 export function mergeInfo(homeInfo, mlsInfo) {
   return {
     offeredWeek: homeInfo.offeredWeek || mlsInfo.offeredWeek || null,
@@ -90,5 +90,6 @@ export function mergeInfo(homeInfo, mlsInfo) {
     days: homeInfo.offeredWeek ? homeInfo.days : mlsInfo.days,
     instr: homeInfo.instr?.length ? homeInfo.instr : mlsInfo.instr || [],
     access: homeInfo.access || mlsInfo.access || "",
+    vacant: !!(homeInfo.vacant || mlsInfo.vacant),
   };
 }
