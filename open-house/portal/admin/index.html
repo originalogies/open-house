@@ -40,21 +40,41 @@ h2.section{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:28px
 .tf-label{color:var(--muted);font-size:.92rem;padding-bottom:11px}
 .stat.wait b{color:var(--brass)}
 
-/* Requests list: waiting rows pinned at the top, then the time frame's requests */
+/* Requests list: waiting rows pinned at the top, then the time frame's requests. A row opens its request. */
 tr.group th{background:var(--bg);text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--ink)}
 tr.group th span{color:var(--muted);font-weight:500;margin-left:4px}
 tr.wait{background:var(--brass-soft)}
 tr.wait td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
+table.reqs tr.req{cursor:pointer}
+table.reqs td.home a{color:inherit;text-decoration:none}
+table.reqs td.home a:hover{text-decoration:underline}
+td .sub.alert{color:var(--danger);font-weight:600}
 /* Keep each row's action (Review, Cancel) in view when a narrow window scrolls the table sideways */
 table.reqs td:last-child{position:sticky;right:0;background:var(--surface)}
 table.reqs tr.wait td:last-child{background:var(--brass-soft)}
+@media (hover:hover){table.reqs tr.req:not(.wait):hover td{background:var(--bg)}}
 @media (max-width:720px){
+  #csv{display:none}
+  #search{max-width:none;flex:1 1 100%}
   table.reqs td:last-child{position:static;background:none}
   table.reqs td .btn.small{min-height:44px;padding:10px 22px}
   table.stack tr.group{padding:0}
   table.stack tr.group th{display:block}
   table.stack tr.wait{box-shadow:inset 3px 0 0 var(--brass)}
   table.stack tr.wait td:first-child{box-shadow:none}
+  /* Three short lines: when · status / home / agent · action */
+  table.stack.reqs tr.req{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px}
+  table.stack.reqs tr.req td{display:block;padding:0;text-align:left}
+  table.stack.reqs tr.req td::before{content:none}
+  table.stack.reqs tr.req td.when{grid-area:1/1}
+  table.stack.reqs tr.req td.status{grid-area:1/2;text-align:right}
+  table.stack.reqs tr.req td.home{grid-area:2/1/3/3}
+  table.stack.reqs tr.req td.agent{grid-area:3/1}
+  table.stack.reqs tr.req td.act{grid-area:3/2;text-align:right}
+  table.stack.reqs tr.req td.act:empty{display:none}
+  table.stack.reqs td.when .sub,table.stack.reqs td.home .sub{display:inline}
+  table.stack.reqs td.when .sub::before,table.stack.reqs td.home .sub::before{content:" · "}
+  table.stack.reqs td.act .link{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-size:.95rem}
 }
 
 /* Pages of the requests list: rows per page, which rows are showing, Previous and Next */
@@ -71,7 +91,7 @@ table.reqs tr.wait td:last-child{background:var(--brass-soft)}
 
 /* Tables */
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.92rem}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem} /* separate: row lines stay whole-pixel under the sticky action column */
 th{text-align:left;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line)}
 td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
 tr:last-child td{border-bottom:0}

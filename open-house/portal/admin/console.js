@@ -8,27 +8,22 @@
   const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
   const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
-  // MLS status of approved and cancelled open houses: [pill class, label]. "synced" means the MLS matches.
-  const MLS = {
-    manual: ["", "Entered by hand"], idle: ["pending", "Waiting for AI agent"], booking: ["pending", "AI agent working"],
-    synced: ["approved", "On the MLS"], dry_run_ok: ["approved", "Dry run passed"], failed: ["declined", "MLS update failed"], needs_login: ["declined", "MLS sign-in needed"],
-    not_on_mls: ["", "Home not on the MLS yet"],
-  };
-  const mlsCell = (r) => {
-    if (r.status !== "approved" && r.status !== "cancelled") return '<span class="sub">—</span>';
-    let [c, t] = MLS[r.mlsState] || ["", r.byHand ? "Entered by hand" : "Not sent yet"];
-    if (r.status === "cancelled" && r.mlsState === "synced") t = "Cancelled on the MLS";
-    if (r.status === "cancelled" && (r.mlsState === "manual" || (!r.mlsState && r.byHand))) t = "Remove by hand";
-    return `<span class="pill ${c}">${esc(t)}</span><div class="sub"><a href="/respond/?id=${encodeURIComponent(r.id)}">MLS status</a></div>`;
-  };
+  // The Requests list shows the MLS only when it needs the team (the request's page has the full MLS status).
+  const MLS_ALERT = { failed: "MLS update failed", needs_login: "MLS sign-in needed" };
+  const requestPage = (r) => `/respond/?id=${encodeURIComponent(r.id)}`;
   // Listing photos are Repliers CDN paths; built-in listings may carry a full URL, and homes the team
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
   const photo = (img, size = "small") => !img ? "" : /^(https?:|\/)/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
   // Open houses imported from the G&N calendar may have no MLS number, and nobody decided them here.
   const mlsNo = (r) => (r.mls ? `MLS# ${esc(r.mls)}` : "MLS# not found");
-  // "Saturday, Oct 24", with the year when it isn't this year (the list goes back to imported history).
-  const dayDate = (r) => `${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${esc(r.iso.slice(0, 4))}` : ""}`;
+  // "Sat, Oct 24", with the year when it isn't this year (the list goes back to imported history).
+  const dayDate = (r) => `${esc(r.day.slice(0, 3))}, ${esc(r.date)}${r.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${esc(r.iso.slice(0, 4))}` : ""}`;
+  // "1–4 PM", or "10 AM–1 PM" when the hours cross noon.
+  const hours = (r) => {
+    const h = (n) => n % 12 || 12, ap = (n) => (n >= 12 ? "PM" : "AM");
+    return ap(r.from) === ap(r.to) ? `${h(r.from)}–${h(r.to)} ${ap(r.to)}` : `${h(r.from)} ${ap(r.from)}–${h(r.to)} ${ap(r.to)}`;
+  };
   const decided = (r) => r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>`
     : `<span class="sub">${r.imported ? "Imported" : "—"}</span>`;
   // What "Vacant" means; agents see the same sentence on the portal.
@@ -186,7 +181,7 @@
         <span class="spacer"></span>
         <button class="btn ghost small" id="csv">Export CSV</button>
       </div>
-      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
       <nav class="pager" id="pager" aria-label="Pages of requests">
         <label class="pg-size"><span>Rows per page</span><select class="field" id="per">${PAGE_SIZES.map((n) => `<option value="${n}" ${n === reqPer ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <span class="pg-info" id="pgInfo"></span>
@@ -247,21 +242,26 @@
     reqPage = Math.min(Math.max(1, reqPage), pages);
     const first = (reqPage - 1) * reqPer, last = Math.min(first + reqPer, total);
     const pageWaiting = waiting.slice(first, last), pageRest = showRest ? rest.slice(Math.max(0, first - waiting.length), last - waiting.length) : [];
-    const group = (label, n) => `<tr class="group"><th colspan="7">${esc(label)} <span>${n}</span></th></tr>`;
-    const row = (r, wait) => `<tr${wait ? ' class="wait"' : ""}>
-        <td data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(r.time)}</div></td>
-        <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
-        <td data-l="Agent">${agentLink(r.agent.email, r.agent.name)}<div class="sub">${esc(r.agent.email)}</div></td>
-        <td data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}</td>
-        <td data-l="Decided">${decided(r)}</td>
-        <td data-l="MLS">${mlsCell(r)}</td>
-        <td data-l="">${wait ? `<a class="btn small" href="/respond/?id=${encodeURIComponent(r.id)}">Review</a>`
+    const group = (label, n) => `<tr class="group"><th colspan="5">${esc(label)} <span>${n}</span></th></tr>`;
+    // On phones each row is three short lines: when and status, the home, the agent and the action.
+    // The address (and the whole row) opens the request's page.
+    const row = (r, wait) => `<tr class="req${wait ? " wait" : ""}" data-open="${esc(requestPage(r))}">
+        <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
+        <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(r.addr)}</a><div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
+        <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
+        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${MLS_ALERT[r.mlsState] ? `<div class="sub alert">${MLS_ALERT[r.mlsState]}</div>` : ""}</td>
+        <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
-    $("rows").innerHTML = !waiting.length && !rest.length ? '<tr><td colspan="7" class="empty">No requests match.</td></tr>'
+    $("rows").innerHTML = !waiting.length && !rest.length ? '<tr><td colspan="5" class="empty">No requests match.</td></tr>'
       : (pageWaiting.length ? group("Waiting for a decision", waiting.length) + pageWaiting.map((r) => row(r, true)).join("") : "")
         + (!showRest || (!pageRest.length && (rest.length || reqPage < pages)) ? "" : group(`${RANGES[reqRange]} · ${rangeLabel()}`, rest.length)
-          + (pageRest.length ? pageRest.map((r) => row(r, false)).join("") : '<tr><td colspan="7" class="empty">No other requests in this time frame.</td></tr>'));
+          + (pageRest.length ? pageRest.map((r) => row(r, false)).join("") : '<tr><td colspan="5" class="empty">No other requests in this time frame.</td></tr>'));
+    // A tap anywhere else on a row opens it (links, buttons and selecting text keep working).
+    $("rows").onclick = (e) => {
+      const tr = e.target.closest("tr[data-open]");
+      if (tr && !e.target.closest("a, button") && !String(getSelection())) location.href = tr.dataset.open;
+    };
     $("pager").hidden = !total;
     $("pgInfo").innerHTML = `${(first + 1).toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}${pages > 1 ? `<span class="pg-of"> · Page ${reqPage} of ${pages}</span>` : ""}`;
     $("prev").disabled = reqPage <= 1; $("next").disabled = reqPage >= pages;
