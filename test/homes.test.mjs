@@ -11,8 +11,12 @@ test("team-added home fields are checked and cleaned", () => {
   assert.deepEqual(cleanHome(good).fields, { addr: "1704 Overlook Drive", city: "Grapevine", zip: "76051", price: 495000, bd: 3, ba: 2.5, sf: 1745 });
   assert.match(cleanHome({ ...good, addr: "" }).error, /Street address is required/);
   assert.match(cleanHome({ ...good, zip: "7605" }).error, /5-digit ZIP/);
-  assert.match(cleanHome({ ...good, ba: "2.25" }).error, /bathroom count/);   // halves only
-  assert.match(cleanHome({ ...good, bd: "1.5" }).error, /bedroom count/);
+  // One decimal place: bathrooms are full.half as on the MLS (4.1 is 4 full and 1 half, 6.3 is 6 full and 3 half).
+  for (const ba of ["4.1", "6.3", "0.3", "2"]) assert.equal(cleanHome({ ...good, ba }).fields.ba, Number(ba));
+  assert.equal(cleanHome({ ...good, bd: "4.5" }).fields.bd, 4.5);
+  assert.match(cleanHome({ ...good, ba: "2.25" }).error, /bathroom count/);
+  assert.match(cleanHome({ ...good, bd: "3.25" }).error, /bedroom count/);
+  assert.match(cleanHome({ ...good, ba: "-1" }).error, /bathroom count/);
   assert.match(cleanHome({ ...good, price: "" }).error, /price/);
   assert.deepEqual(cleanHome({ price: "500000" }, { partial: true }).fields, { price: 500000 }); // update only what's sent
 });

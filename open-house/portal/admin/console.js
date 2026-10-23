@@ -330,9 +330,10 @@
   // Fields of a home the team adds before it's on the MLS: [key, label, input attributes].
   const HOME_FIELDS = [
     ["addr", "Street address", 'autocomplete="off"'], ["city", "City", ""], ["zip", "ZIP", 'inputmode="numeric" maxlength="5"'],
-    ["price", "List price ($)", 'type="number" min="0" step="1"'], ["bd", "Bedrooms", 'type="number" min="0" step="1"'],
-    ["ba", "Bathrooms", 'type="number" min="0" step="0.5"'], ["sf", "Square feet", 'type="number" min="0" step="1"'],
+    ["price", "List price ($)", 'type="number" min="0" step="1"'], ["bd", "Bedrooms", 'type="number" min="0" step="0.1" inputmode="decimal"'],
+    ["ba", "Bathrooms", 'type="number" min="0" step="0.1" inputmode="decimal"'], ["sf", "Square feet", 'type="number" min="0" step="1"'],
   ];
+  const BATHS_TIP = '<p class="fine">Bathrooms are full.half, as on the MLS: 4 full and 1 half bath is 4.1.</p>';
   const homeFields = (h = {}) => HOME_FIELDS.map(([k, label, attrs]) =>
     `<label class="label">${label}<input class="field" data-h="${k}" ${attrs} value="${esc(h[k] ?? "")}"></label>`).join("");
 
@@ -382,7 +383,7 @@
       ${me.admin ? `<div class="card panel" id="addHome" hidden>
         <h3>Add a home that isn't on the MLS yet</h3>
         <p class="fine">It works like any listing here: publish it, set Priority, instructions and access details, and add photos. Once it's on the MLS, link it to its MLS listing on its card and everything moves over.</p>
-        <form id="addHomeForm"><div class="homegrid">${homeFields()}</div>
+        <form id="addHomeForm"><div class="homegrid">${homeFields()}</div>${BATHS_TIP}
           <div class="actions"><button class="btn">Add home</button><button type="button" class="btn ghost" id="addHomeCancel">Cancel</button></div></form></div>` : ""}
       ${d.warning ? `<div class="card banner err"><b>Repliers problem:</b> ${esc(d.warning)}</div>` : ""}
       ${stale >= 3 ? `<div class="card banner"><b>Repliers data looks out of date.</b> Last updated ${esc(d.feedUpdatedOn)} (${stale} days ago).</div>` : ""}
@@ -482,7 +483,7 @@
     const suggested = (l.suggestions || []).map((m) => d.mlsChoices.find((x) => x.mls === m)).filter(Boolean);
     return `<div class="home-edit">
       <h4>Home details</h4>
-      <div class="homegrid">${homeFields(l)}</div>
+      <div class="homegrid">${homeFields(l)}</div>${BATHS_TIP}
       <h4>Photos</h4>
       <div class="photos" data-photos></div>
       <div class="foot"><label class="btn ghost small">Add photos<input type="file" accept="image/*" multiple hidden data-upload></label>

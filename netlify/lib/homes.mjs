@@ -26,15 +26,16 @@ export function cleanHome(b, { partial = false } = {}) {
     if (v.length > max) return `${label} is too long.`;
     out[k] = v; return null;
   };
-  const num = (k, max, label, step) => {
+  // `places`: decimal places allowed (bathrooms are written full.half as on the MLS: 4 full and 1 half is 4.1).
+  const num = (k, max, label, places) => {
     if (b[k] === undefined && partial) return null;
-    const n = Number(b[k]);
-    if (b[k] === "" || b[k] === null || !Number.isFinite(n) || n < 0 || n > max || Math.round(n / step) * step !== n) return `Enter a valid ${label}.`;
+    const n = Number(b[k]), f = 10 ** places;
+    if (b[k] === "" || b[k] === null || !Number.isFinite(n) || n < 0 || n > max || Math.round(n * f) / f !== n) return `Enter a valid ${label}.`;
     out[k] = n; return null;
   };
   const err = text("addr", 120, "Street address") || text("city", 60, "City")
     || (b.zip === undefined && partial ? null : (/^\d{5}$/.test(String(b.zip ?? "").trim()) ? ((out.zip = String(b.zip).trim()), null) : "Enter a 5-digit ZIP code."))
-    || num("price", 1e9, "price", 1) || num("bd", 50, "bedroom count", 1) || num("ba", 50, "bathroom count", 0.5) || num("sf", 100000, "square footage", 1);
+    || num("price", 1e9, "price", 0) || num("bd", 50, "bedroom count", 1) || num("ba", 50, "bathroom count", 1) || num("sf", 100000, "square footage", 0);
   return err ? { error: err } : { fields: out };
 }
 

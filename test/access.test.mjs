@@ -71,6 +71,10 @@ test("Repliers listing mapping", () => {
     map: { latitude: 32.97, longitude: -97.18 }, details: { numBedrooms: 4, numBathrooms: 6, sqft: "6,331" } });
   assert.deepEqual([n.mls, n.addr, n.zip, n.sf, n.ba, n.img], ["123", "2006 Nighthawk Court", "76262", 6331, 6, "ntreismls/IMG-1.jpg"]);
   assert.deepEqual([n.lat, n.lng], [32.97, -97.18]);   // the minus sign stays: -97.18 is Texas, 97.18 is China
+  // Bathrooms are full.half as on the MLS: Repliers' total of 9 with 3 half baths is 6.3; no half baths, the total.
+  const ba = (d) => normalize({ details: d }).ba;
+  assert.deepEqual([ba({ numBathrooms: 9, numBathroomsHalf: 3 }), ba({ numBathrooms: 3, numBathroomsHalf: 1 }), ba({ numBathrooms: 6, numBathroomsHalf: 0 }), ba({ numBathrooms: 4 }), ba({ numBathrooms: 1, numBathroomsHalf: 2 })],
+    [6.3, 2.1, 6, 4, 1]); // more half baths than the total is bad data: keep the total
   assert.deepEqual([normalize({ map: { latitude: "32.978088", longitude: "-97.18720096" } }).lng, normalize({}).lat], [-97.18720096, 0]);
   const w = getWeek(new Date("2026-10-05T17:00:00Z"));
   // Repliers sends UTC times: 15:00Z on Oct 10 is 10:00 AM Central. Deleted entries are ignored.

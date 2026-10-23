@@ -52,6 +52,12 @@ const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, ""
 // Map coordinates keep their sign: Texas longitudes are negative (-97.18), and without the minus a
 // home lands in western China.
 const coord = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+// Bathrooms as the MLS writes them, full.half. Repliers sends the total and how many of those are half
+// baths: 9 with 3 half is 6 full and 3 half, so 6.3. Without a usable half count, the total stands.
+const baths = (d = {}) => {
+  const total = num(d.numBathrooms), half = num(d.numBathroomsHalf);
+  return half > 0 && half < 10 && half <= total ? ((total - half) * 10 + half) / 10 : total;
+};
 
 export function normalize(l) {
   const a = l.address || {};
@@ -62,7 +68,7 @@ export function normalize(l) {
     city: a.city || "", zip: String(a.zip || "").slice(0, 5),
     lat: coord(l.map?.latitude), lng: coord(l.map?.longitude),
     price: num(l.listPrice), dom: Math.round(num(l.daysOnMarket ?? l.simpleDaysOnMarket)),
-    bd: num(l.details?.numBedrooms), ba: num(l.details?.numBathrooms), sf: Math.round(num(l.details?.sqft)),
+    bd: num(l.details?.numBedrooms), ba: baths(l.details), sf: Math.round(num(l.details?.sqft)),
     img: (l.images && l.images[0]) || "",
   };
 }
@@ -110,10 +116,10 @@ const infoFor = (mlsList, stored) => Object.fromEntries(mlsList.map((m) => [m, {
 
 // Homes that always appear, even if Repliers doesn't return them. Live Repliers data wins when present.
 const MANUAL = [
-  { mls: "21297798", addr: "2006 Nighthawk Court", city: "Westlake", zip: "76262", lat: 32.978088, lng: -97.18720096, price: 5950000, dom: 50, bd: 4, ba: 6, sf: 6331, img: "ntreismls/IMG-21297798_0.jpg" },
-  { mls: "21372196", addr: "6900 Rockingham Court", city: "Colleyville", zip: "76034", lat: 32.908375, lng: -97.157547, price: 4350000, dom: 13, bd: 6, ba: 9, sf: 10026, img: "ntreismls/IMG-21372196_4446441738281566696.jpg" },
-  { mls: "21332907", addr: "69 Cortes Drive", city: "Westlake", zip: "76262", lat: 32.983337, lng: -97.18004802, price: 1297000, dom: 32, bd: 3, ba: 4, sf: 2038, img: "ntreismls/IMG-21332907_4446676996495488826.jpg" },
-  { mls: "21346883", addr: "441 Watermere Drive", city: "Southlake", zip: "76092", lat: 32.929991, lng: -97.193693, price: 629000, dom: 28, bd: 2, ba: 3, sf: 2109, img: "ntreismls/IMG-21346883_4444455829925220134.jpg" },
+  { mls: "21297798", addr: "2006 Nighthawk Court", city: "Westlake", zip: "76262", lat: 32.978088, lng: -97.18720096, price: 5950000, dom: 50, bd: 4, ba: 4.2, sf: 6331, img: "ntreismls/IMG-21297798_0.jpg" },
+  { mls: "21372196", addr: "6900 Rockingham Court", city: "Colleyville", zip: "76034", lat: 32.908375, lng: -97.157547, price: 4350000, dom: 13, bd: 6, ba: 6.3, sf: 10026, img: "ntreismls/IMG-21372196_4446441738281566696.jpg" },
+  { mls: "21332907", addr: "69 Cortes Drive", city: "Westlake", zip: "76262", lat: 32.983337, lng: -97.18004802, price: 1297000, dom: 32, bd: 3, ba: 3.1, sf: 2038, img: "ntreismls/IMG-21332907_4446676996495488826.jpg" },
+  { mls: "21346883", addr: "441 Watermere Drive", city: "Southlake", zip: "76092", lat: 32.929991, lng: -97.193693, price: 629000, dom: 28, bd: 2, ba: 2.1, sf: 2109, img: "ntreismls/IMG-21346883_4444455829925220134.jpg" },
 ];
 
 async function catalog(week) {
