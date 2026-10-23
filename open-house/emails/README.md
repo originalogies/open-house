@@ -13,6 +13,9 @@ All emails send from openhouse@synergyrealtors.com. Merge fields use `{{double_b
 
 Listing: `address`, `city`, `zip`, `mls_number`, `list_price`, `photo_url`, `map_url`, `listing_url`
 
+- `photo_url` is the listing photo cropped to a 3:2 landscape (1072×715) by Netlify's image CDN, so a portrait photo doesn't run tall; the templates show it at 536×357.
+- `map_url` is a Google Maps search for the address. The address in each template's Property row links to it.
+
 Request: `request_id`, `day_name`, `date`, `time_range`, `received_at`, `agent_notes`, `other_requests`, `relative_day` ("tomorrow"), `arrival_time` (start minus 30 minutes)
 
 Agent: `agent_name`, `agent_first_name`, `agent_phone` (only on older requests; the form no longer asks for it), `agent_email`

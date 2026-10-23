@@ -28,6 +28,7 @@ export default async (req) => {
       cancelledBy: r.cancelledByName || null, mode: mode(), onMls: isMlsNumber(r.mls),
       agentReady: agentReady(), method: r.mlsMethod || null, byHand: byHand(r),
       approving: r.approving ? { at: r.approving.at, byName: r.approving.byName } : null, emailFailed: !!r.confirmEmailFailed,
+      declineReason: r.declineReason || "",
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, byName: r.cancelRequest.byName, reason: r.cancelRequest.reason || "" } : null,
       sync: s && { state: s.state, message: s.message || "", current: s.current, job: s.job && { id: s.job.id, action: s.job.action, sentAt: s.job.sentAt, done: !!s.job.done, result: s.job.result || null, screenshot: !!s.job.screenshot },
         delivery: s.delivery ? { attempts: s.delivery.attempts, nextTryAt: s.delivery.nextTryAt } : null,
@@ -71,6 +72,9 @@ export default async (req) => {
 
   r.status = b.action === "approve" ? "approved" : "declined";
   r.decidedAt = Date.now(); r.decidedBy = user.email; r.decidedByName = user.name;
+  // The team's optional reason for declining goes to the agent in the decline email.
+  const reason = r.status === "declined" ? String(b.reason || "").trim().slice(0, 500) : "";
+  if (reason) r.declineReason = reason;
   const wasApproving = !!r.approving; delete r.approving; // entered by hand, or declined, after trying the AI agent
   if (r.status === "approved") {
     // By hand: the team already entered it, so the MLS matches. A home not on the MLS yet has nothing to enter.
@@ -78,7 +82,8 @@ export default async (req) => {
     r.sync = !onMls ? { current: null, state: "not_on_mls" } : { current: desiredFor(r), state: "manual" };
   } else if (wasApproving) r.sync = { current: r.sync?.current || null, state: "idle" }; // the AI agent's failure no longer matters
   await saveRequest(r); // single use: status is no longer pending
-  const note = r.status !== "approved" ? (wasApproving ? "Declined after trying the AI agent" : "") : !onMls ? "Home isn't on the MLS yet" : wasApproving ? "Entered on the MLS by hand instead of the AI agent" : "Entered on the MLS by hand";
+  const note = r.status !== "approved" ? [wasApproving && "Declined after trying the AI agent", reason && `Reason: ${reason}`].filter(Boolean).join(". ")
+    : !onMls ? "Home isn't on the MLS yet" : wasApproving ? "Entered on the MLS by hand instead of the AI agent" : "Entered on the MLS by hand";
   await logEvent(r.id, r.status, { note }, user.email);
 
   try { await (r.status === "approved" ? sendConfirmed(r) : sendDeclined(r)); }

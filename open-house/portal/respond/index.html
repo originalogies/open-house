@@ -37,6 +37,8 @@ h2{font-size:1rem;margin:22px 0 8px}
 @media (max-width:420px){.grid{grid-template-columns:1fr}}
 .grid label{font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 input[type=date],select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%}
+label.reason{display:block;margin:18px 0 6px}
+textarea{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%;min-height:96px;resize:vertical}
 ul.log{list-style:none;padding:0;margin:0;font-size:.85rem}ul.log li{padding:6px 0;border-bottom:1px solid var(--line)}
 ul.log .t{color:var(--muted)}
 .shot{max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px}
@@ -126,14 +128,15 @@ async function load() {
   if (r.status === 401) return signIn();
   if (r.status === 403) return el("<h1>Team members only</h1><p>Your account can't approve open house requests. Ask an administrator to add you.</p>");
   if (r.status === 404) return el("<h1>Request not found</h1><p>This link may be wrong or out of date.</p>");
-  const d = await r.json();
-  const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (${d.mls ? `MLS# ${esc(d.mls)}` : "MLS# not found"})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
-    <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+  const d = await r.json(), details = detailsOf(d);
   if (d.status === "pending" && d.cancelRequest) return askView(d, details);
+  // The Decline link in the team's email opens the decline step straight away (once; Back shows the request).
+  if (d.status === "pending" && preset === "decline" && !presetUsed) { presetUsed = true; return declineView(d, details); }
   if (d.status === "pending" && d.approving) return approvingView(d, details);
   if (d.status === "approved" || d.status === "cancelled") return manage(d, details);
   if (d.status !== "pending") {
-    return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>`);
+    return el(`<h1>Already ${esc(d.status)}</h1>${details}<p>${d.decidedBy ? "Answered by " + esc(d.decidedBy) + "." : ""}</p>
+      ${d.declineReason ? `<p><b>Reason:</b> ${esc(d.declineReason)}</p>` : ""}`);
   }
   // A home on the MLS needs one of two choices before it can be confirmed: the team entered it on the
   // MLS by hand, or the AI agent enters it (Start). A team-added home that isn't on the MLS yet has nothing to enter.
@@ -165,13 +168,40 @@ async function load() {
     const r = await post("/api/respond", { action, method, mlsEntered: method === "manual" });
     const j = r ? await r.json().catch(() => ({})) : {};
     const saved = r && (r.ok || r.status === 502), warn = r && r.status === 502 ? j.message : ""; // 502: saved, but an email failed
-    if (saved && action === "decline") return el(`<h1>Declined</h1><p>The agent has been notified.</p>${warn ? `<p class="err">${esc(warn)}</p>` : ""}`);
     if (saved && method === "agent") return approvingView(d, details, true);
     if (saved) return confirmed(d, { warn, line: !d.onMls ? "This home isn't on the MLS yet, so there's nothing to enter there." : "Entered on the MLS by hand." });
     $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
     decline.disabled = false; approve.disabled = d.onMls && !method;
   };
-  approve.onclick = () => act("approve"); $("decline").onclick = () => act("decline");
+  approve.onclick = () => act("approve"); decline.onclick = () => declineView(d, details);
+}
+
+const detailsOf = (d) => `<dl><dt>Property</dt><dd>${esc(d.address)} (${d.mls ? `MLS# ${esc(d.mls)}` : "MLS# not found"})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
+    <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+let presetUsed = false;
+
+// Decline, with an optional reason that goes to the agent in the decline email.
+function declineView(d, details) {
+  const first = esc(d.agentName.split(" ")[0]);
+  el(`<h1>Decline this request</h1>${details}
+    <label class="reason" for="reason"><b>Reason</b> <span class="muted">(optional) ${first} sees this in the decline email.</span></label>
+    <textarea id="reason" maxlength="500" rows="4" placeholder="For example: another agent already has that time, or the sellers asked for no open houses this weekend."></textarea>
+    <div class="row actions"><button class="go" id="send">Decline and email ${first}</button><button class="no" id="back">Back</button></div><p id="msg" role="status"></p>`);
+  $("reason").focus();
+  $("back").onclick = () => load();
+  $("send").onclick = async () => {
+    const reason = $("reason").value.trim();
+    $("send").disabled = $("back").disabled = true; $("msg").className = ""; $("msg").textContent = "Declining…";
+    const r = await post("/api/respond", { action: "decline", reason });
+    const j = r ? await r.json().catch(() => ({})) : {};
+    if (r && (r.ok || r.status === 502)) { // 502: declined, but the email failed
+      return el(`<h1>Declined</h1>${details}<p>${r.ok ? `${esc(d.agentName)} has been emailed${reason ? " with your reason" : ""}.` : ""}</p>
+        ${reason ? `<p><b>Reason:</b> ${esc(reason)}</p>` : ""}${r.ok ? "" : `<p class="err">${esc(j.message || "The email didn't send.")} Let ${esc(d.agentName)} know directly.</p>`}
+        <div class="row"><a class="btn go" href="${PORTAL}">Go to the Open House Portal</a></div>`);
+    }
+    $("msg").className = "err"; $("msg").textContent = j.message || (j.error === "already_answered" ? "Someone already answered this request." : "Something went wrong. Try again.");
+    $("send").disabled = $("back").disabled = false;
+  };
 }
 
 // The open house is confirmed: 5 seconds, then the Open House Portal. If an email failed to send,
@@ -260,19 +290,16 @@ function stuck(d) {
     await post("/api/manage", { action: "retry" });
     follow();
   };
-  $("byHand").onclick = () => answer(d, "approve");
-  $("declineA").onclick = () => answer(d, "decline");
+  $("byHand").onclick = () => approveByHand(d);
+  $("declineA").onclick = () => declineView(d, detailsOf(d));
 }
-async function answer(d, action) {
-  if (!confirm(action === "approve" ? `Approve it as entered on the MLS by hand? ${d.agentName} will be emailed the confirmation.` : `Decline this request? ${d.agentName} will be emailed.`)) return;
+async function approveByHand(d) {
+  if (!confirm(`Approve it as entered on the MLS by hand? ${d.agentName} will be emailed the confirmation.`)) return;
   $("next").querySelectorAll("button").forEach((b) => (b.disabled = true));
-  const r = await post("/api/respond", { action, method: action === "approve" ? "manual" : null, mlsEntered: action === "approve" });
+  const r = await post("/api/respond", { action: "approve", method: "manual", mlsEntered: true });
   const j = r ? await r.json().catch(() => ({})) : {};
   const warn = r && r.status === 502 ? j.message : ""; // 502: saved, but an email failed
-  if (r && (r.ok || r.status === 502)) {
-    return action === "approve" ? confirmed(d, { warn, line: "Entered on the MLS by hand." })
-      : el(`<h1>Declined</h1><p>The agent has been notified.</p>${warn ? `<p class="err">${esc(warn)}</p>` : ""}`);
-  }
+  if (r && (r.ok || r.status === 502)) return confirmed(d, { warn, line: "Entered on the MLS by hand." });
   $("msg").className = "err"; $("msg").textContent = j.message || "Something went wrong. Try again.";
   $("next").querySelectorAll("button").forEach((b) => (b.disabled = false));
 }

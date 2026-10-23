@@ -16,13 +16,21 @@ const compile = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, Handleb
 
 const site = (req) => req.site || SITE;
 
+// The listing photo cropped to a 3:2 landscape (1072x715, shown at 536x357) by Netlify's image CDN, so a
+// portrait photo doesn't run tall; email apps can't be relied on to crop. The sources it may fetch are
+// listed under [images] in netlify.toml. Team-added homes keep photos on this site ("/api/home-photo?...").
+export const emailPhotoUrl = (req) => {
+  const img = String(req.listing.img || "");
+  const src = img.startsWith("/") ? `${SITE}${img}` : `https://cdn.repliers.io/${img}?class=large`;
+  return `${site(req)}/.netlify/images?url=${encodeURIComponent(src)}&w=1072&h=715&fit=cover&fm=jpg&q=80`;
+};
+
 export function fields(req, extra = {}) {
   const l = req.listing;
   const d = dayMeta(req.iso);
   return {
     address: l.addr, city: l.city, zip: l.zip, mls_number: l.mls, list_price: money(l.price),
-    // Team-added homes keep photos on this site ("/api/home-photo?...").
-    photo_url: String(l.img || "").startsWith("/") ? `${site(req)}${l.img}` : `https://cdn.repliers.io/${l.img}?class=medium`,
+    photo_url: emailPhotoUrl(req),
     // By address: requests saved before the coordinate fix carry a longitude without its minus sign.
     map_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${l.addr}, ${l.city}, TX ${l.zip}`)}`,
     listing_url: site(req),
@@ -109,14 +117,16 @@ export const sendReminder = async (req) => {
   });
 };
 
-// Declines have no template yet: short plain note to the agent.
+// Declines have no template yet: short plain note to the agent, with the team's reason when they gave one.
 export const sendDeclined = (req) => {
   const l = req.listing, d = dayMeta(req.iso);
-  const esc = Handlebars.escapeExpression;
+  const esc = Handlebars.escapeExpression, p = "font-family:Arial,sans-serif;font-size:15px;line-height:23px;color:#16202A;";
+  const reason = req.declineReason
+    ? `<div style="${p}margin:0 0 14px;padding:12px 16px;background:#F4F5F3;border-left:3px solid #9A7A3A;border-radius:4px;"><b>${esc(req.decidedByName || "The team")} wrote:</b><br>${esc(req.declineReason).replace(/\n/g, "<br>")}</div>` : "";
   return send({
     to: req.agent.email, replyTo: TEAM_TO()[0],
     subject: `Update on your open house request: ${l.addr}, ${d.label} ${d.date}`,
-    html: `<p style="font-family:Arial,sans-serif;font-size:15px;line-height:23px;color:#16202A;">Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team couldn't confirm your open house request for ${esc(l.addr)} on ${d.label}, ${d.date}, ${fmtRange(req.from, req.to)}. Reply to this email if you'd like to try a different day or time.</p>`,
+    html: `<p style="${p}margin:0 0 14px;">Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team couldn't confirm your open house request for ${esc(l.addr)} on ${d.label}, ${d.date}, ${fmtRange(req.from, req.to)}.</p>${reason}<p style="${p}margin:0;">Reply to this email if you'd like to try a different day or time.</p>`,
   });
 };
 
