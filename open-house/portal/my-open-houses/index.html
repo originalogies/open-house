@@ -97,7 +97,7 @@ function renderMine(){
   const list = myTab === "up" ? up : past;
   $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
       ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
-      <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
+      <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0,4)!==todayIso().slice(0,4)?`, ${esc(r.iso.slice(0,4))}`:""} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
       <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}</span></li>`; }).join("")
     : `<li><span class="empty">${myTab === "up" ? 'No upcoming open houses. <a href="/">Pick a home this weekend</a> to request one.' : "Your past open houses will show up here."}</span></li>`;
   $("myohErr").hidden = true;

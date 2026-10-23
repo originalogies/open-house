@@ -125,7 +125,7 @@ async function load() {
   if (r.status === 403) return el("<h1>Team members only</h1><p>Your account can't approve open house requests. Ask an administrator to add you.</p>");
   if (r.status === 404) return el("<h1>Request not found</h1><p>This link may be wrong or out of date.</p>");
   const d = await r.json();
-  const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (MLS# ${esc(d.mls)})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
+  const details = `<dl><dt>Property</dt><dd>${esc(d.address)} (${d.mls ? `MLS# ${esc(d.mls)}` : "MLS# not found"})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
     <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
   if (d.status === "pending" && d.cancelRequest) return askView(d, details);
   if (d.status === "approved" || d.status === "cancelled") return manage(d, details);

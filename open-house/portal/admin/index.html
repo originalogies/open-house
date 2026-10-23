@@ -57,6 +57,18 @@ table.reqs tr.wait td:last-child{background:var(--brass-soft)}
   table.stack tr.wait td:first-child{box-shadow:none}
 }
 
+/* Pages of the requests list: rows per page, which rows are showing, Previous and Next */
+.pager{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap;margin-top:14px;font-size:.9rem;color:var(--muted)}
+.pg-size{display:flex;gap:8px;align-items:center}
+.pg-size .field{width:auto;padding-top:7px;padding-bottom:7px;color:var(--ink)}
+.pg-nav{display:flex;gap:8px;margin-left:auto}
+@media (max-width:720px){
+  .pg-info{flex:1;text-align:right}
+  .pg-of{display:none}
+  .pg-nav{width:100%}
+  .pg-nav .btn{flex:1;min-height:44px}
+}
+
 /* Tables */
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.92rem}

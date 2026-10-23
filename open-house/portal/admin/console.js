@@ -25,6 +25,12 @@
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
   const photo = (img, size = "small") => !img ? "" : /^(https?:|\/)/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
+  // Open houses imported from the G&N calendar may have no MLS number, and nobody decided them here.
+  const mlsNo = (r) => (r.mls ? `MLS# ${esc(r.mls)}` : "MLS# not found");
+  // "Saturday, Oct 24", with the year when it isn't this year (the list goes back to imported history).
+  const dayDate = (r) => `${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${esc(r.iso.slice(0, 4))}` : ""}`;
+  const decided = (r) => r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>`
+    : `<span class="sub">${r.imported ? "Imported" : "—"}</span>`;
   // What "Vacant" means; agents see the same sentence on the portal.
   const VACANT_TIP = "No one is living in this home, so there are no occupants.";
 
@@ -124,12 +130,15 @@
   // One list. Requests waiting for a decision (new ones and agents' cancellation requests) are pinned at
   // the top whatever the time frame; Review opens the request's page to decide. The time frame (by open
   // house date) sets the stat cards and the rest of the list; status chips and search narrow the list only.
-  // Filters are kept for this tab, so Back from a request's page returns to the same view.
+  // The list is split into pages of 25, 50 or 100 rows.
+  // Filters and the page are kept for this tab, so Back from a request's page returns to the same view.
   const RANGES = { week: "This week", month: "This month", year: "This year", all: "All time", custom: "Custom range" };
-  let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "";
-  try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "" } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
+  const PAGE_SIZES = [25, 50, 100];
+  let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1;
+  try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1 } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
   if (!RANGES[reqRange]) reqRange = "week";
-  const saveFilters = () => { try { sessionStorage.setItem("oh.requests", JSON.stringify({ reqFilter, reqSearch, reqRange, reqFrom, reqTo })); } catch {} };
+  if (!PAGE_SIZES.includes(reqPer)) reqPer = 25;
+  const saveFilters = () => { try { sessionStorage.setItem("oh.requests", JSON.stringify({ reqFilter, reqSearch, reqRange, reqFrom, reqTo, reqPer, reqPage })); } catch {} };
   const waits = (r) => r.status === "pending" || asksToCancel(r);
 
   // The time frame as [first, last] open house dates ("" = open-ended). Weeks run Monday to Sunday,
@@ -173,9 +182,14 @@
         <span class="spacer"></span>
         <button class="btn ghost small" id="csv">Export CSV</button>
       </div>
-      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>`;
+      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th>Decided</th><th>MLS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+      <nav class="pager" id="pager" aria-label="Pages of requests">
+        <label class="pg-size"><span>Rows per page</span><select class="field" id="per">${PAGE_SIZES.map((n) => `<option value="${n}" ${n === reqPer ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <span class="pg-info" id="pgInfo"></span>
+        <span class="pg-nav"><button class="btn ghost small" id="prev">Previous</button><button class="btn ghost small" id="next">Next</button></span>
+      </nav>`;
 
-    const refresh =() => { saveFilters(); $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); };
+    const refresh =() => { reqPage = 1; saveFilters(); $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); };
     $("range").onchange = (e) => {
       if (e.target.value === "custom" && !reqFrom && !reqTo) [reqFrom, reqTo] = rangeBounds(); // start from the range picked before
       reqRange = e.target.value;
@@ -185,10 +199,15 @@
     };
     $("from").onchange = (e) => { reqFrom = e.target.value; refresh(); };
     $("to").onchange = (e) => { reqTo = e.target.value; refresh(); };
-    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); saveFilters(); fillRows(); };
-    $("search").oninput = (e) => { reqSearch = e.target.value; saveFilters(); fillRows(); };
+    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; reqPage = 1; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); saveFilters(); fillRows(); };
+    $("search").oninput = (e) => { reqSearch = e.target.value; reqPage = 1; saveFilters(); fillRows(); };
+    // A new page size keeps the first row of the current page in view.
+    $("per").onchange = (e) => { const per = Number(e.target.value); reqPage = Math.floor(((reqPage - 1) * reqPer) / per) + 1; reqPer = per; saveFilters(); fillRows(); };
+    const turn = (n) => { reqPage += n; saveFilters(); fillRows(); $("rows").closest(".card").scrollIntoView({ block: "start" }); };
+    $("prev").onclick = () => turn(-1);
+    $("next").onclick = () => turn(1);
     $("csv").onclick = () => exportCsv();
-    refresh();
+    $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); // keeps the saved page, unlike refresh()
   }
 
   // Stat cards: waiting counts everything pinned at the top; the rest count the time frame.
@@ -214,23 +233,34 @@
   }
   const filtered = () => { const { waiting, rest } = listParts(); return [...waiting, ...rest]; };
 
+  // One page of the list. A group's heading (with the group's full count) shows on each page that
+  // has rows from it; the time frame's "nothing here" row shows on the last page.
   function fillRows() {
     const { waiting, rest } = listParts();
+    const showRest = reqFilter !== "pending"; // the Waiting chip has nothing below
+    const total = waiting.length + (showRest ? rest.length : 0);
+    const pages = Math.max(1, Math.ceil(total / reqPer));
+    reqPage = Math.min(Math.max(1, reqPage), pages);
+    const first = (reqPage - 1) * reqPer, last = Math.min(first + reqPer, total);
+    const pageWaiting = waiting.slice(first, last), pageRest = showRest ? rest.slice(Math.max(0, first - waiting.length), last - waiting.length) : [];
     const group = (label, n) => `<tr class="group"><th colspan="7">${esc(label)} <span>${n}</span></th></tr>`;
     const row = (r, wait) => `<tr${wait ? ' class="wait"' : ""}>
-        <td data-l="Open house"><b>${esc(r.day)}, ${esc(r.date)}</b><div class="sub">${esc(r.time)}</div></td>
-        <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · MLS# ${esc(r.mls)}</div></td>
+        <td data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(r.time)}</div></td>
+        <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
         <td data-l="Agent">${agentLink(r.agent.email, r.agent.name)}<div class="sub">${esc(r.agent.email)}</div></td>
         <td data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}</td>
-        <td data-l="Decided">${r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>` : '<span class="sub">—</span>'}</td>
+        <td data-l="Decided">${decided(r)}</td>
         <td data-l="MLS">${mlsCell(r)}</td>
         <td data-l="">${wait ? `<a class="btn small" href="/respond/?id=${encodeURIComponent(r.id)}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
     $("rows").innerHTML = !waiting.length && !rest.length ? '<tr><td colspan="7" class="empty">No requests match.</td></tr>'
-      : (waiting.length ? group("Waiting for a decision", waiting.length) + waiting.map((r) => row(r, true)).join("") : "")
-        + (reqFilter === "pending" ? "" : group(`${RANGES[reqRange]} · ${rangeLabel()}`, rest.length) // the Waiting chip has nothing below
-          + (rest.length ? rest.map((r) => row(r, false)).join("") : '<tr><td colspan="7" class="empty">No other requests in this time frame.</td></tr>'));
+      : (pageWaiting.length ? group("Waiting for a decision", waiting.length) + pageWaiting.map((r) => row(r, true)).join("") : "")
+        + (!showRest || (!pageRest.length && (rest.length || reqPage < pages)) ? "" : group(`${RANGES[reqRange]} · ${rangeLabel()}`, rest.length)
+          + (pageRest.length ? pageRest.map((r) => row(r, false)).join("") : '<tr><td colspan="7" class="empty">No other requests in this time frame.</td></tr>'));
+    $("pager").hidden = !total;
+    $("pgInfo").innerHTML = `${(first + 1).toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}${pages > 1 ? `<span class="pg-of"> · Page ${reqPage} of ${pages}</span>` : ""}`;
+    $("prev").disabled = reqPage <= 1; $("next").disabled = reqPage >= pages;
     $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => {
       const r = requests.find((x) => x.id === b.dataset.cancel);
       if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${r.byHand ? "; remove it from the MLS by hand" : " and the AI agent marks it Canceled"}.`)) manageAction(r, "cancel", b);
@@ -265,7 +295,7 @@
     const name = (mine.find((r) => r.agent.name) || {}).agent?.name || email;
     const hosted = mine.filter((r) => r.status === "approved" && r.iso < today);
     const upcoming = mine.filter((r) => r.status === "approved" && r.iso >= today);
-    const homes = new Set(hosted.map((r) => r.mls));
+    const homes = new Set(hosted.map((r) => r.mls || r.addr));
     const label = (r) => r.status === "approved" && r.iso < today ? '<span class="pill approved">Hosted</span>' : pill(r.status);
     const phone = (mine.find((r) => r.phone) || {}).phone;
     view.innerHTML = `
@@ -281,10 +311,10 @@
       </div>
       <div class="card table-wrap"><table class="stack"><thead><tr><th>Open house</th><th>Home</th><th>Status</th><th>Decided</th></tr></thead><tbody>
         ${mine.map((r) => `<tr>
-          <td data-l="Open house"><b>${esc(r.day)}, ${esc(r.date)}</b><div class="sub">${esc(r.time)}</div></td>
-          <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · MLS# ${esc(r.mls)}</div></td>
+          <td data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(r.time)}</div></td>
+          <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
           <td data-l="Status">${label(r)}</td>
-          <td data-l="Decided">${r.decidedBy ? `${esc(r.decidedBy)}<div class="sub">${esc(fmtDate(r.decidedAt))}</div>` : '<span class="sub">—</span>'}</td>
+          <td data-l="Decided">${decided(r)}</td>
         </tr>`).join("") || '<tr><td colspan="4" class="empty">No open house requests yet.</td></tr>'}
       </tbody></table></div>`;
     if (mine.length) $("csv").onclick = () => exportCsv(mine, `open-houses-${email.split("@")[0]}`);

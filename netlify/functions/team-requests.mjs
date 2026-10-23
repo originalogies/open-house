@@ -24,7 +24,7 @@ export default async (req) => {
       day: d.label, date: d.date, time: fmtRange(r.from, r.to),
       agent: { name: r.agent.name, email: r.agent.email }, phone: r.phone, notes: r.notes,
       createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
-      cancelledBy: r.cancelledByName || null,
+      cancelledBy: r.cancelledByName || null, imported: !!r.imported, // from the G&N calendar, not requested here
       mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls), byHand: byHand(r),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
     };

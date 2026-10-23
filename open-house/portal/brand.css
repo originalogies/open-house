@@ -5,6 +5,7 @@
   --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
   --accent:#1E5B4F; --accent-ink:#FFFFFF; --accent-soft:#E3EEEA; --brass:#9A7A3A; --brass-soft:#F4EEDF;
   --danger:#A12B2B; --danger-soft:#F6E5E5; --priority:#2F8BE0; --photo:#2B3A45;
+  --chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235A6570' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --serif:"Newsreader", Georgia, "Times New Roman", serif;
   --sans:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -13,12 +14,14 @@
     --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
     --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --brass-soft:#2E2918;
     --danger:#E58A8A; --danger-soft:#3A2224; --photo:#24313B;
+    --chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239AA6B0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 }
 :root[data-theme="dark"]{
   --bg:#11171C; --surface:#182129; --ink:#ECEFF1; --muted:#9AA6B0; --line:#2A3540;
   --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --brass-soft:#2E2918;
   --danger:#E58A8A; --danger-soft:#3A2224; --photo:#24313B;
+  --chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239AA6B0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -56,6 +59,8 @@ a{color:var(--accent)}
 /* Form fields */
 .field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
 textarea.field{min-height:84px;resize:vertical}
+/* Our own dropdown arrow, the same distance from the edge as the text, instead of the browser's */
+select.field{appearance:none;-webkit-appearance:none;padding-right:38px;background:var(--surface) var(--chevron) no-repeat right 12px center/12px 8px;cursor:pointer}
 .label{display:block;font-weight:600;font-size:.88rem;margin:14px 0 6px}
 .check{display:inline-flex;gap:8px;align-items:center;font-size:.93rem;cursor:pointer}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
