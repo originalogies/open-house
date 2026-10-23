@@ -5,7 +5,8 @@ import { dayMeta } from "./week.mjs";
 import { fmtRange } from "./time.mjs";
 import { readAll } from "./readall.mjs";
 
-const store = () => getStore("open-house-requests");
+// Strong reads: a decision or a new request shows everywhere at once (the default can serve a copy up to a minute old).
+const store = () => getStore({ name: "open-house-requests", consistency: "strong" });
 
 export const newId = () => crypto.randomBytes(16).toString("hex");
 export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from < b.to && b.from < a.to;

@@ -37,7 +37,7 @@ export const normalizeDomain = (s) => {
 
 async function store() {
   const { getStore } = await import("@netlify/blobs");
-  return getStore("open-house");
+  return getStore({ name: "open-house", consistency: "strong" }); // removing someone takes effect on their next click
 }
 
 // Stored list (managed by admins in the portal) plus the optional env seed lists.

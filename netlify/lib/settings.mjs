@@ -1,7 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import { DEFAULT_CUTOFF, normalizeCutoff, getWeek } from "./week.mjs";
 
-const store = () => getStore("open-house-settings");
+const store = () => getStore({ name: "open-house-settings", consistency: "strong" });
 
 export async function getCutoff() {
   const saved = await store().get("cutoff", { type: "json" }).catch(() => null);

@@ -129,6 +129,8 @@
       return;
     }
     window.addEventListener("hashchange", route);
+    // Going back from a request's page (on phones especially) can restore this page as it was; reload the view.
+    window.addEventListener("pageshow", (e) => { if (e.persisted) route(); });
     route();
     if (primed) loadRequests(); // views that don't list requests still show the waiting count
   }

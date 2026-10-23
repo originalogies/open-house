@@ -144,6 +144,8 @@ async function loadMine(){
 $("tabUp").onclick = () => { myTab = "up"; renderMine(); };
 $("tabPast").onclick = () => { myTab = "past"; renderMine(); };
 document.addEventListener("signedin", loadMine);
+// Going back to this page can restore it as it was; load the list again so changes show.
+window.addEventListener("pageshow", e => { if (e.persisted && myReqs.length) loadMine(); });
 </script>
 </body>
 </html>

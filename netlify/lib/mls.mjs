@@ -167,7 +167,7 @@ export { STALL_MS, MAX_DELIVERY };
 
 // ---- stores -----------------------------------------------------------------
 const syncStore = () => getStore({ name: "open-house-mls", consistency: "strong" });
-const auditStore = () => getStore("open-house-audit");
+const auditStore = () => getStore({ name: "open-house-audit", consistency: "strong" }); // a request's history shows what just happened
 const shotStore = () => getStore("open-house-screenshots");
 
 // One job in flight at a time across all requests, so parallel runs never share the MLS login.

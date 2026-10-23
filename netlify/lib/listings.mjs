@@ -103,7 +103,7 @@ export async function mlsOpenHouses(mls) {
 }
 
 // ---- Team-managed details (not in MLS data) ------------------------------
-const infoStore = () => getStore("open-house-listing-info");
+const infoStore = () => getStore({ name: "open-house-listing-info", consistency: "strong" }); // publishing shows on the portal at once
 // vacant: no one lives in the home (no occupants). Shown to agents as a "Vacant" tag.
 const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "", vacant: false };
 
