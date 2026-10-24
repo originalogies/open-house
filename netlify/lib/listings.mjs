@@ -20,7 +20,7 @@ async function repliers(params) {
 // Repliers' `class` is unreliable (single-family homes appear under CondoProperty), so filter on propertyType instead.
 const NOT_RESIDENTIAL = /land|lot|farm|ranch|acre|commercial/i;
 let cache = { at: 0, data: null };
-let freshness = { at: 0, date: null };
+let freshness = { at: 0, stamp: null };
 
 // Active residential sale listings for the two agents (land and commercial excluded).
 async function fetchRaw() {
@@ -39,12 +39,14 @@ async function fetchRaw() {
   return data;
 }
 
-// Date (YYYY-MM-DD) the Repliers data was last updated, so a stale feed is obvious.
-export async function feedUpdatedOn() {
-  if (freshness.date && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.date;
+// When the Repliers data was last updated, so a stale feed is obvious: an ISO time ("2026-10-23T22:22:52.000Z"),
+// or just the date if Repliers sends no time.
+export async function feedUpdatedAt() {
+  if (freshness.stamp && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.stamp;
   const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc" }));
-  freshness = { at: Date.now(), date: String(d.listings?.[0]?.updatedOn || "").slice(0, 10) || null };
-  return freshness.date;
+  const raw = String(d.listings?.[0]?.updatedOn || ""), t = new Date(raw);
+  freshness = { at: Date.now(), stamp: raw.length > 10 && !Number.isNaN(+t) ? t.toISOString() : raw.slice(0, 10) || null };
+  return freshness.stamp;
 }
 
 // Amounts like "$1,295,000" or "6,331": digits only. Never use it for coordinates; it drops the minus sign.
@@ -152,12 +154,14 @@ export async function offeredListings(week) {
 }
 
 export async function teamListings(week) {
-  const [{ list, warning }, stored, updatedOn] = await Promise.all([catalog(week), storedInfo(), feedUpdatedOn().catch(() => null)]);
+  const [{ list, warning }, stored, updatedAt] = await Promise.all([catalog(week), storedInfo(), feedUpdatedAt().catch(() => null)]);
   const info = infoFor(list.map((x) => x.n.mls), stored);
   const mls = list.filter((x) => !x.n.teamAdded).map((x) => x.n);
   return {
     warning,
-    feedUpdatedOn: updatedOn,
+    // The date (Central) for the out-of-date warning, and the time for "Repliers data updated ...".
+    feedUpdatedOn: updatedAt ? (updatedAt.length > 10 ? chicagoNow(new Date(updatedAt)).date : updatedAt) : null,
+    feedUpdatedAt: updatedAt,
     listings: list.map((x) => ({
       ...x.n, ...teamView(info[x.n.mls], week), openHouses: x.openHouses,
       // Team-added homes: their photos, and MLS listings at the same address to link to.
@@ -176,7 +180,7 @@ export async function probe() {
     out.activeAnyClass = (await repliers(q({ status: "A" }))).count;
     const inactive = await repliers((() => { const p = q({}); p.append("status", "A"); p.append("status", "U"); return p; })());
     out.activeAndInactive = inactive.count;
-    out.feedUpdatedOn = await feedUpdatedOn();
+    out.feedUpdatedAt = await feedUpdatedAt();
   } catch (e) { out.error = e.message; }
   return out;
 }

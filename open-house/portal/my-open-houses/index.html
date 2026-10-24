@@ -16,13 +16,14 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="George &amp; Noonan Open House Requests">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/brand.css">
 <link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/dialog.css">
 <style>
 /* My open houses: every request the signed-in agent has made, upcoming and past. */
 .signed-out .wrap{visibility:hidden}
@@ -45,7 +46,7 @@
 .myoh-list .cancel:disabled{opacity:.5;cursor:wait}
 .opill{font-size:.78rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;background:var(--bg);color:var(--muted)}
 .opill.pending{color:var(--brass);background:var(--brass-soft)}
-.opill.approved,.opill.hosted{color:var(--accent);background:var(--accent-soft)}
+.opill.approved{color:var(--accent);background:var(--accent-soft)}
 .opill.declined{color:var(--danger);background:var(--danger-soft)}
 #myohErr{color:var(--danger)}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
@@ -85,6 +86,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 </div>
 
 <script src="/nav.js"></script>
+<script src="/dialog.js"></script>
 <script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
@@ -98,7 +100,7 @@ const isUpcoming = r => r.iso >= todayIso() && (r.status === "pending" || r.stat
 let myReqs = [], myTab = "up";
 function myLabel(r){
   if (r.cancelRequested && isUpcoming(r)) return ["pending","Cancellation requested"];
-  if (r.status === "approved") return r.iso < todayIso() ? ["hosted","Hosted"] : ["approved","Approved"];
+  if (r.status === "approved") return ["approved","Approved"];
   return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"], cancelled:["cancelled","Cancelled"] })[r.status] || ["", r.status];
 }
 function renderMine(){
@@ -117,19 +119,20 @@ function renderMine(){
   $("myohList").querySelectorAll(".cancel").forEach(b => b.onclick = async () => {
     const r = myReqs.find(x => x.id === b.dataset.id);
     b.disabled = true;
-    const sent = await askToCancel(r.id, `${r.addr} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
+    const sent = await askToCancel(r.id, `your ${r.status === "approved" ? "open house" : "request"} at ${r.addr}, ${r.city} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
     if(!sent) b.disabled = false;
   });
 }
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
 // or keep the open house. Returns true once the request is sent. (The weekend page has the same ask.)
 async function askToCancel(id, what, showError){
-  const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
+  const reason = await OHDialog.prompt({ title: "Request cancellation", body: `Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.`,
+    label: "Reason (optional)", placeholder: "For example: a listing appointment came up", ok: "Send request", cancel: "Back" });
   if(reason === null) return false;
   const r = await fetch("/api/requests/cancel-request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id, reason})}).catch(()=>null);
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
-  if(r.status===502) alert(d.message);
+  if(r.status===502) await OHDialog.alert({ title: "Request saved", body: d.message });
   await loadMine();
   return true;
 }

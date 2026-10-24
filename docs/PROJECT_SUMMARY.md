@@ -1,6 +1,6 @@
 # Open House Portal: project summary
 
-Last updated: 2026-10-21
+Last updated: 2026-10-24
 
 This document records what has been built, how it fits together, how it is configured, and what is still open. For day-to-day usage see `open-house/README.md`; for email template fields see `open-house/emails/README.md`.
 
@@ -39,7 +39,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `/my-open-houses/` | Signed-in agents | "My open houses": every request the agent has made, upcoming and history, with "Request cancellation". |
 | `/inventory/` | Team | Redirects to the Admin Console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
 | `/respond/?id=...` | Team | The confirmation page: confirm or decline a request, or answer an agent's cancellation request. Confirming a home on the MLS needs one of two choices: "Submitted manually" or "Schedule Open House with AI Agent" (Start, then live progress; needs MLS automation on). Once confirmed, a 5-second countdown goes to the Open House Portal. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. "← Back" returns to the page that opened it (or the Admin Console's Requests list, when opened from an email). |
-| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console. Requests: a time frame by open house date (This week by default, This month, This year, All time, or a custom range with date pickers) sets the stat cards (Requests, Waiting for a decision, Approved, Agents) and the list. Requests and cancellation requests waiting for a decision are pinned at the top of the one list whatever the time frame, with a Review button; status chips and search narrow the list. Filters are kept for the browser tab. Every request shows its MLS status and an "MLS status" link; Cancel for upcoming approved open houses. Also weekend listings, agent access, weekly request cutoff. |
+| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console. Requests: a time frame by open house date (This week by default, This month, This year, All time, or a custom range with date pickers) sets the stat cards (Requests, Waiting for a decision, Approved, Agents) and the list. Requests and cancellation requests waiting for a decision are pinned at the top of the one list whatever the time frame, with a Review button; status chips and search narrow the list. Filters are kept for the browser tab. Every request shows its MLS status and an "MLS status" link; Cancel for upcoming approved open houses. An agent's page (from Agents or an agent's name) has their stats and every open house they've requested, with a photo of each home, a search by address or MLS#, and pages like the Requests list. Also weekend listings (with the date and time Repliers data was last updated), agent access, weekly request cutoff. |
 
 ## Features
 
@@ -79,6 +79,10 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 **Design**
 - Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My open houses and (for the team) Admin Console; the Admin Console shows Requests, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
 - Mobile responsive; admin settings autosave with toast confirmations.
+- Confirmations and questions (cancel, remove, link, a cancellation reason) open the site's own dialog (`dialog.js`, `dialog.css`) instead of the browser's boxes.
+- Addresses read street and city everywhere ("200 Murano Place, Southlake"), including email subjects and the calendar event title.
+- Status labels match across old and new open houses: past approved open houses read "Approved", not "Hosted".
+- Browser tab icon: `favicon.png` (the blue ampersand, 72×72). Home-screen and link-preview icons still use `apple-touch-icon.png` (G&N, 180×180).
 
 ## Configuration (Netlify environment variables)
 

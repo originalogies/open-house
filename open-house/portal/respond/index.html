@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Respond to open house request</title>
-<link rel="icon" type="image/png" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/dialog.css">
 <style>
 :root{--bg:#F4F5F3;--surface:#fff;--ink:#16202A;--muted:#5A6570;--line:#DCE0E2;--accent:#1E5B4F;--accent-ink:#fff;--accent-soft:#E7F0EE;--danger:#A12B2B}
 @media (prefers-color-scheme:dark){:root{--bg:#11171C;--surface:#182129;--ink:#ECEFF1;--muted:#9AA6B0;--line:#2A3540;--accent:#5FB3A0;--accent-ink:#0E1A17;--accent-soft:#1C2E2B;--danger:#E58A8A}}
@@ -88,6 +89,7 @@ ol.steps li.bad span,ol.steps li.warn span{color:var(--danger)}
 </head>
 <body>
 <main><a class="back" id="back" href="/admin/#requests">← Back to Requests</a><div class="card" id="card"><p>Loading…</p></div></main>
+<script src="/dialog.js"></script>
 <script>
 const $ = (id) => document.getElementById(id), card = $("card");
 // Back returns to the page that opened this one (the Admin Console keeps its filters), or to the
@@ -294,7 +296,7 @@ function stuck(d) {
   $("declineA").onclick = () => declineView(d, detailsOf(d));
 }
 async function approveByHand(d) {
-  if (!confirm(`Approve it as entered on the MLS by hand? ${d.agentName} will be emailed the confirmation.`)) return;
+  if (!(await OHDialog.confirm({ title: "Approve it as entered by hand?", body: `Approve ${d.address} as entered on the MLS by hand. ${d.agentName} will be emailed the confirmation.`, ok: "Approve" }))) return;
   $("next").querySelectorAll("button").forEach((b) => (b.disabled = true));
   const r = await post("/api/respond", { action: "approve", method: "manual", mlsEntered: true });
   const j = r ? await r.json().catch(() => ({})) : {};
@@ -379,7 +381,9 @@ function manage(d, details) {
   bindCancelBox();
   if ($("retry")) $("retry").onclick = () => postManage({ action: "retry" }, $("retry"));
   if ($("change")) $("change").onclick = () => postManage({ action: "change", iso: $("cDate").value, from: Number($("cFrom").value), to: Number($("cTo").value) }, $("change"));
-  if ($("cancel")) $("cancel").onclick = () => confirm("Cancel this open house? The agent and team will be emailed.") && postManage({ action: "cancel" }, $("cancel"));
+  if ($("cancel")) $("cancel").onclick = async () => (await OHDialog.confirm({ title: "Cancel this open house?", danger: true, ok: "Cancel open house", cancel: "Keep it",
+    body: `${d.agent}'s open house at ${d.address}, ${d.when}. The agent and team will be emailed${d.byHand ? "; remove it from the MLS by hand." : ", and the AI agent marks it Canceled on the MLS."}` }))
+    && postManage({ action: "cancel" }, $("cancel"));
 }
 load();
 </script>

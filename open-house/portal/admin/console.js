@@ -23,6 +23,8 @@
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
   const photo = (img, size = "small") => !img ? "" : /^(https?:|\/)/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
+  // A home's street and city, the way every address on the site reads: "200 Murano Place, Southlake".
+  const place = (x) => [x.addr, x.city].filter(Boolean).join(", ");
   // Open houses imported from the G&N calendar may have no MLS number, and nobody decided them here.
   const mlsNo = (r) => (r.mls ? `MLS# ${esc(r.mls)}` : "MLS# not found");
   // "Sat, Oct 24", with the year when it isn't this year (the list goes back to imported history).
@@ -143,6 +145,24 @@
   // Filters and the page are kept for this tab, so Back from a request's page returns to the same view.
   const RANGES = { week: "This week", month: "This month", year: "This year", all: "All time", custom: "Custom range" };
   const PAGE_SIZES = [25, 50, 100];
+  // Pages of a list (the Requests list and an agent's open houses): rows per page, which rows are showing, Previous and Next.
+  const pagerHtml = (label, per) => `<nav class="pager" id="pager" aria-label="${label}">
+        <label class="pg-size"><span>Rows per page</span><select class="field" id="per">${PAGE_SIZES.map((n) => `<option value="${n}" ${n === per ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <span class="pg-info" id="pgInfo"></span>
+        <span class="pg-nav"><button class="btn ghost small" id="prev">Previous</button><button class="btn ghost small" id="next">Next</button></span>
+      </nav>`;
+  // Fills in the pager for `total` rows; returns the page (kept in range), the page count and the page's first and last row.
+  function paintPager(total, page, per) {
+    const pages = Math.max(1, Math.ceil(total / per));
+    page = Math.min(Math.max(1, page), pages);
+    const first = (page - 1) * per, last = Math.min(first + per, total);
+    $("pager").hidden = !total;
+    $("pgInfo").innerHTML = `${(first + 1).toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}${pages > 1 ? `<span class="pg-of"> · Page ${page} of ${pages}</span>` : ""}`;
+    $("prev").disabled = page <= 1; $("next").disabled = page >= pages;
+    return { page, pages, first, last };
+  }
+  // A new page size keeps the first row of the current page in view.
+  const resizedPage = (page, per, newPer) => Math.floor(((page - 1) * per) / newPer) + 1;
   let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1;
   try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1 } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
   if (!RANGES[reqRange]) reqRange = "week";
@@ -192,11 +212,7 @@
         <button class="btn ghost small" id="csv">Export CSV</button>
       </div>
       <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
-      <nav class="pager" id="pager" aria-label="Pages of requests">
-        <label class="pg-size"><span>Rows per page</span><select class="field" id="per">${PAGE_SIZES.map((n) => `<option value="${n}" ${n === reqPer ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <span class="pg-info" id="pgInfo"></span>
-        <span class="pg-nav"><button class="btn ghost small" id="prev">Previous</button><button class="btn ghost small" id="next">Next</button></span>
-      </nav>`;
+      ${pagerHtml("Pages of requests", reqPer)}`;
 
     const refresh =() => { reqPage = 1; saveFilters(); $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); };
     $("range").onchange = (e) => {
@@ -210,8 +226,7 @@
     $("to").onchange = (e) => { reqTo = e.target.value; refresh(); };
     $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; reqPage = 1; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); saveFilters(); fillRows(); };
     $("search").oninput = (e) => { reqSearch = e.target.value; reqPage = 1; saveFilters(); fillRows(); };
-    // A new page size keeps the first row of the current page in view.
-    $("per").onchange = (e) => { const per = Number(e.target.value); reqPage = Math.floor(((reqPage - 1) * reqPer) / per) + 1; reqPer = per; saveFilters(); fillRows(); };
+    $("per").onchange = (e) => { const per = Number(e.target.value); reqPage = resizedPage(reqPage, reqPer, per); reqPer = per; saveFilters(); fillRows(); };
     const turn = (n) => { reqPage += n; saveFilters(); fillRows(); $("rows").closest(".card").scrollIntoView({ block: "start" }); };
     $("prev").onclick = () => turn(-1);
     $("next").onclick = () => turn(1);
@@ -248,16 +263,15 @@
     const { waiting, rest } = listParts();
     const showRest = reqFilter !== "pending"; // the Waiting chip has nothing below
     const total = waiting.length + (showRest ? rest.length : 0);
-    const pages = Math.max(1, Math.ceil(total / reqPer));
-    reqPage = Math.min(Math.max(1, reqPage), pages);
-    const first = (reqPage - 1) * reqPer, last = Math.min(first + reqPer, total);
+    let pages, first, last;
+    ({ page: reqPage, pages, first, last } = paintPager(total, reqPage, reqPer));
     const pageWaiting = waiting.slice(first, last), pageRest = showRest ? rest.slice(Math.max(0, first - waiting.length), last - waiting.length) : [];
     const group = (label, n) => `<tr class="group"><th colspan="5">${esc(label)} <span>${n}</span></th></tr>`;
     // On phones each row is three short lines: when and status, the home, the agent and the action.
     // The address (and the whole row) opens the request's page.
     const row = (r, wait) => `<tr class="req${wait ? " wait" : ""}" data-open="${esc(requestPage(r))}">
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
-        <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(r.addr)}</a><div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
+        <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
         <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
@@ -272,12 +286,10 @@
       const tr = e.target.closest("tr[data-open]");
       if (tr && !e.target.closest("a, button") && !String(getSelection())) location.href = tr.dataset.open;
     };
-    $("pager").hidden = !total;
-    $("pgInfo").innerHTML = `${(first + 1).toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}${pages > 1 ? `<span class="pg-of"> · Page ${reqPage} of ${pages}</span>` : ""}`;
-    $("prev").disabled = reqPage <= 1; $("next").disabled = reqPage >= pages;
-    $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = () => {
+    $("rows").querySelectorAll("[data-cancel]").forEach((b) => b.onclick = async () => {
       const r = requests.find((x) => x.id === b.dataset.cancel);
-      if (confirm(`Cancel ${r.agent.name}'s open house at ${r.addr} on ${r.day}, ${r.date}? The agent and team will be emailed${r.byHand ? "; remove it from the MLS by hand" : " and the AI agent marks it Canceled"}.`)) manageAction(r, "cancel", b);
+      if (await OHDialog.confirm({ title: "Cancel this open house?", danger: true, ok: "Cancel open house", cancel: "Keep it",
+        body: `${r.agent.name}'s open house at ${place(r)} on ${r.day}, ${r.date}, ${r.time}. The agent and team will be emailed${r.byHand ? "; remove it from the MLS by hand." : ", and the AI agent marks it Canceled on the MLS."}` })) manageAction(r, "cancel", b);
     });
   }
 
@@ -302,6 +314,8 @@
   }
 
   // ---- One agent's history -------------------------------------------------
+  // Every open house the agent has requested, newest first, with a photo of each home. Search narrows the
+  // table to an address (or MLS#), and it's split into pages like the Requests list.
   async function renderAgent(email) {
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
     const today = todayIso();
@@ -310,28 +324,53 @@
     const hosted = mine.filter((r) => r.status === "approved" && r.iso < today);
     const upcoming = mine.filter((r) => r.status === "approved" && r.iso >= today);
     const homes = new Set(hosted.map((r) => r.mls || r.addr));
-    const label = (r) => r.status === "approved" && r.iso < today ? '<span class="pill approved">Hosted</span>' : pill(r.status);
     const phone = (mine.find((r) => r.phone) || {}).phone;
+    let search = "", page = 1, per = PAGE_SIZES[0];
     view.innerHTML = `
       <p style="margin:22px 0 0"><a href="${me.admin ? "#agents" : "#requests"}">← ${me.admin ? "All agents" : "All requests"}</a></p>
       <section class="intro" style="padding-top:12px"><div><h1>${esc(name)}</h1>
-        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""}</p></div>
-        ${mine.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}</section>
+        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""}</p></div></section>
       <div class="stats">
         <div class="card stat"><b>${hosted.length}</b><span>Open houses hosted</span></div>
         <div class="card stat"><b>${upcoming.length}</b><span>Upcoming approved</span></div>
         <div class="card stat"><b>${homes.size}</b><span>Different homes hosted</span></div>
         <div class="card stat"><b>${mine.length}</b><span>Requests all time</span></div>
       </div>
-      <div class="card table-wrap"><table class="stack"><thead><tr><th>Open house</th><th>Home</th><th>Status</th><th>Decided</th></tr></thead><tbody>
-        ${mine.map((r) => `<tr>
-          <td data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(r.time)}</div></td>
-          <td data-l="Home">${esc(r.addr)}<div class="sub">${esc(r.city)} · ${mlsNo(r)}</div></td>
-          <td data-l="Status">${label(r)}</td>
-          <td data-l="Decided">${decided(r)}</td>
-        </tr>`).join("") || '<tr><td colspan="4" class="empty">No open house requests yet.</td></tr>'}
-      </tbody></table></div>`;
-    if (mine.length) $("csv").onclick = () => exportCsv(mine, `open-houses-${email.split("@")[0]}`);
+      ${mine.length ? `<div class="toolbar">
+        <input class="field" id="search" type="search" placeholder="Search address or MLS#" aria-label="Search ${esc(name)}'s open houses by address">
+        <span class="spacer"></span>
+        <button class="btn ghost small" id="csv">Export CSV</button>
+      </div>` : ""}
+      <div class="card table-wrap"><table class="stack hist"><thead><tr><th>Open house</th><th colspan="2">Home</th><th>Status</th><th>Decided</th></tr></thead><tbody id="rows"></tbody></table></div>
+      ${pagerHtml("Pages of open houses", per)}`;
+
+    const shown = () => {
+      const s = search.trim().toLowerCase();
+      return s ? mine.filter((r) => [r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s)) : mine;
+    };
+    // The photo sits on a dark tile, which stays as a placeholder when a home has no photo or it fails to load.
+    const thumb = (r) => `<span class="thumb">${r.img ? `<img src="${esc(photo(r.img))}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
+    const fill = () => {
+      const list = shown();
+      let first, last;
+      ({ page, first, last } = paintPager(list.length, page, per));
+      $("rows").innerHTML = list.slice(first, last).map((r) => `<tr>
+          <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
+          <td class="pic">${thumb(r)}</td>
+          <td class="home" data-l="Home">${esc(place(r))}<div class="sub">${mlsNo(r)}</div></td>
+          <td class="status" data-l="Status">${pill(r.status)}</td>
+          <td class="decided${r.decidedBy || r.imported ? "" : " none"}" data-l="Decided">${decided(r)}</td>
+        </tr>`).join("") || `<tr><td colspan="5" class="empty">${mine.length ? "No open houses match that address." : "No open house requests yet."}</td></tr>`;
+    };
+    if (mine.length) {
+      $("search").oninput = (e) => { search = e.target.value; page = 1; fill(); };
+      $("csv").onclick = () => exportCsv(shown(), `open-houses-${email.split("@")[0]}`);
+    }
+    $("per").onchange = (e) => { const n = Number(e.target.value); page = resizedPage(page, per, n); per = n; fill(); };
+    const turn = (n) => { page += n; fill(); $("rows").closest(".card").scrollIntoView({ block: "start" }); };
+    $("prev").onclick = () => turn(-1);
+    $("next").onclick = () => turn(1);
+    fill();
   }
 
   // ---- Listings ------------------------------------------------------------
@@ -386,22 +425,26 @@
     const d = r.data;
     savers.clear();
     const stale = d.feedUpdatedOn && Math.floor((Date.now() - new Date(d.feedUpdatedOn + "T12:00:00Z")) / 86400000);
+    // When Repliers last changed any listing, in Central time: "Oct 23, 2026 at 5:22 PM" (just the date if the time is missing).
+    const updated = d.feedUpdatedAt?.length > 10 && !Number.isNaN(Date.parse(d.feedUpdatedAt))
+      ? new Date(d.feedUpdatedAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d+:)/, " at $1")
+      : d.feedUpdatedOn ? fmtIso(d.feedUpdatedOn) : "";
     view.innerHTML = `
       <section class="intro"><div><h1>Publish this weekend's homes</h1>
         <p class="sub">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
-        <div class="intro-actions">${me.admin ? '<button class="btn small" id="addHomeBtn">Add a home</button>' : ""}<a class="btn ghost small" href="/" target="_blank" rel="noopener">Preview agent portal</a></div></section>
+        ${me.admin ? '<div class="intro-actions"><button class="btn small" id="addHomeBtn">Add a home</button></div>' : ""}</section>
       ${me.admin ? `<div class="card panel" id="addHome" hidden>
         <h3>Add a home that isn't on the MLS yet</h3>
         <p class="fine">It works like any listing here: publish it, set Priority, instructions and access details, and add photos. Once it's on the MLS, link it to its MLS listing on its card and everything moves over.</p>
         <form id="addHomeForm"><div class="homegrid">${homeFields()}</div>${BATHS_TIP}
           <div class="actions"><button class="btn">Add home</button><button type="button" class="btn ghost" id="addHomeCancel">Cancel</button></div></form></div>` : ""}
       ${d.warning ? `<div class="card banner err"><b>Repliers problem:</b> ${esc(d.warning)}</div>` : ""}
-      ${stale >= 3 ? `<div class="card banner"><b>Repliers data looks out of date.</b> Last updated ${esc(d.feedUpdatedOn)} (${stale} days ago).</div>` : ""}
+      ${stale >= 3 ? `<div class="card banner"><b>Repliers data looks out of date.</b> Last updated ${esc(updated)} (${stale} days ago).</div>` : ""}
       <div class="toolbar">
         <div class="chips" id="lchips">${Object.entries(FILTERS).map(([f, [label]]) =>
           `<button class="chip" data-f="${f}" aria-pressed="${listFilter === f}">${label} (<span data-n="${f}">0</span>)</button>`).join("")}</div>
         <span class="spacer"></span>
-        <span class="fine">${d.feedUpdatedOn ? `Repliers data updated ${esc(d.feedUpdatedOn)}` : ""}</span>
+        <span class="fine">${updated ? `Repliers data updated ${esc(updated)}` : ""}</span>
       </div>
       <div class="listings" id="list"></div>
       <details style="margin-top:28px"><summary class="fine">Check Repliers data</summary>
@@ -427,7 +470,7 @@
         $("addHomeForm").querySelectorAll("[data-h]").forEach((i) => { body[i.dataset.h] = i.value; });
         const res = await api("POST", "/api/admin/homes", body);
         if (!res.ok) return toast(res.data.message || "Couldn't add the home.", true);
-        toast(`Added ${res.data.home.addr}. Add photos and publish it on its card.`);
+        toast(`Added ${place(res.data.home)}. Add photos and publish it on its card.`);
         listFilter = "all";
         renderListings(res.data.home.id);
       };
@@ -441,13 +484,13 @@
     const c = document.createElement("article"); c.className = "card lcard" + (l.priority ? " pri" : ""); c.dataset.mls = l.mls;
     const oh = l.openHouses.length ? `<div class="mls-oh">Already on the MLS: ${l.openHouses.map((o) => `${o.day === "sat" ? "Sat" : "Sun"} ${o.from}:00–${o.to}:00`).join(", ")}</div>` : "";
     const badges = () => `${l.offered ? '<span class="pill approved">Published</span>' : '<span class="pill">Unpublished</span>'}${l.priority ? '<span class="pill priority">★ Priority</span>' : ""}${l.teamAdded ? '<span class="pill pending">Not on the MLS yet</span>' : ""}`;
-    const facts = () => `${esc(l.city)} · ${l.teamAdded ? "Added by the team" : `MLS# ${esc(l.mls)}`} · ${money(l.price)}${l.bd ? ` · ${esc(l.bd)} bd / ${esc(l.ba)} ba` : ""}${l.sf ? ` · ${Number(l.sf).toLocaleString()} sq ft` : ""}`;
+    const facts = () => `${l.teamAdded ? "Added by the team" : `MLS# ${esc(l.mls)}`} · ${money(l.price)}${l.bd ? ` · ${esc(l.bd)} bd / ${esc(l.ba)} ba` : ""}${l.sf ? ` · ${Number(l.sf).toLocaleString()} sq ft` : ""}`;
     const cover = () => (l.img ? `<img src="${esc(photo(l.img, "medium"))}" alt="" loading="lazy">` : "");
     const editable = l.teamAdded && me.admin;
     c.innerHTML = `
       <div class="photo">${cover()}</div>
       <div class="body">
-        <h3><span class="addr">${esc(l.addr)}</span><span class="badges">${badges()}</span></h3>
+        <h3><span class="addr">${esc(place(l))}</span><span class="badges">${badges()}</span></h3>
         <div class="fine facts">${facts()}</div>
         ${oh}
         <div class="toggles">
@@ -479,7 +522,7 @@
       Object.assign(l, { offered: q("offered").checked, priority: q("priority").checked, vacant: q("vacant").checked, days, instr: instr.map((s) => s.trim()).filter(Boolean), access });
       c.classList.toggle("pri", l.priority);
       c.querySelector(".badges").innerHTML = badges();
-      toast(`Saved ${l.addr}.`);
+      toast(`Saved ${place(l)}.`);
       onSaved();
     });
     c.querySelectorAll(".toggles input").forEach((i) => { i.onchange = settings.now; });
@@ -499,7 +542,7 @@
       <div class="foot"><label class="btn ghost small">Add photos<input type="file" accept="image/*" multiple hidden data-upload></label>
         <span class="fine">The first photo is the cover. Large photos are resized before upload.</span></div>
       <h4>Link to its MLS listing</h4>
-      ${suggested.length ? suggested.map((s) => `<div class="suggest">Found on the MLS: <b>${esc(s.addr)}</b>, ${esc(s.city)} · MLS# ${esc(s.mls)} <button class="btn small" data-link="${esc(s.mls)}">Link</button></div>`).join("")
+      ${suggested.length ? suggested.map((s) => `<div class="suggest"><span>Found on the MLS: <b>${esc(place(s))}</b> · MLS# ${esc(s.mls)}</span><button class="btn small" data-link="${esc(s.mls)}">Link</button></div>`).join("")
         : '<p class="fine">When this home shows up on the MLS at the same address, it appears here to link in one click. You can also pick it from the list.</p>'}
       <div class="addrow"><select class="field" data-pick aria-label="MLS listing to link"><option value="">Choose an MLS listing…</option>${d.mlsChoices.map((m) =>
         `<option value="${esc(m.mls)}">${esc(m.addr)}, ${esc(m.city)} · MLS# ${esc(m.mls)}</option>`).join("")}</select><button class="btn ghost small" data-linkpick>Link</button></div>
@@ -517,8 +560,8 @@
       if (!res.ok) return toast(res.data.message || "Couldn't save the home's details.", true);
       const { addr, city, zip, price, bd, ba, sf } = res.data.home;
       Object.assign(l, { addr, city, zip, price, bd, ba, sf });
-      c.querySelector(".addr").textContent = l.addr; c.querySelector(".facts").innerHTML = facts();
-      toast(`Saved ${l.addr}.`);
+      c.querySelector(".addr").textContent = place(l); c.querySelector(".facts").innerHTML = facts();
+      toast(`Saved ${place(l)}.`);
     });
     c.querySelectorAll("[data-h]").forEach((i) => { i.oninput = details.soon; i.onblur = details.flush; });
 
@@ -529,7 +572,10 @@
         : '<p class="fine">No photos yet.</p>';
       c.querySelector(".photo").innerHTML = cover();
       box.querySelectorAll("[data-cover]").forEach((b) => { b.onclick = () => photoAction("cover", b.dataset.cover, "Cover photo set."); });
-      box.querySelectorAll("[data-unphoto]").forEach((b) => { b.onclick = () => confirm("Remove this photo?") && photoAction("unphoto", b.dataset.unphoto, "Photo removed."); });
+      box.querySelectorAll("[data-unphoto]").forEach((b) => {
+        b.onclick = async () => (await OHDialog.confirm({ title: "Remove this photo?", body: `It's deleted from ${place(l)}.`, ok: "Remove photo", cancel: "Keep it", danger: true }))
+          && photoAction("unphoto", b.dataset.unphoto, "Photo removed.");
+      });
     };
     const setPhotos = (home) => {
       l.photos = home.photos.map((id) => ({ id, url: `/api/home-photo?id=${l.mls}&p=${id}` }));
@@ -559,22 +605,25 @@
     const link = async (mls) => {
       const m = d.mlsChoices.find((x) => x.mls === mls);
       if (!m) return toast("Choose an MLS listing first.", true);
-      if (!confirm(`Link ${l.addr} to MLS# ${m.mls} (${m.addr}, ${m.city})?\n\nIts settings, instructions, access details and open house requests move to the MLS listing, and this card is replaced by the MLS listing.`)) return;
+      if (!(await OHDialog.confirm({ title: `Link to MLS# ${m.mls}?`, ok: "Link",
+        body: `${place(l)} will be linked to ${place(l) === place(m) ? "its MLS listing" : `the MLS listing at ${place(m)}`}. Its settings, instructions, access details and open house requests move to the MLS listing, and this card is replaced by the MLS listing.` }))) return;
       await Promise.all([settings.flush(), details.flush()]); // the latest edits go over too
       const res = await api("POST", "/api/admin/homes", { action: "link", id: l.mls, mls });
       if (!res.ok) return toast(res.data.message || "Couldn't link the home.", true);
       toast(`Linked to MLS# ${mls}.${res.data.moved ? ` ${res.data.moved} request${res.data.moved === 1 ? "" : "s"} moved over.` : ""}`);
-      if (res.data.enterByHand?.length) alert(`MLS automation is off, so enter these approved open houses on the MLS for ${m.addr} by hand:\n\n${res.data.enterByHand.join("\n")}`);
+      if (res.data.enterByHand?.length) await OHDialog.alert({ title: "Enter these on the MLS by hand", ok: "Done",
+        body: `MLS automation is off, so enter these approved open houses on the MLS for ${place(m)}:\n\n${res.data.enterByHand.join("\n")}` });
       renderListings(mls);
     };
     c.querySelectorAll("[data-link]").forEach((b) => { b.onclick = () => link(b.dataset.link); });
     c.querySelector("[data-linkpick]").onclick = () => link(c.querySelector("[data-pick]").value);
 
     c.querySelector("[data-remove]").onclick = async () => {
-      if (!confirm(`Remove ${l.addr} from the portal? Its photos are deleted too. This can't be undone.`)) return;
+      if (!(await OHDialog.confirm({ title: "Remove this home?", ok: "Remove home", cancel: "Keep it", danger: true,
+        body: `${place(l)} comes off the portal and its photos are deleted. This can't be undone.` }))) return;
       const res = await api("POST", "/api/admin/homes", { action: "remove", id: l.mls });
       if (!res.ok) return toast(res.data.message || "Couldn't remove the home.", true);
-      toast(`Removed ${l.addr}.`);
+      toast(`Removed ${place(l)}.`);
       renderListings();
     };
   }
@@ -634,8 +683,12 @@
 
       $("addEmail").onsubmit = (e) => { e.preventDefault(); const v = $("newEmail").value.trim().toLowerCase(); if (v) save({ emails: [...new Set([...access.emails, v])], domains: access.domains }, `Added ${v}.`); };
       $("addDomain").onsubmit = (e) => { e.preventDefault(); const v = $("newDomain").value.trim().toLowerCase().replace(/^@/, ""); if (v) save({ emails: access.emails, domains: [...new Set([...access.domains, v])] }, `Added @${v}.`); };
-      view.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => confirm(`Remove ${b.dataset.rm}? They lose access right away.`) && save({ emails: access.emails.filter((x) => x !== b.dataset.rm), domains: access.domains }, `Removed ${b.dataset.rm}.`));
-      view.querySelectorAll("[data-rmd]").forEach((b) => b.onclick = () => confirm(`Remove @${b.dataset.rmd}? Everyone at that domain who isn't listed loses access.`) && save({ emails: access.emails, domains: access.domains.filter((x) => x !== b.dataset.rmd) }, `Removed @${b.dataset.rmd}.`));
+      view.querySelectorAll("[data-rm]").forEach((b) => b.onclick = async () =>
+        (await OHDialog.confirm({ title: `Remove ${b.dataset.rm}?`, body: "They lose access right away.", ok: "Remove", danger: true }))
+        && save({ emails: access.emails.filter((x) => x !== b.dataset.rm), domains: access.domains }, `Removed ${b.dataset.rm}.`));
+      view.querySelectorAll("[data-rmd]").forEach((b) => b.onclick = async () =>
+        (await OHDialog.confirm({ title: `Remove @${b.dataset.rmd}?`, body: "Everyone at that domain who isn't listed loses access right away.", ok: "Remove domain", danger: true }))
+        && save({ emails: access.emails, domains: access.domains.filter((x) => x !== b.dataset.rmd) }, `Removed @${b.dataset.rmd}.`));
     };
 
     async function save(next, done) {

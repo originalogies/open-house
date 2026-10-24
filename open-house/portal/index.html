@@ -16,12 +16,13 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="George &amp; Noonan Open House Requests">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/dialog.css">
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
@@ -306,6 +307,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 </aside>
 
 <script src="/nav.js"></script>
+<script src="/dialog.js"></script>
 <script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
@@ -381,12 +383,13 @@ document.addEventListener("signedin", async () => {
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
 // or keep the open house. Returns true once the request is sent. (My open houses has the same ask.)
 async function askToCancel(id, what, showError){
-  const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
+  const reason = await OHDialog.prompt({ title: "Request cancellation", body: `Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.`,
+    label: "Reason (optional)", placeholder: "For example: a listing appointment came up", ok: "Send request", cancel: "Back" });
   if(reason === null) return false;
   const r = await fetch("/api/requests/cancel-request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id, reason})}).catch(()=>null);
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
-  if(r.status===502) alert(d.message);
+  if(r.status===502) await OHDialog.alert({ title: "Request saved", body: d.message });
   const idx = cur ? homes.indexOf(cur) : -1;
   await loadListings();
   if(idx >= 0) cur = homes[idx];
@@ -514,7 +517,7 @@ function showStatus(){
 async function cancelMine(btn){
   const r0 = mine().find(x => x.id === btn.dataset.id);
   btn.disabled = true;
-  const sent = await askToCancel(r0.id, `your ${r0.status==="approved" ? "open house" : "request"} on ${DAYS[r0.day].label}, ${range(r0)}`, msg => { $("mineErr").textContent = msg; $("mineErr").hidden = false; });
+  const sent = await askToCancel(r0.id, `your ${r0.status==="approved" ? "open house" : "request"} at ${cur.addr}, ${cur.city} on ${DAYS[r0.day].label}, ${range(r0)}`, msg => { $("mineErr").textContent = msg; $("mineErr").hidden = false; });
   if(!sent){ btn.disabled = false; return; }
   if(mine().length) showStatus(); else showForm();
 }
