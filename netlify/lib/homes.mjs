@@ -45,7 +45,7 @@ export const photoUrl = (id, p) => `/api/home-photo?id=${id}&p=${p}`;
 export const asListing = (h) => ({
   mls: h.id, addr: h.addr, city: h.city, zip: h.zip, lat: 0, lng: 0,
   price: h.price, dom: 0, bd: h.bd, ba: h.ba, sf: h.sf,
-  img: h.photos?.length ? photoUrl(h.id, h.photos[0]) : "", teamAdded: true,
+  img: h.photos?.length ? photoUrl(h.id, h.photos[0]) : "", gallery: (h.photos || []).map((p) => photoUrl(h.id, p)), teamAdded: true,
 });
 
 export async function listHomes() {

@@ -35,7 +35,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings, request a time. |
+| `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings (Priority first, then highest price first), request a time. A home's details open with a gallery of up to 5 of its photos: swipe on phones, arrows on desktop, "2 / 5" to show where you are. |
 | `/my-open-houses/` | Signed-in agents | "My open houses": every request the agent has made, upcoming and history, with "Request cancellation". |
 | `/inventory/` | Team | Redirects to the Admin Console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
 | `/respond/?id=...` | Team | The confirmation page: confirm or decline a request, or answer an agent's cancellation request. Confirming a home on the MLS needs one of two choices: "Submitted manually" or "Schedule Open House with AI Agent" (Start, then live progress; needs MLS automation on). Once confirmed, a 5-second countdown goes to the Open House Portal. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. "← Back" returns to the page that opened it (or the Admin Console's Requests list, when opened from an email). |

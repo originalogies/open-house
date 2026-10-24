@@ -72,8 +72,12 @@ export function normalize(l) {
     price: num(l.listPrice), dom: Math.round(num(l.daysOnMarket ?? l.simpleDaysOnMarket)),
     bd: num(l.details?.numBedrooms), ba: baths(l.details), sf: Math.round(num(l.details?.sqft)),
     img: (l.images && l.images[0]) || "",
+    gallery: (l.images || []).slice(0, GALLERY),
   };
 }
+
+// Photos agents can click through on a home's details: the cover and the next four.
+export const GALLERY = 5;
 
 // Open houses already on the MLS for one listing, as whole-hour blocks in Central time: [{ iso, from, to }].
 // Entries look like { date, startTime: "2026-05-23T18:00:00.000-00:00" (UTC), endTime, type, status }.
@@ -150,7 +154,7 @@ export async function offeredListings(week) {
   const info = infoFor(list.map((x) => x.n.mls), stored);
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
     .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, vacant: !!info[x.n.mls].vacant, external: x.openHouses }))
-    .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
+    .sort((a, b) => Number(b.priority) - Number(a.priority) || b.price - a.price); // Priority first, then highest price first
 }
 
 export async function teamListings(week) {
@@ -218,7 +222,9 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
-export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
+// gallery: up to GALLERY photos, the cover first (built-in listings have only their cover).
+export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img,
+  gallery: (l.gallery?.length ? l.gallery : [l.img]).filter(Boolean).slice(0, GALLERY), days: l.days, instr: l.instr, priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
 export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img, ...(l.teamAdded && { teamAdded: true }) });

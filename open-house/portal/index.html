@@ -104,6 +104,18 @@ button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger targ
 .sheet .hero{position:relative;aspect-ratio:16/10;background:var(--photo)}
 .sheet .hero img{width:100%;height:100%;object-fit:cover}
 .sheet .hero.noimg img{display:none}
+/* Photo gallery: up to five photos in a strip that swipes on phones and steps with the arrows; "2 / 5" shows where you are. */
+.gal{position:absolute;inset:0;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none}
+.gal::-webkit-scrollbar{display:none}
+.gal:focus-visible{outline-offset:-3px;border-radius:0}
+.sheet .hero .gal img{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always}
+.gal-nav{position:absolute;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;border:0;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;transition:opacity .15s}
+.gal-nav::before{content:"";position:absolute;top:50%;left:50%;width:9px;height:9px;border-top:2.5px solid #16202A;border-right:2.5px solid #16202A}
+.gal-nav.prev{left:12px}.gal-nav.prev::before{transform:translate(-35%,-50%) rotate(-135deg)}
+.gal-nav.next{right:12px}.gal-nav.next::before{transform:translate(-65%,-50%) rotate(45deg)}
+.gal-nav::after{content:"";position:absolute;inset:-4px} /* a bigger target for thumbs */
+.gal-nav:disabled{opacity:0;pointer-events:none}
+.gal-count{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(8,12,16,.68);color:#fff;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:99px;pointer-events:none}
 .close{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#16202A;font-size:1.4rem;cursor:pointer}
 .body{padding:22px 24px 28px}
 .body h2{font-family:var(--serif);font-weight:500;font-size:1.9rem;line-height:1.1;margin:0}
@@ -257,7 +269,13 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
 <div class="scrim" id="scrim"></div>
 <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle" aria-hidden="true">
-  <div class="hero" id="sHero"><img id="sImg" alt=""><button class="close" id="close" aria-label="Close">×</button></div>
+  <div class="hero" id="sHero">
+    <div class="gal" id="gal" tabindex="0" role="group" aria-roledescription="gallery"></div>
+    <button class="gal-nav prev" id="galPrev" aria-label="Previous photo"></button>
+    <button class="gal-nav next" id="galNext" aria-label="Next photo"></button>
+    <span class="gal-count" id="galCount" aria-live="polite"></span>
+    <button class="close" id="close" aria-label="Close">×</button>
+  </div>
   <div class="body">
     <h2 id="sTitle"></h2>
     <div class="sub" id="sSub"></div>
@@ -335,6 +353,39 @@ function imgEl(h, el, wrap){
   el.onerror = () => wrap.classList.add("noimg");
 }
 
+// Gallery at the top of a home's details: its photos (up to five, the cover first) side by side, swiped on
+// phones or stepped through with the arrows. A photo loads when it's shown or next to the one shown, and
+// one that fails to load drops out.
+const gal = $("gal");
+let galTimer, galTo = null; // galTo: the photo the arrows are scrolling to, until the scroll settles
+function showGallery(h){
+  const list = h.gallery && h.gallery.length ? h.gallery : h.img ? [h.img] : [];
+  gal.innerHTML = list.map((p,k) => `<img alt="${k ? `Photo ${k+1} of` : "Front of"} ${esc(h.addr)}, ${esc(h.city)}" data-src="${esc(photoSrc(p, "medium"))}">`).join("");
+  gal.setAttribute("aria-label", `Photos of ${h.addr}, ${h.city}`);
+  gal.querySelectorAll("img").forEach(img => { img.onerror = () => { img.remove(); galUpdate(); }; });
+  gal.scrollLeft = 0; galTo = null;
+  galUpdate();
+}
+const galAt = () => gal.clientWidth ? Math.round(gal.scrollLeft / gal.clientWidth) : 0;
+function galUpdate(shown = galAt()){
+  const imgs = [...gal.querySelectorAll("img")], n = imgs.length, at = Math.min(shown, Math.max(n-1, 0));
+  imgs.forEach((img,k) => { if(Math.abs(k-at) <= 1 && !img.getAttribute("src")) img.src = img.dataset.src; });
+  $("sHero").classList.toggle("noimg", !n);
+  $("galPrev").hidden = $("galNext").hidden = $("galCount").hidden = n < 2;
+  $("galPrev").disabled = at <= 0; $("galNext").disabled = at >= n-1;
+  $("galCount").textContent = `${at+1} / ${n}`;
+}
+// Quick clicks each count: a step starts from the photo already being scrolled to.
+function galGo(step){
+  galTo = Math.min(Math.max((galTo ?? galAt()) + step, 0), gal.querySelectorAll("img").length - 1);
+  gal.scrollTo({ left: galTo * gal.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  galUpdate(galTo);
+}
+$("galPrev").onclick = () => galGo(-1);
+$("galNext").onclick = () => galGo(1);
+gal.addEventListener("scroll", () => { clearTimeout(galTimer); galTimer = setTimeout(() => { galTo = null; galUpdate(); }, 80); }, { passive: true });
+gal.addEventListener("keydown", e => { if(e.key === "ArrowLeft" || e.key === "ArrowRight"){ e.preventDefault(); galGo(e.key === "ArrowRight" ? 1 : -1); } });
+
 // Cards
 const grid = $("grid");
 function renderGrid(){
@@ -400,7 +451,7 @@ async function askToCancel(id, what, showError){
 let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to,end}: start and end times on the hour; end = the end time was tapped
 function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
-  $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
+  showGallery(cur);
   $("sTitle").textContent = cur.addr;
   $("sSub").innerHTML = `${esc(cur.city)}, TX ${esc(cur.zip)}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + esc(cur.mls)}`
     + (cur.vacant ? `<span class="tip"><button type="button" class="vac" aria-describedby="vacTip">Vacant <i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="vacTip">${VACANT_TIP}</span></span>` : "");
