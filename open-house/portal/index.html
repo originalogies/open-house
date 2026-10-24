@@ -432,7 +432,7 @@ document.addEventListener("signedin", async () => {
 });
 
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
-// or keep the open house. Returns true once the request is sent. (My open houses has the same ask.)
+// or keep the open house. Returns true once the request is sent. (My Requests has the same ask.)
 async function askToCancel(id, what, showError){
   const reason = await OHDialog.prompt({ title: "Request cancellation", body: `Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.`,
     label: "Reason (optional)", placeholder: "For example: a listing appointment came up", ok: "Send request", cancel: "Back" });

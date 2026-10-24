@@ -12,7 +12,7 @@
     // <body data-page="..."> says which page this is, so its link is marked as the current one.
     OHNav.mount({ current: document.body.dataset.page, user: u, links: [
       { key: "weekend", href: "/", label: "This weekend" },
-      { key: "mine", href: "/my-open-houses/", label: "My open houses" },
+      { key: "mine", href: "/my-open-houses/", label: "My Requests" },
       ...(u.team ? [{ key: "admin", href: "/admin/", label: "Admin Console" }] : []),
     ] });
     document.dispatchEvent(new CustomEvent("signedin", { detail: u }));
