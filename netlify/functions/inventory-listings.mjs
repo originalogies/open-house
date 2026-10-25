@@ -1,5 +1,5 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
-import { teamListings, getInfo, saveInfo, rawSample, probe } from "../lib/listings.mjs";
+import { teamListings, getInfo, saveInfo, rawSample, probe, STANDARD_INSTR } from "../lib/listings.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
@@ -14,7 +14,7 @@ export default async (req) => {
   if (req.method === "GET") {
     try {
       if (new URL(req.url).searchParams.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
-      return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, ...(await teamListings(week)) });
+      return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, standardInstr: STANDARD_INSTR, ...(await teamListings(week)) });
     } catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable", message: e.message.slice(0, 200) }); }
   }
 

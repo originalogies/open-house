@@ -218,6 +218,22 @@ test("calendar invites update and cancel the same event", () => {
   assert.match(cx, /METHOD:CANCEL/); assert.match(cx, /STATUS:CANCELLED/); assert.match(cx, /UID:a{32}@/);
 });
 
+test("the George & Noonan team is on every calendar invite, and long lines fold", () => {
+  for (const cal of [ics(req()), ics(req({ status: "cancelled" }))]) {
+    const lines = cal.replace(/\r\n /g, "").split("\r\n"); // unfolded
+    assert.ok(lines.some((l) => /^ORGANIZER;CN="George & Noonan Team":mailto:team@georgeandnoonan\.com$/.test(l)));
+    assert.ok(lines.some((l) => /^ATTENDEE;.*:mailto:team@georgeandnoonan\.com$/.test(l)));
+    assert.ok(lines.some((l) => new RegExp(`^ATTENDEE;.*:mailto:${req().agent.email.replace(/\./g, "\\.")}$`).test(l)));
+    assert.ok(cal.split("\r\n").every((l) => Buffer.byteLength(l) <= 75));
+  }
+});
+
+test("every home's instructions end with texting the team", async () => {
+  const { agentInstructions, publicListing } = await import("../netlify/lib/listings.mjs");
+  assert.deepEqual(agentInstructions(["Use Supra to access."]), ["Use Supra to access.", "Please text the George & Noonan Team once you enter the home and when you leave."]);
+  assert.equal(publicListing({ instr: [] }).instr.length, 1);
+});
+
 const { openHouseEntries } = await import("../netlify/lib/listings.mjs");
 
 test("team changes are checked against open houses already on the MLS", () => {

@@ -222,9 +222,13 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
+// Instructions every home gets after its own (on the agent portal and in the Confirmed and Reminder emails).
+export const STANDARD_INSTR = ["Please text the George & Noonan Team once you enter the home and when you leave."];
+export const agentInstructions = (instr = []) => [...instr, ...STANDARD_INSTR];
+
 // gallery: up to GALLERY photos, the cover first (built-in listings have only their cover).
 export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img,
-  gallery: (l.gallery?.length ? l.gallery : [l.img]).filter(Boolean).slice(0, GALLERY), days: l.days, instr: l.instr, priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
+  gallery: (l.gallery?.length ? l.gallery : [l.img]).filter(Boolean).slice(0, GALLERY), days: l.days, instr: agentInstructions(l.instr), priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
 export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img, ...(l.teamAdded && { teamAdded: true }) });

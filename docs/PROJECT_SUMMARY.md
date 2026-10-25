@@ -56,6 +56,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 **Requests and email**
 - Submitting a request sends template 1 (Request Received) to `team@georgeandnoonan.com` and template 2 (Request Sent) to the agent.
 - Approval sends template 3 (Confirmed) to the agent and the team with an `open-house.ics` attachment. Decline sends a short plain note to the agent.
+- The calendar event names the George & Noonan Team (team@georgeandnoonan.com) as organizer and lists it as a guest beside the agent. team@georgeandnoonan.com also gets every email that carries the event (Confirmed, Updated, Cancelled), whatever `TEAM_EMAIL` is set to (`TEAM_CALENDAR` in `netlify/lib/email.mjs`).
+- Every home's instructions end with "Please text the George & Noonan Team once you enter the home and when you leave." on the portal and in the Confirmed and Reminder emails (`STANDARD_INSTR` in `netlify/lib/listings.mjs`); the Admin Console notes it under each home's instructions.
 - Reminder (template 4) runs from an hourly scheduled function and sends at 9:00 AM Central the day before.
 - Access details (gate, lockbox, alarm codes) are stored server-side and appear only in the Confirmed and Reminder emails, never in the browser or request emails.
 - Overlapping hours are blocked for the same agent and listing, and against any approved request or open house already on the MLS. Agents can have up to 12 open requests.
@@ -126,6 +128,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 5. **End-to-end check still worth doing:** submit a real request, approve it, and confirm the Confirmed email, calendar invite and (the next morning) the Reminder arrive and look correct, including the logo.
 6. **No team list of approved open houses yet.** The team reaches a request's page from its email link. A dashboard listing every request (with MLS status) is the next step for the admin area.
 7. **Cutoff is global.** It repeats weekly; there is no per-week override.
+8. **Some MLS map pins are wrong.** The agent portal's "View location" map uses the MLS coordinates from Repliers (emails link to the address). Checked Oct 24 2026: 125 Murano Place is about 15 km off and 200 Murano Place about 3.5 km off (Google has both addresses right, in Carillon Parc); every other listing is within about 0.3 km. New streets Google doesn't know yet (the Westlake Entrada homes on Edson, Otter, Molly and Ellis, and 1920 Serendipity Court) carry subdivision placeholder pins that several homes share. The pin can be corrected on the MLS listing itself, which also fixes it on every site that uses MLS data.
 
 ## Decisions worth remembering
 

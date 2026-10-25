@@ -502,7 +502,8 @@
             <span class="tip-text" role="tooltip" id="vacTip-${esc(l.mls)}">${esc(VACANT_TIP)} Agents see a Vacant tag on this listing.</span></label>
         </div>
         <div class="two">
-          <div><label class="label">Instructions for agents (one per line)</label><textarea class="field" data-f="instr">${esc(l.instr.join("\n"))}</textarea></div>
+          <div><label class="label">Instructions for agents (one per line)</label><textarea class="field" data-f="instr">${esc(l.instr.join("\n"))}</textarea>
+            ${d.standardInstr?.length ? `<div class="fine">Every home also tells agents: ${esc(d.standardInstr.join(" "))}</div>` : ""}</div>
           <div><label class="label">Access details (private)</label><textarea class="field" data-f="access" placeholder="Gate, lockbox, alarm codes">${esc(l.access)}</textarea>
             <div class="fine">Only sent in the Confirmed and Reminder emails. Never shown to agents on the site.</div></div>
         </div>

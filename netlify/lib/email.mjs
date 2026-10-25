@@ -1,6 +1,6 @@
 import Handlebars from "handlebars";
 import * as T from "./templates.generated.mjs";
-import { getInfo } from "./listings.mjs";
+import { getInfo, agentInstructions } from "./listings.mjs";
 import { dayMeta } from "./week.mjs";
 import { fmtRange, fmtArrival, fmtReceived, chicagoToUtc } from "./time.mjs";
 
@@ -10,6 +10,10 @@ export const SITE = "https://open-house.synergyrealtors.com";
 export const siteFor = (origin) => (origin === SITE || /^http:\/\/localhost:\d+$/.test(origin) ? origin : SITE);
 const FROM = "George & Noonan Open Houses <openhouse@synergyrealtors.com>";
 export const TEAM_TO = () => (process.env.TEAM_EMAIL || "team@georgeandnoonan.com").split(",").map((s) => s.trim());
+// The George & Noonan team's calendar: the organizer of every open house's calendar event, listed as a
+// guest, and sent every email that carries the event (Confirmed, Updated, Cancelled) whatever TEAM_EMAIL is.
+export const TEAM_CALENDAR = { name: "George & Noonan Team", email: "team@georgeandnoonan.com" };
+const withCalendar = (to) => [...new Set([...to, TEAM_CALENDAR.email])];
 
 const money = (n) => "$" + n.toLocaleString("en-US");
 const compile = Object.fromEntries(Object.entries(T).map(([k, v]) => [k, Handlebars.compile(v)]));
@@ -57,14 +61,30 @@ export function ics(req) {
   const cancelled = req.status === "cancelled";
   const z = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const esc = (s) => String(s).replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+  // Guests: the hosting agent and the George & Noonan team. Names are quoted; a name can't contain a quote.
+  const who = (name, email) => `CN="${String(name || email).replace(/["\r\n]/g, "")}":mailto:${email}`;
+  const guest = (name, email) => `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE;${who(name, email)}`;
   return [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//George & Noonan//Open House//EN", `METHOD:${cancelled ? "CANCEL" : "PUBLISH"}`, "BEGIN:VEVENT",
     `UID:${req.id}@open-house.synergyrealtors.com`, `SEQUENCE:${req.seq || 0}`, `DTSTAMP:${z(new Date())}`,
     `DTSTART:${z(chicagoToUtc(iso, req.from))}`, `DTEND:${z(chicagoToUtc(iso, req.to))}`,
     `SUMMARY:${esc("Open house: " + place(l))}`, `LOCATION:${esc(`${l.addr}, ${l.city}, TX ${l.zip}`)}`,
+    `ORGANIZER;${who(TEAM_CALENDAR.name, TEAM_CALENDAR.email)}`,
+    guest(req.agent.name, req.agent.email), guest(TEAM_CALENDAR.name, TEAM_CALENDAR.email),
     ...(cancelled ? ["STATUS:CANCELLED"] : ["BEGIN:VALARM", "TRIGGER:-PT30M", "ACTION:DISPLAY", "DESCRIPTION:Open house starts soon", "END:VALARM"]),
     "END:VEVENT", "END:VCALENDAR",
-  ].join("\r\n") + "\r\n";
+  ].map(fold).join("\r\n") + "\r\n";
+}
+
+// Calendar lines longer than 75 bytes continue on the next line after a space (RFC 5545 folding).
+function fold(line) {
+  const parts = [];
+  let cur = "";
+  for (const ch of line) {
+    if (Buffer.byteLength(cur + ch) > (parts.length ? 74 : 75)) { parts.push(cur); cur = ""; }
+    cur += ch;
+  }
+  return [...parts, cur].join("\r\n ");
 }
 
 async function send({ to, subject, html, replyTo, attachments }) {
@@ -102,9 +122,9 @@ export const sendRequestSent = (req) =>
 export const sendConfirmed = async (req) => {
   const l = req.listing, d = dayMeta(req.iso), info = await getInfo(req.mls);
   return send({
-    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
+    to: withCalendar([req.agent.email, ...TEAM_TO()]), replyTo: TEAM_TO()[0],
     subject: `Confirmed: open house at ${place(l)}, ${d.label} ${d.date}, ${fmtRange(req.from, req.to)}`,
-    html: compile.requestConfirmed(fields(req, { access_details: info.access || "No access details were provided. Ask the George & Noonan team.", instructions: info.instr })),
+    html: compile.requestConfirmed(fields(req, { access_details: info.access || "No access details were provided. Ask the George & Noonan team.", instructions: agentInstructions(info.instr) })),
     attachments: [{ filename: "open-house.ics", content: Buffer.from(ics(req)).toString("base64") }],
   });
 };
@@ -115,7 +135,7 @@ export const sendReminder = async (req) => {
   return send({
     to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
     subject: `Reminder: open house at ${place(l)} tomorrow, ${fmtRange(req.from, req.to)}`,
-    html: compile.reminder(fields(req, { access_details: info.access || "No access details were provided. Ask the George & Noonan team.", instructions: info.instr })),
+    html: compile.reminder(fields(req, { access_details: info.access || "No access details were provided. Ask the George & Noonan team.", instructions: agentInstructions(info.instr) })),
   });
 };
 
@@ -141,7 +161,7 @@ const when = (iso, from, to) => { const d = dayMeta(iso); return `${d.label}, ${
 export const sendUpdated = (req, before, byName) => {
   const l = req.listing, esc = Handlebars.escapeExpression;
   return send({
-    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
+    to: withCalendar([req.agent.email, ...TEAM_TO()]), replyTo: TEAM_TO()[0],
     subject: `Updated: open house at ${place(l)}, now ${when(req.iso, req.from, req.to)}`,
     html: plain(`Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>The George &amp; Noonan team${byName ? ` (${esc(byName)})` : ""} changed your open house at ${esc(place(l))}.<br><br>
       <b>Was:</b> ${esc(when(before.iso, before.from, before.to))}<br><b>Now:</b> ${esc(when(req.iso, req.from, req.to))}<br><br>
@@ -155,7 +175,7 @@ export const sendUpdated = (req, before, byName) => {
 export const sendCancelled = (req, byName, atRequest) => {
   const l = req.listing, esc = Handlebars.escapeExpression;
   return send({
-    to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
+    to: withCalendar([req.agent.email, ...TEAM_TO()]), replyTo: TEAM_TO()[0],
     subject: `Cancelled: open house at ${place(l)}, ${when(req.iso, req.from, req.to)}`,
     html: plain(`The open house at ${esc(place(l))} on ${esc(when(req.iso, req.from, req.to))} hosted by ${esc(req.agent.name)} has been cancelled${byName ? ` by ${esc(byName)}` : ""}${atRequest ? ` at ${esc(req.agent.name)}'s request` : ""}.<br><br>
       The attached file removes it from your calendar. Those hours are open again for other requests.`),
