@@ -1,5 +1,5 @@
 import { getStore } from "@netlify/blobs";
-import { chicagoNow } from "./time.mjs";
+import { chicagoNow, chicagoToUtc } from "./time.mjs";
 import { listHomes, asListing, linkSuggestions, photoUrl } from "./homes.mjs";
 import { readAll } from "./readall.mjs";
 
@@ -39,15 +39,29 @@ async function fetchRaw() {
   return data;
 }
 
-// When the Repliers data was last updated, so a stale feed is obvious: an ISO time ("2026-10-23T22:22:52.000Z"),
-// or just the date if Repliers sends no time.
+// When a listing last changed on the MLS: an ISO time ("2026-10-28T05:13:31.000Z"), or just the date if Repliers
+// sends no time. Repliers labels updatedOn as UTC, but it's the MLS's Central time: "2026-10-28T00:13:31.000-00:00"
+// was 12:13 AM CT, and Repliers took it in at 05:46Z (`took`, its timestamps.repliersUpdatedOn). So it's read as
+// Central, unless that would put the change after Repliers took it in (then the label was right).
+export function mlsChangedAt(updatedOn, took) {
+  const raw = String(updatedOn || ""), tookAt = Date.parse(took);
+  if (raw.length <= 10 || Number.isNaN(Date.parse(raw))) return raw.slice(0, 10) || null;
+  const [h, m, s] = raw.slice(11, 19).split(":").map(Number);
+  const central = new Date(+chicagoToUtc(raw.slice(0, 10), h) + (m * 60 + s) * 1000);
+  return (central <= tookAt || Number.isNaN(tookAt) ? central : new Date(raw)).toISOString();
+}
+
+// When the newest MLS change in Repliers was made, so a stale feed is obvious.
 export async function feedUpdatedAt() {
   if (freshness.stamp && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.stamp;
-  const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc" }));
-  const raw = String(d.listings?.[0]?.updatedOn || ""), t = new Date(raw);
-  freshness = { at: Date.now(), stamp: raw.length > 10 && !Number.isNaN(+t) ? t.toISOString() : raw.slice(0, 10) || null };
+  const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc", fields: "updatedOn,timestamps" }));
+  const l = d.listings?.[0] || {};
+  freshness = { at: Date.now(), stamp: mlsChangedAt(l.updatedOn, l.timestamps?.repliersUpdatedOn) };
   return freshness.stamp;
 }
+
+// The Listings page's Refresh: the next read asks Repliers again instead of reusing the copy from the last 5 minutes.
+export const forgetRepliers = () => { cache = { at: 0, data: null }; freshness = { at: 0, stamp: null }; };
 
 // Amounts like "$1,295,000" or "6,331": digits only. Never use it for coordinates; it drops the minus sign.
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };

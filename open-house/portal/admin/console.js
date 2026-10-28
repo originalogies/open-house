@@ -419,8 +419,9 @@
     });
   }
 
-  async function renderListings(scrollTo) {
-    const r = await api("GET", "/api/inventory/listings");
+  // fresh: ask Repliers again now (the Refresh button). Returns what was shown, or nothing if it couldn't load.
+  async function renderListings(scrollTo, fresh) {
+    const r = await api("GET", `/api/inventory/listings${fresh ? "?fresh=1" : ""}`);
     if (!r.ok) { view.innerHTML = `<div class="card banner err">${esc(r.data.message || "Could not load listings from Repliers.")}</div>`; return; }
     const d = r.data;
     savers.clear();
@@ -444,7 +445,8 @@
         <div class="chips" id="lchips">${Object.entries(FILTERS).map(([f, [label]]) =>
           `<button class="chip" data-f="${f}" aria-pressed="${listFilter === f}">${label} (<span data-n="${f}">0</span>)</button>`).join("")}</div>
         <span class="spacer"></span>
-        <span class="fine">${updated ? `Repliers data updated ${esc(updated)}` : ""}</span>
+        <span class="feed"><span class="fine">${updated ? `Repliers data updated ${esc(updated)}` : ""}</span>
+          <button class="btn small refresh" id="refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66L20 8.5"/><path d="M20 3.5v5h-5"/></svg><span>Refresh</span></button></span>
       </div>
       <div class="listings" id="list"></div>
       <details style="margin-top:28px"><summary class="fine">Check Repliers data</summary>
@@ -461,6 +463,18 @@
     };
     $("lchips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; flushSaves(); listFilter = b.dataset.f; $("lchips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); paint(); };
     $("raw").onclick = async () => { const j = await api("GET", "/api/inventory/listings?raw=1"); const o = $("rawOut"); o.hidden = false; o.textContent = JSON.stringify(j.data, null, 2); };
+    // Refresh: edits still waiting to save go first, then Repliers is asked again and any new homes are named.
+    $("refresh").onclick = async () => {
+      const btn = $("refresh");
+      btn.disabled = true; btn.classList.add("busy"); btn.querySelector("span").textContent = "Checking…";
+      await Promise.all([...savers].map((s) => s.flush()));
+      const seen = new Set(d.listings.map((l) => l.mls));
+      const next = await renderListings(null, true);
+      if (!next) return;
+      const added = next.listings.filter((l) => !seen.has(l.mls));
+      toast(added.length ? `New from the MLS: ${added.map(place).join("; ")}.` : "No new homes from the MLS yet.");
+      if (added.length) $("list").querySelector(`[data-mls="${added[0].mls}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     if (me.admin) {
       $("addHomeBtn").onclick = () => { $("addHome").hidden = !$("addHome").hidden; if (!$("addHome").hidden) $("addHome").querySelector("input").focus(); };
       $("addHomeCancel").onclick = () => { $("addHome").hidden = true; };
@@ -478,6 +492,7 @@
     counts();
     paint();
     if (scrollTo) list.querySelector(`[data-mls="${scrollTo}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return d;
   }
 
   function listingCard(l, d, onSaved) {

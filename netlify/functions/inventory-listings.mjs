@@ -1,10 +1,11 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
-import { teamListings, getInfo, saveInfo, rawSample, probe, STANDARD_INSTR } from "../lib/listings.mjs";
+import { teamListings, getInfo, saveInfo, rawSample, probe, forgetRepliers, STANDARD_INSTR } from "../lib/listings.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
 // PUT { mls, offered, priority, days, instr[], access, vacant } saves one listing. GET ?raw=1 shows one raw Repliers
-// listing (no description) for checking field mapping.
+// listing (no description) for checking field mapping. GET ?fresh=1 (the Refresh button) asks Repliers again now
+// instead of using the server's copy from the last 5 minutes.
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
@@ -13,7 +14,9 @@ export default async (req) => {
 
   if (req.method === "GET") {
     try {
-      if (new URL(req.url).searchParams.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
+      const q = new URL(req.url).searchParams;
+      if (q.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
+      if (q.get("fresh")) forgetRepliers();
       return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, standardInstr: STANDARD_INSTR, ...(await teamListings(week)) });
     } catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable", message: e.message.slice(0, 200) }); }
   }

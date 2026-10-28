@@ -139,9 +139,19 @@ test("email links only point at trusted sites", () => {
   assert.equal(siteFor("http://localhost.evil.com"), SITE);
 });
 
-import { BOARD_AGENT_IDS } from "../netlify/lib/listings.mjs";
+import { BOARD_AGENT_IDS, mlsChangedAt } from "../netlify/lib/listings.mjs";
 test("board agent ids are zero-padded like Repliers stores them", () => {
   assert.deepEqual(BOARD_AGENT_IDS, ["0492946", "0560617"]);
+});
+
+test("Repliers' updatedOn is Central time labeled as UTC", () => {
+  // Seen Oct 28 2026: changed at 12:13 AM CDT, sent as 00:13 "UTC", taken in by Repliers at 05:46Z.
+  assert.equal(mlsChangedAt("2026-10-28T00:13:31.000-00:00", "2026-10-28T05:46:07.658Z"), "2026-10-28T05:13:31.000Z");
+  assert.equal(mlsChangedAt("2026-11-07T09:30:00.000-00:00", "2026-11-07T16:00:00Z"), "2026-11-07T15:30:00.000Z"); // CST
+  // If Repliers starts sending real UTC, reading it as Central would come after Repliers took it in, so the label stands.
+  assert.equal(mlsChangedAt("2026-10-28T05:13:31.000Z", "2026-10-28T05:46:07.658Z"), "2026-10-28T05:13:31.000Z");
+  assert.equal(mlsChangedAt("2026-10-28T00:13:31.000-00:00"), "2026-10-28T05:13:31.000Z"); // no repliersUpdatedOn
+  assert.deepEqual([mlsChangedAt("2026-10-28"), mlsChangedAt(""), mlsChangedAt(undefined)], ["2026-10-28", null, null]);
 });
 
 import { historyFor } from "../netlify/lib/requests.mjs";

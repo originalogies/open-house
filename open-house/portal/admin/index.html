@@ -23,6 +23,14 @@ main{padding-bottom:64px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .toolbar .field{max-width:280px}
 .toolbar .spacer{flex:1}
+.toolbar .feed{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn.refresh{background:none;border-color:transparent;color:var(--muted);font-size:.85rem;font-weight:500;padding:6px 8px;gap:5px}
+.btn.refresh:hover:not(:disabled){color:var(--ink);background:var(--surface);border-color:var(--line)}
+.refresh svg{width:14px;height:14px;flex:none}
+.refresh.busy:disabled{opacity:1;cursor:progress}
+.refresh.busy svg{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.refresh.busy svg{animation:none}}
 h2.section{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:28px 0 12px}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 
