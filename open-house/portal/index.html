@@ -57,7 +57,6 @@ button{font:inherit;color:inherit}
 
 .intro{padding:36px 0 28px}
 .intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.5rem);line-height:1.12;margin:0 0 8px;letter-spacing:-.01em}
-.intro .sub{margin:0;color:var(--muted);font-size:1.05rem;max-width:62ch}
 .when{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin-top:18px}
 .cal{display:flex;gap:10px}
 .cal div{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;text-align:center;min-width:76px}
@@ -230,6 +229,8 @@ html.sheet-open{overflow:hidden}
 .mine-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+footer .foot-links{margin:0 0 8px;font-size:.88rem;font-weight:600}
+footer .foot-links a{color:inherit}
 
 @media (max-width:760px){
   .intro{padding-top:24px}
@@ -276,6 +277,9 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 #gBtn{display:flex;justify-content:center;min-height:44px}
 .gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
 @media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
+/* First visit: how a request works, over a short film of one being made (see showWelcome). A site dialog (dialog.css). */
+.welcome-film{display:block;width:100%;aspect-ratio:1;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--bg);object-fit:cover}
+.welcome-film[hidden]{display:none}
 </style>
 </head>
 <body class="signed-out" data-page="weekend">
@@ -287,8 +291,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 <div class="wrap">
 
   <section class="intro">
-    <h1>Host one of our homes this weekend</h1>
-    <p class="sub">Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+    <h1>Host a George &amp; Noonan Home this weekend</h1>
     <div class="when">
       <div class="cal" aria-label="Weekend dates"></div>
       <div class="deadline" hidden></div>
@@ -297,7 +300,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
 
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+  <footer><p class="foot-links"><a href="/how-compensation-works/">How compensation works</a></p>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
 
 <div class="upright">
@@ -315,6 +318,15 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
     <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
   </div>
 </div>
+
+<dialog class="ohd" id="welcome" aria-labelledby="welcomeTitle" aria-describedby="welcomeBody">
+  <form method="dialog">
+    <video class="welcome-film" id="welcomeFilm" src="/how-it-works.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+    <h2 class="ohd-title" id="welcomeTitle">How it works</h2>
+    <p class="ohd-body" id="welcomeBody">Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+    <div class="ohd-actions"><button class="ohd-btn" value="ok">Get started</button></div>
+  </form>
+</dialog>
 
 <div class="scrim" id="scrim"></div>
 <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle" aria-hidden="true">
@@ -487,7 +499,25 @@ document.addEventListener("signedin", async () => {
   if(d.cutoffEnabled) dl.innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
   renderGrid();
   if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
+  showWelcome();
 });
+
+// The first visit on this device opens "How it works", with its film playing (shown still, with controls, to
+// anyone who has asked for less motion). Closing it any way, the button, Escape or a tap outside, means it
+// won't open here again. No film to play, and it's the words alone.
+function showWelcome(){
+  try { if(localStorage.getItem("ohWelcomeSeen")) return; } catch { return; } // nowhere to remember it: don't open it every visit
+  const d = $("welcome"), film = $("welcomeFilm");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  film.controls = still;
+  if(still){ film.removeAttribute("aria-hidden"); film.setAttribute("aria-label", "How it works, a 10-second film"); } // its controls must be reachable
+  film.addEventListener("error", () => { film.hidden = true; }, { once:true });
+  film.addEventListener("canplay", () => { if(!still && d.open) film.play().catch(() => {}); }, { once:true });
+  film.preload = "auto"; film.load();
+  d.addEventListener("click", e => { if(e.target === d) d.close(); }); // the backdrop
+  d.addEventListener("close", () => { film.pause(); try { localStorage.setItem("ohWelcomeSeen", "1"); } catch {} }, { once:true });
+  d.showModal();
+}
 
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
 // or keep the open house. Returns true once the request is sent. (My Requests has the same ask.)

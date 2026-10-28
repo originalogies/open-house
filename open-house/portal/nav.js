@@ -1,6 +1,6 @@
 // Top navigation bar shared by the agent portal and the Admin Console (styles in nav.css).
 // The page's HTML has the bar with just the logo; once someone is signed in, mount() adds the links,
-// who's signed in and Sign out. Below 760px those sit in a menu behind a hamburger button, which
+// who's signed in and Sign out. Up to 900px wide those sit in a menu behind a hamburger button, which
 // closes on a link tap, a tap outside, Escape, or widening the window.
 window.OHNav = (function () {
   let header = null;
@@ -28,7 +28,7 @@ window.OHNav = (function () {
     menu.addEventListener("click", (e) => { if (e.target.closest("a")) set(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) { set(false); toggle.focus(); } });
     document.addEventListener("click", (e) => { if (isOpen() && !header.contains(e.target)) set(false); });
-    matchMedia("(min-width: 761px)").addEventListener("change", (e) => { if (e.matches) set(false); });
+    matchMedia("(min-width: 901px)").addEventListener("change", (e) => { if (e.matches) set(false); });
 
     const out = bar.querySelector(".topnav-signout");
     if (out) out.onclick = async () => { await fetch("/api/auth/logout", { method: "POST" }).catch(() => {}); location.reload(); };

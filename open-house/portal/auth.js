@@ -13,6 +13,7 @@
     OHNav.mount({ current: document.body.dataset.page, user: u, links: [
       { key: "weekend", href: "/", label: "This weekend" },
       { key: "mine", href: "/my-open-houses/", label: "My Requests" },
+      { key: "how", href: "/how-it-works/", label: "How it works" },
       ...(u.team ? [{ key: "admin", href: "/admin/", label: "Admin Console" }] : []),
     ] });
     document.dispatchEvent(new CustomEvent("signedin", { detail: u }));

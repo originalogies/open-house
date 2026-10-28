@@ -1,5 +1,5 @@
 /* Top navigation bar (nav.js), shared by the agent portal and the Admin Console: logo and page
-   name, links, and who's signed in. Below 760px the links and account fold into a hamburger menu
+   name, links, and who's signed in. Up to 900px wide the links and account fold into a hamburger menu
    that slides open and closed. Uses each page's color variables. */
 .topnav{background:var(--surface);border-bottom:1px solid var(--line);position:relative;z-index:20}
 .topnav-bar{display:flex;align-items:center;flex-wrap:wrap;gap:0 32px;min-height:76px}
@@ -28,7 +28,7 @@
 .topnav-signout:hover{border-color:var(--muted)}
 .topnav-toggle{display:none}
 
-@media (max-width:760px){
+@media (max-width:900px){
   .topnav-bar{min-height:64px;gap:0}
   .topnav-brand img{width:140px}
   .topnav-toggle{display:inline-flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:44px;height:44px;margin-left:auto;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer}

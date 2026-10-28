@@ -51,6 +51,8 @@
 .opill.declined{color:var(--danger);background:var(--danger-soft)}
 #myohErr{color:var(--danger)}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+footer .foot-links{margin:0 0 8px;font-size:.88rem;font-weight:600}
+footer .foot-links a{color:inherit}
 @media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .side{grid-column:2;align-items:flex-start}.myoh-stats div{text-align:left}}
 </style>
 </head>
@@ -72,7 +74,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   </div>
   <p class="fine" id="myohErr" role="alert" hidden></p>
   <ul class="myoh-list" id="myohList"><li><span class="empty">Loading…</span></li></ul>
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+  <footer><p class="foot-links"><a href="/how-compensation-works/">How compensation works</a></p>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
 
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
