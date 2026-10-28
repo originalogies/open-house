@@ -131,13 +131,26 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .day span{font-size:.82rem;color:var(--muted)}
 .day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .day:disabled{opacity:.45;cursor:not-allowed}
-.slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}
+/* Time picker: the open hours as a day view (see renderSlots). Labels sit on the lines between the hours. */
+.timeline{position:relative;margin:10px 0 12px 68px;border-bottom:1px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.tl-hr{display:block;box-sizing:border-box;width:100%;height:44px;margin:0;padding:0;border:0;border-top:1px solid var(--line);border-radius:0;background:none;cursor:pointer;touch-action:manipulation}
+.tl-hr:disabled{cursor:default}
+@media (hover:hover){.tl-hr:not(:disabled):hover{background:var(--accent-soft)}}
+.tl-t{position:absolute;left:-68px;width:58px;text-align:right;font-size:.78rem;color:var(--muted);transform:translateY(-50%);white-space:nowrap;pointer-events:none}
+.tl-b{position:absolute;left:4px;right:4px;box-sizing:border-box;border-radius:8px;padding:9px 10px;font-size:.84rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.tl-held{background:var(--taken);border:1.5px solid var(--line);color:var(--muted)}
+.tl-held b,.tl-own b{font-weight:600;margin-right:4px}
+.tl-own{background:var(--accent-soft);border:1.5px dashed var(--accent);color:var(--accent)}
+/* The request being made: drag it to move it, or its handles (top and bottom, at the right) to change the start and end. */
+.tl-sel{background:var(--accent);color:var(--accent-ink);overflow:visible;pointer-events:auto;cursor:grab;touch-action:none;box-shadow:0 2px 10px rgba(0,0,0,.18);z-index:1}
+.tl-sel.dragging{cursor:grabbing;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+.tl-sel b{display:block;font-weight:600}
+.tl-sel span span{display:block;font-size:.8rem;opacity:.85}
+.tl-h{position:absolute;right:6px;width:56px;height:32px;padding:0;border:0;background:none;cursor:ns-resize;touch-action:none}
+.tl-h[data-edge="from"]{top:-16px}
+.tl-h[data-edge="to"]{bottom:-16px}
+.tl-h::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:10px;margin:-5px 0 0 -15px;box-sizing:border-box;border-radius:5px;background:var(--surface);border:2px solid var(--accent)}
 .hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
-.slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;min-height:44px;cursor:pointer;font-weight:500;font-size:.88rem}
-.slot[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
-.slot.in{border-color:var(--accent);background:var(--accent-soft)} /* times between the start and end */
-.slot:disabled{background:var(--taken);color:var(--muted);cursor:not-allowed}
-.slot small{display:block;font-weight:400;font-size:.75rem;text-decoration:none}
 .empty{color:var(--muted);font-size:.9rem;margin:0 0 20px}
 label.note{display:block;font-size:.9rem;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
@@ -151,6 +164,9 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 /* The request button stays within reach at the bottom of the sheet while the times are on screen. */
 .send{position:sticky;bottom:0;z-index:1;background:var(--surface);margin:16px -24px 0;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 .send .primary{margin-top:0}
+/* Once a time is picked, a soft glow draws the eye to the Request button. */
+#submit:not(:disabled){box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent),0 0 16px color-mix(in srgb,var(--accent) 45%,transparent);animation:glowIn .5s ease}
+@keyframes glowIn{from{box-shadow:none}}
 .fine.err{color:#A12B2B;margin:0 0 8px}
 html.sheet-open{overflow:hidden}
 .fine{font-size:.8rem;color:var(--muted);margin-top:10px}
@@ -194,7 +210,6 @@ html.sheet-open{overflow:hidden}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
 
-@media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
   .intro{padding-top:24px}
   .grid{grid-template-columns:1fr}
@@ -215,6 +230,14 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* Phones held sideways. Browsers don't let a page lock the orientation, so on a phone turned sideways this covers
+   the page and asks for it to be turned upright; it goes away as soon as it is. Tablets and computers aren't affected. */
+.upright{display:none;position:fixed;inset:0;z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;background:var(--bg);color:var(--ink);text-align:center;touch-action:none}
+.upright svg{color:var(--accent);animation:turnUpright 2.4s ease-in-out infinite}
+.upright b{display:block;font-family:var(--serif);font-weight:500;font-size:1.4rem;margin-bottom:4px}
+.upright p{margin:0;color:var(--muted)}
+@keyframes turnUpright{0%,20%{transform:rotate(-90deg)}55%,100%{transform:rotate(0)}}
+@media (orientation:landscape) and (max-height:500px) and (pointer:coarse){.upright{display:flex}}
 .signed-out .wrap{visibility:hidden}
 .gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg)}
 .gate[hidden]{display:none}
@@ -254,6 +277,11 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   <section class="grid" id="grid" aria-label="Available homes"></section>
 
   <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+</div>
+
+<div class="upright">
+  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg>
+  <p><b>Turn your phone upright</b>This page works best with your phone held upright.</p>
 </div>
 
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
@@ -299,8 +327,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
       </section>
       <section class="step" id="stepTime" hidden>
         <h3>Choose a time</h3>
-        <div class="slots" id="slots"></div>
-        <p class="hint" id="hint"></p>
+        <div class="timeline" id="slots"></div>
+        <p class="hint" id="hint" aria-live="polite"></p>
       </section>
       <section class="step" id="stepSend" hidden>
         <label class="note" for="notes">Notes for the listing team (optional)</label>
@@ -448,7 +476,7 @@ async function askToCancel(id, what, showError){
 }
 
 // Sheet
-let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to,end}: start and end times on the hour; end = the end time was tapped
+let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to}: the request's start and end, on the hour
 function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
   showGallery(cur);
@@ -493,43 +521,153 @@ function renderDays(){
     d.appendChild(b);
   });
 }
-// The buttons are clock times from FIRST to LAST. The first tap is the start time (one hour until an end
-// is picked) and a later tap is the end time, so 12:00 then 3:00 is three hours. After that, a tap starts over;
-// tapping the end time again lets you pick a different one. LAST is closing time, so it can't be a start:
-// tapped on its own it picks the last hour, ending at LAST.
+// The time picker is the open hours stacked like a calendar's day view: times sit on the lines and each row is an
+// hour, so a booking from 1:00 to 3:00 is one block that ends on the 3:00 line. Tapping an hour picks it, and
+// tapping a later hour right after stretches the request to it. The request's block drags to move it, and its top
+// and bottom handles drag to change the start and end (the arrow keys do the same). On a computer, dragging
+// across empty hours picks them too; on a phone that drag scrolls the sheet instead.
+const ROW = 44; // px per hour, a comfortable tap target
 const free = (from,to) => { for(let x=from;x<to;x++) if(blocked(day,x)) return false; return true; };
-const choosingEnd = () => !!sel && !sel.end;
-const lastHourFree = () => free(LAST-1,LAST);
-function pick(h){
-  if(choosingEnd() && h>sel.from && free(sel.from,h)) sel={from:sel.from,to:h,end:true};
-  else if(choosingEnd() && h===sel.from) sel=null;
-  else if(sel && sel.end && h===sel.to) sel={from:sel.from,to:sel.from+1,end:false};
-  else if(h<LAST && !blocked(day,h)) sel={from:h,to:h+1,end:false};
-  else if(h===LAST && lastHourFree()) sel={from:LAST-1,to:LAST,end:true};
-  renderSlots();
+const hours = n => `${n} ${n===1?"hour":"hours"}`;
+// A block's times, short enough for a narrow phone: "1:00 to 3:00 PM".
+const short = r => (r.from<12)===(r.to<12) ? `${fmt(r.from).slice(0,-3)} to ${fmt(r.to)}` : range(r);
+// Hours held by others for the day, overlapping ones joined (an approved request that's also on the MLS is one block).
+function heldSpans(){
+  const out=[];
+  cur.taken.filter(t=>t.day===day).sort((a,b)=>a.from-b.from).forEach(t=>{
+    const last=out[out.length-1];
+    if(last && t.from<last.to) last.to=Math.max(last.to,t.to); else out.push({from:t.from,to:t.to});
+  });
+  return out;
 }
+const blockAt = (r,cls,html) => `<div class="tl-b ${cls}" style="top:${(r.from-FIRST)*ROW+2}px;height:${(r.to-r.from)*ROW-3}px">${html}</div>`;
 function renderSlots(){
-  const s=$("slots"); s.innerHTML="";
-  if(!day){ $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
-  for(let h=FIRST; h<=LAST; h++){
-    const asEnd = choosingEnd() && h>sel.from && free(sel.from,h); // ending here is fine even if the next hour is booked
-    const isStart = !!sel && h===sel.from, isEnd = !!sel && sel.end && h===sel.to;
-    const taken = h<LAST && blocked(day,h) && !asEnd && !isEnd, own = isMine(day,h);
-    const b=document.createElement("button");
-    b.className = "slot" + (sel && sel.end && h>sel.from && h<sel.to ? " in" : "");
-    b.disabled = !(asEnd || isStart || isEnd || (h<LAST ? !blocked(day,h) : lastHourFree()));
-    b.setAttribute("aria-pressed", isStart || isEnd);
-    b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
-    b.setAttribute("aria-label", fmt(h) + (isStart ? ", start time" : isEnd ? ", end time" : asEnd ? ", choose as end time" : taken ? (own ? ", your request" : ", already booked") : ""));
-    b.onclick=()=>{ const first=!sel; pick(h); if(first && sel) reveal("stepSend"); };
-    s.appendChild(b);
+  const tl=$("slots");
+  if(!day){ tl.innerHTML=""; $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
+  let h="";
+  for(let x=FIRST;x<LAST;x++) h += `<button type="button" class="tl-hr" data-h="${x}"${blocked(day,x) ? " disabled" : ""} aria-label="${fmt(x)} to ${fmt(x+1)}${isMine(day,x) ? ", your request" : blocked(day,x) ? ", booked" : ""}"></button>`;
+  for(let x=FIRST;x<=LAST;x++) h += `<span class="tl-t" style="top:${(x-FIRST)*ROW}px" aria-hidden="true">${fmt(x)}</span>`;
+  h += heldSpans().map(r=>blockAt(r,"tl-held",`<b>Booked</b> ${short(r)}`)).join("");
+  h += mine().filter(r=>r.day===day).map(r=>blockAt(r,"tl-own",`<b>${r.status==="approved" ? "Your open house" : "Your request"}</b> ${short(r)}`)).join("");
+  h += `<div class="tl-b tl-sel" id="tlSel" tabindex="0" hidden><span id="tlText"></span>
+    <button type="button" class="tl-h" data-edge="from"></button><button type="button" class="tl-h" data-edge="to"></button></div>`;
+  tl.innerHTML=h;
+  tl.style.height = (LAST-FIRST)*ROW+"px";
+  drawSel();
+}
+// Moves the request's block and its labels to match sel; the block itself stays put so a drag keeps going.
+function drawSel(){
+  const b=$("tlSel");
+  if(b){
+    b.hidden=!sel;
+    if(sel){
+      const n=sel.to-sel.from;
+      b.style.top=(sel.from-FIRST)*ROW+2+"px"; b.style.height=n*ROW-3+"px";
+      $("tlText").innerHTML=`<b>${short(sel)}</b>${n>1 ? `<span>${hours(n)}</span>` : ""}`;
+      b.setAttribute("aria-label",`Your new request, ${range()}. Use the up and down arrow keys to move it.`);
+      b.querySelector('[data-edge="from"]').setAttribute("aria-label",`Start time, ${fmt(sel.from)}. Use the up and down arrow keys to change it.`);
+      b.querySelector('[data-edge="to"]').setAttribute("aria-label",`End time, ${fmt(sel.to)}. Use the up and down arrow keys to change it.`);
+    }
   }
-  const hrs = sel && sel.to-sel.from;
-  $("hint").textContent = !sel ? "Tap the start time, then the end time."
-    : sel.end ? `${range()} (${hrs} ${hrs===1?"hour":"hours"}). Tap a time to start over.`
-    : `Starts ${fmt(sel.from)}. Now tap the end time.`;
+  const n=sel && sel.to-sel.from;
+  $("hint").textContent = !sel ? "Tap the hour you'd like to start."
+    : n===1 ? `${range()} (1 hour). Tap a later hour, or drag the bottom edge, to make it longer. Drag the block to move it.`
+    : `${range()} (${hours(n)}). Drag the top or bottom edge to change the time, or drag the block to move it.`;
   update();
 }
+function setSel(next){
+  if(!next || (sel && next.from===sel.from && next.to===sel.to)) return;
+  const first=!sel; sel=next; drawSel();
+  if(first) keepClear();
+}
+// The notes and the request bar appear once there's a time. The timeline stays where it is so the next tap or drag
+// lands where the agent expects; it only scrolls if the request bar would cover the new block.
+function keepClear(){
+  requestAnimationFrame(()=>{
+    const over=$("tlSel").getBoundingClientRect().bottom+12-$("send").getBoundingClientRect().top;
+    if(over>0) $("sheet").scrollBy({top:over,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  });
+}
+// A tap on an hour picks it; right after picking one hour, a tap on a later hour stretches the request to it.
+function tapHour(h){
+  if(sel && sel.to-sel.from===1 && h>=sel.to && free(sel.from,h+1)) setSel({from:sel.from,to:h+1});
+  else setSel({from:h,to:h+1});
+}
+// Where a drag lands, kept clear of booked hours: an edge stops at the first booked hour in its way; a moved block
+// goes where it's dropped if that's free, or else to the free spot nearest it on the way back.
+function dragTo(kind, y){
+  const top=$("slots").getBoundingClientRect().top;
+  const line=FIRST+Math.round((y-top)/ROW), row=Math.min(LAST-1,Math.max(FIRST,FIRST+Math.floor((y-top)/ROW)));
+  if(kind==="new"){
+    let a=drag.h, b=drag.h+1;
+    while(a>row && !blocked(day,a-1)) a--;
+    while(b<=row && !blocked(day,b)) b++;
+    return {from:a,to:b};
+  }
+  if(kind==="from"){
+    let f=sel.from;
+    if(line<f) while(f>line && f>FIRST && !blocked(day,f-1)) f--; else f=Math.min(line,sel.to-1);
+    return {from:f,to:sel.to};
+  }
+  if(kind==="to"){
+    let t=sel.to;
+    if(line>t) while(t<line && t<LAST && !blocked(day,t)) t++; else t=Math.max(line,sel.from+1);
+    return {from:sel.from,to:t};
+  }
+  const o=drag.orig, n=o.to-o.from; // the block follows the finger, even as the sheet scrolls under it
+  let f=Math.min(LAST-n,Math.max(FIRST,o.from+Math.round((y-top-drag.y)/ROW)));
+  while(f!==o.from && !free(f,f+n)) f += f<o.from ? 1 : -1;
+  return {from:f,to:f+n};
+}
+let drag=null, skipClick=false; // drag = {kind: "new"|"move"|"from"|"to", h, y (from the timeline's top), orig, moved, lastY}
+const tl=$("slots");
+tl.addEventListener("pointerdown",e=>{
+  if(!day || e.button>0) return;
+  const edge=e.target.closest(".tl-h"), block=e.target.closest(".tl-sel"), hr=e.target.closest(".tl-hr");
+  if(edge || block){
+    drag={kind:edge ? edge.dataset.edge : "move", y:e.clientY-tl.getBoundingClientRect().top, orig:{...sel}, moved:true, lastY:e.clientY};
+    e.preventDefault(); tl.setPointerCapture(e.pointerId);
+    $("tlSel").classList.add("dragging"); requestAnimationFrame(edgeScroll);
+  } else if(hr && !hr.disabled && e.pointerType==="mouse"){
+    drag={kind:"new", h:+hr.dataset.h, moved:false, lastY:e.clientY}; // becomes a drag once it leaves this hour
+  }
+});
+tl.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  drag.lastY=e.clientY;
+  if(!drag.moved){
+    if(FIRST+Math.floor((e.clientY-tl.getBoundingClientRect().top)/ROW)===drag.h) return;
+    drag.moved=true; tl.setPointerCapture(e.pointerId); requestAnimationFrame(edgeScroll);
+  }
+  setSel(dragTo(drag.kind,e.clientY));
+});
+const endDrag=()=>{
+  if(drag && drag.kind==="new" && drag.moved){ skipClick=true; setTimeout(()=>skipClick=false); } // the click after a drag isn't a tap
+  drag=null; $("tlSel")?.classList.remove("dragging");
+};
+// On iPhones a finger held still on the block would bring up the text magnifier; this keeps the touch for the drag.
+tl.addEventListener("touchstart",e=>{ if(e.target.closest(".tl-sel")) e.preventDefault(); },{passive:false});
+tl.addEventListener("pointerup",endDrag);
+tl.addEventListener("pointercancel",endDrag);
+tl.addEventListener("click",e=>{
+  const hr=e.target.closest(".tl-hr");
+  if(hr && !hr.disabled && !skipClick) tapHour(+hr.dataset.h);
+});
+// While dragging near the top or bottom of what's on screen, the sheet scrolls so the far hours come into reach.
+function edgeScroll(){
+  if(!drag || !drag.moved) return;
+  const sh=$("sheet"), r=tl.getBoundingClientRect(), top=sh.getBoundingClientRect().top, bottom=$("send").hidden ? sh.getBoundingClientRect().bottom : $("send").getBoundingClientRect().top;
+  const step = drag.lastY>bottom-36 && r.bottom>bottom-12 ? 6 : drag.lastY<top+36 && r.top<top+12 ? -6 : 0;
+  if(step){ const before=sh.scrollTop; sh.scrollTop+=step; if(sh.scrollTop!==before) setSel(dragTo(drag.kind,drag.lastY)); }
+  requestAnimationFrame(edgeScroll);
+}
+tl.addEventListener("keydown",e=>{
+  if(!sel || (e.key!=="ArrowUp" && e.key!=="ArrowDown") || !e.target.closest(".tl-sel")) return;
+  e.preventDefault();
+  const d=e.key==="ArrowUp" ? -1 : 1, edge=e.target.closest(".tl-h")?.dataset.edge;
+  const next = edge==="from" ? {from:sel.from+d,to:sel.to} : edge==="to" ? {from:sel.from,to:sel.to+d} : {from:sel.from+d,to:sel.to+d};
+  if(next.from>=FIRST && next.to<=LAST && next.from<next.to && free(next.from,next.to)) setSel(next);
+});
 const range = (r=sel) => `${fmt(r.from)} to ${fmt(r.to)}`;
 // Progressive disclosure: each step shows only once the one before it is done.
 function update(){
