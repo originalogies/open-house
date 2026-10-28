@@ -65,27 +65,33 @@ button{font:inherit;color:inherit}
 .deadline em{font-style:normal;color:var(--brass);font-weight:600}
 
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;padding-bottom:64px}
-.card{position:relative;border:0;padding:0;background:var(--photo);border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:4/3;width:100%}
+/* Home cards, after Zillow's: the photo on top with its badges, then the address, the city, and the price and size. */
+.card{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);padding:0;background:var(--surface);color:var(--ink);font:inherit;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;width:100%}
+.card .photo{position:relative;aspect-ratio:16/10;background:var(--photo);overflow:hidden}
 .card img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
 .card:hover img{transform:scale(1.03)}
-.card.priority{box-shadow:0 0 0 3px #2F8BE0,0 0 16px 3px rgba(47,139,224,.55)}
-.card .pri-badge{position:absolute;top:14px;right:14px;z-index:2;background:#2F8BE0;color:#fff;font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 11px;border-radius:99px}
+.card.priority{border-color:#2F8BE0;box-shadow:0 0 0 2px #2F8BE0,0 0 16px 3px rgba(47,139,224,.45)}
+.card .pri-badge{position:absolute;top:12px;right:12px;z-index:2;background:#2F8BE0;color:#fff}
 .card .fallback{position:absolute;inset:0;display:none;background:
   linear-gradient(160deg,rgba(255,255,255,.06),rgba(0,0,0,.25)),var(--photo)}
 .card.noimg .fallback{display:block}
 .card.noimg img{display:none}
-.card .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(8,12,16,.82) 100%)}
-.card .meta{position:absolute;left:0;right:0;bottom:0;padding:20px 22px;color:#fff;display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:end}
-.card .addr{font-family:var(--serif);font-size:1.55rem;font-weight:500;line-height:1.15}
-.card .city{font-size:.92rem;opacity:.85}
-.card .price{font-family:var(--serif);font-size:1.55rem;font-weight:500;text-align:right;grid-row:1;grid-column:2}
-.card .facts{font-size:.85rem;opacity:.85;text-align:right;grid-column:2}
-.card .tl{position:absolute;top:14px;left:14px;right:130px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
-.dom{background:rgba(255,255,255,.92);color:#16202A;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:999px}
-.dom.fresh{background:#F3E7C9}
-
+.card .tl{position:absolute;top:12px;left:12px;right:120px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.card .flag{background:rgba(12,16,20,.82);color:#fff} /* "New Listing" or "Coming soon" */
+/* The three rows sit the same distance apart: one gap, and every row's line box only as tall as its text. */
+.card .meta{display:flex;flex-direction:column;gap:8px;padding:16px 18px}
+.card .meta > *{line-height:1.15}
+.card .addr{font-family:var(--serif);font-size:1.4rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .city{font-size:.9rem;color:var(--muted);margin-top:-3px} /* the serif address leaves more room under its letters */
+.card .numbers{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;font-size:.92rem}
+.card .price{font-weight:700;font-size:1.05rem}
+.card .facts{white-space:nowrap}
+.card .facts b{font-weight:700}
+.card .sep{margin:0 7px;color:var(--muted);opacity:.6}
 /* Vacant tag: on the photo card (hover shows what it means) and in the details panel (hover, keyboard focus or tap) */
 .vac{display:inline-flex;align-items:center;gap:5px;background:#E3EEEA;color:#1E5B4F;font-size:.8rem;font-weight:700;padding:5px 10px;border-radius:999px;line-height:1.2}
+/* The badges on a card ("New Listing", "Vacant", "★ Priority") are all one size. */
+.card .flag,.card .vac,.card .pri-badge{display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:28px;padding:0 11px;border-radius:999px;font-size:.78rem;font-weight:600;line-height:1;white-space:nowrap}
 .tip{position:relative;display:inline-flex}
 .tip-i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1.5px solid currentColor;font-size:.64rem;font-weight:800;font-style:normal;line-height:1}
 .tip-text{position:absolute;left:0;top:calc(100% + 8px);z-index:30;width:max-content;max-width:min(240px,75vw);padding:8px 11px;border-radius:8px;background:#16202A;color:#fff;font-size:.82rem;font-weight:500;line-height:1.4;text-align:left;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
@@ -94,6 +100,13 @@ button{font:inherit;color:inherit}
 button.vac{border:0;cursor:pointer;position:relative}
 button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger target for thumbs */
 .sub .tip{vertical-align:middle;margin-left:8px}
+/* "Choose a time" and its info icon; the tip opens below the whole heading so it stays inside the sheet on a phone. */
+.time-head{position:relative;display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.time-head h3{margin:0}
+.time-head .tip{position:static}
+.time-head .tip-text{max-width:min(300px,100%)}
+button.info{position:relative;display:inline-grid;place-items:center;padding:0;border:0;background:none;color:var(--accent);cursor:pointer}
+button.info::after{content:"";position:absolute;inset:-14px} /* a bigger target for thumbs */
 
 /* Sheet */
 /* Above the top navigation bar (z-index 20), below the sign-in gate (100). */
@@ -120,7 +133,7 @@ button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger targ
 .body{padding:22px 24px 28px}
 .body h2{font-family:var(--serif);font-weight:500;font-size:1.9rem;line-height:1.1;margin:0}
 .sub{color:var(--muted);margin:4px 0 16px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
 .stats div{padding:12px 0}
 .stats b{display:block;font-family:var(--serif);font-size:1.25rem;font-weight:500}
 .stats span{font-size:.8rem;color:var(--muted)}
@@ -132,7 +145,7 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .day:disabled{opacity:.45;cursor:not-allowed}
 /* Time picker: the open hours as a day view (see renderSlots). Labels sit on the lines between the hours. */
-.timeline{position:relative;margin:10px 0 12px 68px;border-bottom:1px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.timeline{position:relative;margin:10px 0 24px 68px;border-bottom:1px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .tl-hr{display:block;box-sizing:border-box;width:100%;height:44px;margin:0;padding:0;border:0;border-top:1px solid var(--line);border-radius:0;background:none;cursor:pointer;touch-action:manipulation}
 .tl-hr:disabled{cursor:default}
 @media (hover:hover){.tl-hr:not(:disabled):hover{background:var(--accent-soft)}}
@@ -150,7 +163,8 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .tl-h[data-edge="from"]{top:-16px}
 .tl-h[data-edge="to"]{bottom:-16px}
 .tl-h::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:10px;margin:-5px 0 0 -15px;box-sizing:border-box;border-radius:5px;background:var(--surface);border:2px solid var(--accent)}
-.hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
+.hint{font-size:.85rem;color:var(--muted);margin:-8px 0 20px;min-height:1.3em}
+.hint.sr{position:absolute;width:1px;height:1px;min-height:0;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap} /* read out, not shown */
 .empty{color:var(--muted);font-size:.9rem;margin:0 0 20px}
 label.note{display:block;font-size:.9rem;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
@@ -213,7 +227,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 @media (max-width:760px){
   .intro{padding-top:24px}
   .grid{grid-template-columns:1fr}
-  .card .addr,.card .price{font-size:1.3rem}
+  .card .addr{font-size:1.28rem}
+  .card .meta{padding:14px 16px}
   .sheet{top:auto;bottom:0;height:92%;width:100%;border-radius:18px 18px 0 0;transform:translateY(100%)}
   /* Tighter top of the sheet on phones so "Choose a day" is on the first screen. */
   .sheet .hero{aspect-ratio:auto;height:min(170px,22vh)}
@@ -227,7 +242,6 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   .instr h3{margin-bottom:6px}
   .instr .fine{margin-top:6px}
   .send{margin:16px -18px 0;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}
-  .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* Phones held sideways. Browsers don't let a page lock the orientation, so on a phone turned sideways this covers
@@ -326,7 +340,10 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
         <div class="days" id="days"></div>
       </section>
       <section class="step" id="stepTime" hidden>
-        <h3>Choose a time</h3>
+        <div class="time-head">
+          <h3>Choose a time</h3>
+          <span class="tip"><button type="button" class="info" aria-label="How to choose a time" aria-describedby="timeTip"><i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="timeTip">Tap the hour you'd like to start. Tap a later hour, or drag the bottom edge, to make it longer. Drag the block to move it, or drag its top or bottom edge to change the time.</span></span>
+        </div>
         <div class="timeline" id="slots"></div>
         <p class="hint" id="hint" aria-live="polite"></p>
       </section>
@@ -370,7 +387,12 @@ const blocked = (d,h) => isTaken(d,h) || isMine(d,h);
 const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?class=" + size;
 // Map query: coordinates for MLS listings, the address for team-added homes (they have none).
 const where = h => h.lat && h.lng ? `${h.lat},${h.lng}` : encodeURIComponent(`${h.addr}, ${h.city}, TX ${h.zip}`);
-const domLabel = h => h.teamAdded ? "Coming soon" : `${h.dom} ${h.dom===1?'day':'days'} on market`;
+// A card's flag: "Coming soon" for a home the team added before it's on the MLS, "New Listing" for one on the market
+// under 8 days. Agents don't see days on market itself; the team does, on Listings.
+const flagOf = h => h.teamAdded ? "Coming soon" : h.dom < 8 ? "New Listing" : "";
+// "4 bds | 3 ba | 3,500 sqft", leaving out any number the listing doesn't have.
+const specsOf = h => [[h.bd, h.bd===1 ? "bd" : "bds"], [h.ba, "ba"], [h.sf && h.sf.toLocaleString("en-US"), "sqft"]]
+  .filter(([n]) => n).map(([n,u]) => `<b>${n}</b> ${u}`).join('<span class="sep" aria-hidden="true">|</span>');
 // What the "Vacant" tag means (the Admin Console's Vacant box says the same).
 const VACANT_TIP = "No one is living in this home, so there are no occupants.";
 
@@ -421,13 +443,14 @@ function renderGrid(){
   homes.forEach((h,i) => {
     const b = document.createElement("button");
     b.className = "card" + (h.priority ? " priority" : "");
-    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${domLabel(h)}.${h.vacant?" Vacant: "+VACANT_TIP:""} Request an open house.`);
-    b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-      <div class="tl"><span class="dom ${h.teamAdded||h.dom<=14?'fresh':''}">${domLabel(h)}</span>${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
+    const flag = flagOf(h);
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${flag ? flag+". " : ""}${h.addr}, ${h.city}, ${money(h.price)}.${h.vacant?" Vacant: "+VACANT_TIP:""} Request an open house.`);
+    b.innerHTML = `<div class="photo"><img loading="lazy"><div class="fallback"></div>
+        <div class="tl">${flag ? `<span class="flag">${flag}</span>` : ""}${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}</div>
       <div class="meta">
-        <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
-        <div class="price">${money(h.price)}</div>
-        <div></div><div class="facts">${h.bd} bd, ${h.ba} ba, ${h.sf.toLocaleString()} sq ft</div>
+        <div class="addr">${h.addr}</div>
+        <div class="city">${h.city}, TX ${h.zip}</div>
+        <div class="numbers"><span class="price">${money(h.price)}</span><span class="facts">${specsOf(h)}</span></div>
       </div>`;
     imgEl(h, b.querySelector("img"), b);
     b.onclick = () => openSheet(i, b);
@@ -484,7 +507,6 @@ function openSheet(i, trigger){
   $("sSub").innerHTML = `${esc(cur.city)}, TX ${esc(cur.zip)}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + esc(cur.mls)}`
     + (cur.vacant ? `<span class="tip"><button type="button" class="vac" aria-describedby="vacTip">Vacant <i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="vacTip">${VACANT_TIP}</span></span>` : "");
   $("sStats").innerHTML = `<div><b>${money(cur.price)}</b><span>List price</span></div>
-    ${cur.teamAdded ? '<div><b>New</b><span>Coming soon</span></div>' : `<div><b>${cur.dom}</b><span>Days on market</span></div>`}
     <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
     <div><b>${cur.sf.toLocaleString()}</b><span>Sq ft</span></div>`;
   $("instrList").innerHTML = cur.instr.map(t=>`<li>${esc(t)}</li>`).join("");
@@ -570,9 +592,11 @@ function drawSel(){
     }
   }
   const n=sel && sel.to-sel.from;
-  $("hint").textContent = !sel ? "Tap the hour you'd like to start."
-    : n===1 ? `${range()} (1 hour). Tap a later hour, or drag the bottom edge, to make it longer. Drag the block to move it.`
-    : `${range()} (${hours(n)}). Drag the top or bottom edge to change the time, or drag the block to move it.`;
+  // Before a time is picked, the line under the timeline says where to start. After, the hours are on the Request
+  // button, so the line is only read out (it still announces changes made with the arrow keys). How to drag is in
+  // the info tip by "Choose a time".
+  $("hint").textContent = !sel ? "Tap the hour you'd like to start." : `${range()} (${hours(n)})`;
+  $("hint").classList.toggle("sr", !!sel);
   update();
 }
 function setSel(next){
