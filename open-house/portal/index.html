@@ -277,6 +277,11 @@ footer .foot-links a{color:inherit}
 #gBtn{display:flex;justify-content:center;min-height:44px}
 .gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
 @media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
+/* Agents who haven't signed the Support and Referral Agreement (auth.js): its button, and who's signed in. */
+.gate-go{display:block;width:100%;min-height:48px;border:0;border-radius:12px;padding:13px 18px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:1rem;cursor:pointer}
+.gate-go:disabled{opacity:.6;cursor:progress}
+.gate-card .gate-who{margin:20px 0 0;font-size:.85rem;overflow-wrap:anywhere}
+.gate-link{min-height:44px;padding:0 8px;border:0;background:none;color:var(--accent);text-decoration:underline;font-size:.9rem;cursor:pointer}
 /* First visit: how a request works, over a short film of one being made (see showWelcome). A site dialog (dialog.css). */
 .welcome-film{display:block;width:100%;aspect-ratio:1;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--bg);object-fit:cover}
 .welcome-film[hidden]{display:none}

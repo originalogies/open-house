@@ -8,6 +8,7 @@ export default async (req) => {
   // Independent reads run together; the requests are read while the listings load.
   const [user, week] = await Promise.all([currentUser(req), currentWeek()]);
   if (!user) return json(401, { error: "signed_out" });
+  if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
   const requests = listRequests();
   let offered;
   try { offered = await offeredListings(week); }

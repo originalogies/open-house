@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { agreementOn, getAgreement } from "./agreement.mjs";
 
 const COOKIE = "oh_session";
 const SESSION_SECONDS = 7 * 24 * 60 * 60;
@@ -95,13 +96,17 @@ export const clearCookie = (req) => `${COOKIE}=; Path=/; HttpOnly${secureFlag(re
 
 // Current signed-in user, re-checked against the live allowlist on every call so
 // removing someone takes effect immediately.
+// mustSign: an agent who hasn't signed the Support and Referral Agreement yet (agreement.mjs). Until they
+// do, the agent pages show only the agreement and the agent API answers 403 agreement_required.
 export async function currentUser(req) {
   const s = readSession(req);
   if (!s) return null;
-  const access = await getAccess();
+  const on = agreementOn();
+  const [access, agreement] = await Promise.all([getAccess(), on ? getAgreement(s.email) : null]); // read together
   if (!isAllowed(s.email, access)) return null;
   const admin = adminEmails().includes(s.email);
-  return { email: s.email, name: s.name, admin, team: admin || parseList(process.env.TEAM_EMAILS).includes(s.email) };
+  const team = admin || parseList(process.env.TEAM_EMAILS).includes(s.email);
+  return { email: s.email, name: s.name, admin, team, mustSign: on && !team && agreement?.status !== "signed", agreement: agreement?.status || null };
 }
 
 // Reject cross-site writes.

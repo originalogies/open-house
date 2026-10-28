@@ -48,6 +48,13 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Admins manage the list at `/admin/`. Removing someone ends their access immediately (the list is re-checked on every request).
 - Subdomains and look-alike domains do not match an allowed domain.
 
+**Support and Referral Agreement (DocuSeal)**
+- Agents sign the George & Noonan Support and Referral Agreement once before they can use the portal. Until they do, every agent page shows only the agreement step, and the agent API (`/api/listings`, `/api/requests`, `/api/requests/cancel-request`) answers 403 `agreement_required`. The team (admins and `TEAM_EMAILS`) doesn't sign.
+- "Read and sign" opens the agreement on DocuSeal (the agent's name is filled in; they can correct it), and DocuSeal sends them back to the page they started from. The portal then asks DocuSeal whether that agent completed it and records the signature with DocuSeal's own time of signing (`signedAt`). DocuSeal's webhook (`/api/agreement/webhook`) records it too, for agents who don't come back. Neither trusts the browser or the webhook body: the signature is looked up in DocuSeal.
+- An agent who leaves partway sees "Continue signing" (the same DocuSeal form). An agent who declines can start again.
+- Records live in Netlify Blobs (`open-house-agreements`, `agreement/<email>`). The Admin Console's Agents list has an Agreement column (Signed with the date and time and a link to the signed copy, Started, Declined, Not signed, or Not needed for the team), and an agent's page says when they signed. The signed copy is fetched from DocuSeal each time.
+- It's on only while `DOCUSEAL_API_KEY` and `DOCUSEAL_TEMPLATE_ID` are set. Code: `netlify/lib/agreement.mjs`, `netlify/functions/agreement*.mjs`, `portal/auth.js`.
+
 **Changes and cancellations**
 - Agents can't cancel on their own. They send a cancellation request for their own pending or approved request until the open house starts (the weekly cutoff doesn't apply). The team gets an email like a new booking and approves the cancellation or keeps the open house. Time changes go through the team.
 - The team can change the date or hours of an approved open house, or cancel it, from the request page (cancel also from the Admin Console). The agent gets an Updated email with a calendar invite that updates the same event, or a calendar cancellation. The reminder is re-sent for a new date.
@@ -102,14 +109,18 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent: Grokbot's Cursor automation webhook. |
 | `GROKBOT_WEBHOOK_TOKEN` | For MLS automation | The `crsr_…` Bearer token for that webhook. Mark as secret. |
 | `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters; stays on Netlify. Makes each job's one-time callback token and signs outgoing jobs. Mark as secret. |
+| `DOCUSEAL_API_KEY` | For the agreement | DocuSeal API key (DocuSeal, Settings, API). Mark as secret. With this and the template ID set, agents must sign the agreement. |
+| `DOCUSEAL_TEMPLATE_ID` | For the agreement | The DocuSeal template "G&N Support and Referral Agreement" (6672249). Its signer role must be `Cooperating Agent`, with a text field `Agent Name`. |
+| `DOCUSEAL_WEBHOOK_SECRET` | No | 32+ random characters. Set the same value as the DocuSeal webhook's secret, header `X-OH-Webhook-Secret`. |
+| `DOCUSEAL_API_URL` | No | `https://api.docuseal.com` by default; `https://api.docuseal.eu` for DocuSeal's EU cloud. |
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`, `/api/agreement`, `/api/agreement/webhook`, `/api/admin/agreements`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 
-- Run `npm test` (21 tests, including MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
+- Run `npm test` (50 tests, including the agreement step against a stand-in DocuSeal, MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
 - After editing a file in `open-house/emails/`, run `npm run build:templates` (Netlify also runs it on each build).
 - Push to `main` to deploy. Functions take about a minute longer than static files to appear.
 

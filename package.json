@@ -6,7 +6,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/access.test.mjs test/mls.test.mjs test/homes.test.mjs test/readall.test.mjs",
+    "test": "node --test test/access.test.mjs test/mls.test.mjs test/homes.test.mjs test/readall.test.mjs test/agreement.test.mjs",
     "build:templates": "node scripts/build-templates.mjs",
     "dev": "npx netlify-cli dev"
   },

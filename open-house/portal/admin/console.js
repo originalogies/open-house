@@ -38,6 +38,18 @@
     : `<span class="sub">${r.imported ? "Imported" : "—"}</span>`;
   // What "Vacant" means; agents see the same sentence on the portal.
   const VACANT_TIP = "No one is living in this home, so there are no occupants.";
+  // The Support and Referral Agreement each agent signs in DocuSeal before using the portal (GET /api/admin/agreements).
+  // "Signed Oct 28, 2026, 3:14 PM", with a link to the signed copy.
+  const fmtSigned = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const signedCopy = (email) => `<a href="/api/admin/agreements?copy=${encodeURIComponent(email)}" target="_blank" rel="noopener">Signed copy</a>`;
+  const agreementCell = (ag, email) => {
+    const a = ag.agreements.find((x) => x.email === email);
+    if (ag.exempt.includes(email)) return '<span class="sub">Not needed (team)</span>';
+    if (a?.status === "signed") return `<span class="pill approved">Signed</span><div class="sub">${esc(fmtSigned(a.signedAt))} · ${signedCopy(email)}</div>`;
+    if (a?.status === "declined") return '<span class="pill declined">Declined</span>';
+    if (a?.status === "pending") return '<span class="pill pending">Started</span><div class="sub">Not signed yet</div>';
+    return '<span class="sub">Not signed</span>';
+  };
 
   let me = null;
   let requests = [];
@@ -317,10 +329,16 @@
   // Every open house the agent has requested, newest first, with a photo of each home. Search narrows the
   // table to an address (or MLS#), and it's split into pages like the Requests list.
   async function renderAgent(email) {
-    if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
+    const [ok, g] = await Promise.all([loadRequests(), api("GET", "/api/admin/agreements")]);
+    if (!ok) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
     const today = todayIso();
     const mine = requests.filter((r) => r.agent.email.toLowerCase() === email).sort((a, b) => b.iso.localeCompare(a.iso) || b.from - a.from);
-    const name = (mine.find((r) => r.agent.name) || {}).agent?.name || email;
+    // Whether they've signed the Support and Referral Agreement, once it's required (the team doesn't sign it).
+    const ag = g.ok && g.data.on && !g.data.exempt.includes(email) ? g.data.agreements.find((x) => x.email === email) || {} : null;
+    const signed = !ag ? "" : ag.status === "signed" ? `Signed the Support and Referral Agreement ${esc(fmtSigned(ag.signedAt))} · ${signedCopy(email)}`
+      : ag.status === "declined" ? "Declined the Support and Referral Agreement"
+      : `Hasn't signed the Support and Referral Agreement yet${ag.status === "pending" ? " (started)" : ""}`;
+    const name = (mine.find((r) => r.agent.name) || {}).agent?.name || ag?.name || email;
     const hosted = mine.filter((r) => r.status === "approved" && r.iso < today);
     const upcoming = mine.filter((r) => r.status === "approved" && r.iso >= today);
     const homes = new Set(hosted.map((r) => r.mls || r.addr));
@@ -329,7 +347,8 @@
     view.innerHTML = `
       <p style="margin:22px 0 0"><a href="${me.admin ? "#agents" : "#requests"}">← ${me.admin ? "All agents" : "All requests"}</a></p>
       <section class="intro" style="padding-top:12px"><div><h1>${esc(name)}</h1>
-        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""}</p></div></section>
+        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""}</p>
+        ${signed ? `<p class="sub" style="margin-top:4px">${signed}</p>` : ""}</div></section>
       <div class="stats">
         <div class="card stat"><b>${hosted.length}</b><span>Open houses hosted</span></div>
         <div class="card stat"><b>${upcoming.length}</b><span>Upcoming approved</span></div>
@@ -646,9 +665,10 @@
 
   // ---- Agents --------------------------------------------------------------
   async function renderAgents() {
-    const [a] = await Promise.all([api("GET", "/api/admin/access"), loadRequests()]);
+    const [a, g] = await Promise.all([api("GET", "/api/admin/access"), api("GET", "/api/admin/agreements"), loadRequests()]);
     if (!a.ok) { view.innerHTML = '<p class="empty">Only administrators can manage agents.</p>'; return; }
     let access = a.data;
+    const ag = g.ok && g.data.on ? g.data : null; // the Agreement column shows once the agreement is required
 
     const draw = () => {
       const domainOf = (e) => e.slice(e.lastIndexOf("@") + 1);
@@ -658,6 +678,7 @@
       access.emails.forEach((e) => add(e)); access.env.emails.forEach((e) => add(e));
       access.admins.forEach((e) => add(e)); (access.team || []).forEach((e) => add(e));
       requests.forEach((r) => { const p = add(r.agent.email, r.agent.name); p.requests++; if (r.status === "approved") p.approved++; p.last = Math.max(p.last, r.createdAt); });
+      ag?.agreements.forEach((x) => add(x.email, x.name)); // signed in and signed, but hasn't requested yet
 
       const how = (p) => {
         const tags = [];
@@ -673,21 +694,22 @@
 
       view.innerHTML = `
         <section class="intro"><div><h1>Agents and access</h1>
-          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away.</p></div></section>
+          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}</p></div></section>
         <div class="card panel">
           <h3>Add an agent</h3>
           <p class="fine">For agents who sign in with an address outside an allowed domain, like a personal Gmail.</p>
           <form class="addrow" id="addEmail"><input class="field" id="newEmail" type="email" placeholder="agent@example.com" autocomplete="off" aria-label="Agent email"><button class="btn">Add agent</button></form>
         </div>
-        <div class="card table-wrap"><table class="stack"><thead><tr><th>Person</th><th>Access</th><th>Requests</th><th>Approved</th><th>Last request</th><th></th></tr></thead>
+        <div class="card table-wrap"><table class="stack"><thead><tr><th>Person</th><th>Access</th>${ag ? "<th>Agreement</th>" : ""}<th>Requests</th><th>Approved</th><th>Last request</th><th></th></tr></thead>
           <tbody>${people.map((p) => `<tr>
             <td data-l="Person">${p.name ? `${agentLink(p.email, p.name)}<div class="sub">${esc(p.email)}</div>` : agentLink(p.email)}</td>
             <td data-l="Access">${how(p)}</td>
+            ${ag ? `<td data-l="Agreement">${agreementCell(ag, p.email)}</td>` : ""}
             <td data-l="Requests">${p.requests}</td>
             <td data-l="Approved">${p.approved}</td>
             <td data-l="Last request">${p.last ? esc(fmtDate(p.last)) : '<span class="sub">—</span>'}</td>
             <td data-l="">${access.emails.includes(p.email) ? `<button class="link" data-rm="${esc(p.email)}">Remove</button>` : ""}</td>
-          </tr>`).join("") || '<tr><td colspan="6" class="empty">No one yet.</td></tr>'}</tbody></table></div>
+          </tr>`).join("") || `<tr><td colspan="${ag ? 7 : 6}" class="empty">No one yet.</td></tr>`}</tbody></table></div>
         <h2 class="section">Domain access</h2>
         <div class="card panel">
           <p class="fine" style="margin-top:0">Everyone with an address at these domains can sign in. Subdomains are not included.</p>

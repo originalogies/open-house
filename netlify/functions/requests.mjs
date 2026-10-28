@@ -11,11 +11,13 @@ export default async (req) => {
   if (req.method === "GET") {
     const [user, all] = await Promise.all([currentUser(req), listRequests()]); // read together
     if (!user) return json(401, { error: "signed_out" });
+    if (user.mustSign) return json(403, { error: "agreement_required" });
     return json(200, { requests: historyFor(all, user.email) });
   }
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
+  if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
 
   const week = await currentWeek();
   const b = await req.json().catch(() => null);
