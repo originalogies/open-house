@@ -45,7 +45,9 @@
   --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --taken:#1F2830; --photo:#24313B;
 }
 *,*::before,*::after{box-sizing:inherit}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* Text stays the size set here. Without this, iPhone browsers (Chrome especially) enlarge blocks of text when the
+   phone is turned sideways and can leave them enlarged after it's turned back. Pinch zoom still works. */
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
 img{max-width:100%;display:block}
 button{font:inherit;color:inherit}
@@ -100,6 +102,11 @@ button{font:inherit;color:inherit}
 button.vac{border:0;cursor:pointer;position:relative}
 button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger target for thumbs */
 .sub .tip{vertical-align:middle;margin-left:8px}
+/* The Vacant tip in the sheet opens below the whole line, from its left edge, so it never runs past the side of the sheet:
+   even hidden, anything wider than the sheet lets it slide sideways on a phone. */
+#sSub{position:relative}
+#sSub .tip{position:static}
+#sSub .tip-text{max-width:min(240px,100%)}
 /* "Choose a time" and its info icon; the tip opens below the whole heading so it stays inside the sheet on a phone. */
 .time-head{position:relative;display:flex;align-items:center;gap:8px;margin:0 0 10px}
 .time-head h3{margin:0}
@@ -112,7 +119,7 @@ button.info::after{content:"";position:absolute;inset:-14px} /* a bigger target 
 /* Above the top navigation bar (z-index 20), below the sign-in gate (100). */
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(6,10,14,.5);opacity:0;pointer-events:none;transition:opacity .25s}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;z-index:60;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overscroll-behavior:contain;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet{position:fixed;z-index:60;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet.on{transform:none}
 .sheet .hero{position:relative;aspect-ratio:16/10;background:var(--photo)}
 .sheet .hero img{width:100%;height:100%;object-fit:cover}
