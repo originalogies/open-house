@@ -84,7 +84,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Confirmations and questions (cancel, remove, link, a cancellation reason) open the site's own dialog (`dialog.js`, `dialog.css`) instead of the browser's boxes.
 - Addresses read street and city everywhere ("200 Murano Place, Southlake"), including email subjects and the calendar event title.
 - Status labels match across old and new open houses: past approved open houses read "Approved", not "Hosted".
-- Browser tab icon: `favicon.png` (the blue ampersand, 72×72). Home-screen and link-preview icons still use `apple-touch-icon.png` (G&N, 180×180).
+- Shared links show `og-image.jpg` (1200×630): the logo and "OPEN HOUSE / REQUEST THIS WEEKEND" in white over a modern home under a blue sky. The icons take the same look, white on that sky's blue gradient: the browser tab uses `favicon.png` (the logo's ampersand, 96×96, with `favicon.ico` at 16/32/48 for crawlers), and home screens and link previews use `apple-touch-icon.png` (G&N, 180×180). The page tags carry `?v=2` so browsers and link previews drop the old images; bump it when the images change again.
 
 ## Configuration (Netlify environment variables)
 
