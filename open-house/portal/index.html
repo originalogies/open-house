@@ -495,14 +495,17 @@ function renderDays(){
 }
 // The buttons are clock times from FIRST to LAST. The first tap is the start time (one hour until an end
 // is picked) and a later tap is the end time, so 12:00 then 3:00 is three hours. After that, a tap starts over;
-// tapping the end time again lets you pick a different one.
+// tapping the end time again lets you pick a different one. LAST is closing time, so it can't be a start:
+// tapped on its own it picks the last hour, ending at LAST.
 const free = (from,to) => { for(let x=from;x<to;x++) if(blocked(day,x)) return false; return true; };
 const choosingEnd = () => !!sel && !sel.end;
+const lastHourFree = () => free(LAST-1,LAST);
 function pick(h){
   if(choosingEnd() && h>sel.from && free(sel.from,h)) sel={from:sel.from,to:h,end:true};
   else if(choosingEnd() && h===sel.from) sel=null;
   else if(sel && sel.end && h===sel.to) sel={from:sel.from,to:sel.from+1,end:false};
   else if(h<LAST && !blocked(day,h)) sel={from:h,to:h+1,end:false};
+  else if(h===LAST && lastHourFree()) sel={from:LAST-1,to:LAST,end:true};
   renderSlots();
 }
 function renderSlots(){
@@ -514,7 +517,7 @@ function renderSlots(){
     const taken = h<LAST && blocked(day,h) && !asEnd && !isEnd, own = isMine(day,h);
     const b=document.createElement("button");
     b.className = "slot" + (sel && sel.end && h>sel.from && h<sel.to ? " in" : "");
-    b.disabled = !(asEnd || isStart || isEnd || (h<LAST && !blocked(day,h)));
+    b.disabled = !(asEnd || isStart || isEnd || (h<LAST ? !blocked(day,h) : lastHourFree()));
     b.setAttribute("aria-pressed", isStart || isEnd);
     b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
     b.setAttribute("aria-label", fmt(h) + (isStart ? ", start time" : isEnd ? ", end time" : asEnd ? ", choose as end time" : taken ? (own ? ", your request" : ", already booked") : ""));
