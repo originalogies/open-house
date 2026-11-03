@@ -64,7 +64,7 @@ export default async (req) => {
     const target = (await mlsListings(await currentWeek())).find((l) => l.mls === String(b.mls || ""));
     if (!target) return json(400, { error: "unknown_mls", message: "Pick one of the team's MLS listings." });
     const other = (await listHomes()).find((h) => h.linkedMls === target.mls);
-    if (other) return json(409, { error: "already_linked", message: `MLS# ${target.mls} is already linked to ${other.addr}.` });
+    if (other) return json(409, { error: "already_linked", message: `MLS# ${target.mls} is already linked to ${[other.addr, other.city].filter(Boolean).join(", ")}.` });
     const { status, ...body } = await linkHome(home, target.mls, user);
     return json(status, body);
   }

@@ -14,3 +14,8 @@
 
 [functions]
   directory = "netlify/functions"
+
+# Email photos are cropped by Netlify's image CDN (/.netlify/images, see emailPhotoUrl in netlify/lib/email.mjs).
+# These are the only places it may fetch them from: Repliers' listing photos and team-added homes' photos.
+[images]
+  remote_images = ["https://cdn\\.repliers\\.io/.*", "https://open-house\\.synergyrealtors\\.com/api/home-photo.*"]

@@ -1,10 +1,11 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
-import { teamListings, getInfo, saveInfo, rawSample, probe } from "../lib/listings.mjs";
+import { teamListings, getInfo, saveInfo, rawSample, probe, forgetRepliers, STANDARD_INSTR } from "../lib/listings.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
-// PUT { mls, offered, days, instr[], access } saves one listing. GET ?raw=1 shows one raw Repliers
-// listing (no description) for checking field mapping.
+// PUT { mls, offered, priority, days, instr[], access, vacant } saves one listing. GET ?raw=1 shows one raw Repliers
+// listing (no description) for checking field mapping. GET ?fresh=1 (the Refresh button) asks Repliers again now
+// instead of using the server's copy from the last 5 minutes.
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
@@ -13,8 +14,10 @@ export default async (req) => {
 
   if (req.method === "GET") {
     try {
-      if (new URL(req.url).searchParams.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
-      return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, ...(await teamListings(week)) });
+      const q = new URL(req.url).searchParams;
+      if (q.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
+      if (q.get("fresh")) forgetRepliers();
+      return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, standardInstr: STANDARD_INSTR, ...(await teamListings(week)) });
     } catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable", message: e.message.slice(0, 200) }); }
   }
 
@@ -28,8 +31,9 @@ export default async (req) => {
     const access = String(b.access ?? cur.access).slice(0, 500);
     const priorityWeek = b.priority === true ? week.satIso : b.priority === false ? null : cur.priorityWeek;
     const offeredWeek = b.offered === true ? week.satIso : b.offered === false ? null : cur.offeredWeek;
+    const vacant = typeof b.vacant === "boolean" ? b.vacant : !!cur.vacant;
     if (offeredWeek && !days.length) return json(400, { error: "no_days", message: "Pick at least one day to offer." });
-    await saveInfo(b.mls, { offeredWeek, priorityWeek, days, instr, access });
+    await saveInfo(b.mls, { offeredWeek, priorityWeek, days, instr, access, vacant });
     return json(200, { ok: true });
   }
   return json(405, { error: "method_not_allowed" });

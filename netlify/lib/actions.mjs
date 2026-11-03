@@ -1,7 +1,7 @@
 import { saveRequest, listRequests } from "./requests.mjs";
 import { sendUpdated, sendCancelled, sendWithdrawn, sendCancelRequested, sendCancelKept } from "./email.mjs";
 import { checkChange, checkCancel, checkCancelRequest, openCancelRequest, dayKeyOf } from "./changes.mjs";
-import { logEvent, mode, desiredFor } from "./mls.mjs";
+import { logEvent, mode, byHand, desiredFor } from "./mls.mjs";
 import { mlsOpenHouses, getInfo, saveInfo } from "./listings.mjs";
 import { saveHome, mergeInfo, isMlsNumber } from "./homes.mjs";
 import { dayMeta } from "./week.mjs";
@@ -16,9 +16,9 @@ export async function cancelRequest(r, user) {
   r.status = "cancelled"; r.cancelledAt = Date.now(); r.cancelledBy = user.email; r.cancelledByName = user.name;
   if (asked) Object.assign(r.cancelRequest, { outcome: "approved", decidedAt: r.cancelledAt, decidedBy: user.email, decidedByName: user.name });
   r.seq = (r.seq || 0) + 1;
-  // Manual mode: the team removes it from the MLS by hand, so record the MLS as matching.
+  // Entered by hand: the team removes it from the MLS by hand, so record the MLS as matching.
   // A team-added home that isn't on the MLS yet has nothing to remove.
-  const onMls = isMlsNumber(r.mls), manualMls = wasApproved && onMls && mode() === "off";
+  const onMls = isMlsNumber(r.mls), manualMls = wasApproved && onMls && byHand(r);
   if (!onMls) r.sync = { ...(r.sync || {}), current: null, state: "not_on_mls" };
   else if (manualMls) r.sync = { ...(r.sync || {}), current: null, state: "manual" };
   else if (r.sync && r.sync.state !== "booking") r.sync.state = "idle"; // MLS change pending
@@ -92,9 +92,9 @@ export async function changeRequest(r, user, next) {
   r.seq = (r.seq || 0) + 1;
   r.reminderSent = false; // the reminder goes out again for the new date
   (r.history ||= []).push({ at: Date.now(), by: user.email, before, after: { iso: r.iso, from: r.from, to: r.to } });
-  // Manual mode: the team updates the MLS by hand, so record the MLS as matching.
+  // Entered by hand: the team updates the MLS by hand, so record the MLS as matching.
   // A team-added home that isn't on the MLS yet has nothing to update there.
-  const onMls = isMlsNumber(r.mls), manualMls = onMls && mode() === "off";
+  const onMls = isMlsNumber(r.mls), manualMls = onMls && byHand(r);
   if (!onMls) r.sync = { ...(r.sync || {}), current: null, state: "not_on_mls" };
   else if (manualMls) r.sync = { ...(r.sync || {}), current: desiredFor(r), state: "manual" };
   else if (r.sync && r.sync.state !== "booking") r.sync.state = "idle"; // MLS change pending

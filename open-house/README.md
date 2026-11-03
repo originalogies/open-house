@@ -44,6 +44,17 @@ Agents sign in with Google. The server checks every sign-in against an allowlist
 
 Nothing is allowed by default: with no admins and no allowed entries, no one can sign in. Removing someone at `/admin/` ends their access right away.
 
+## Support and Referral Agreement (DocuSeal)
+
+The first time an agent signs in, they must read and sign the George & Noonan Support and Referral Agreement before they can use the portal. "Read and sign" opens it on DocuSeal, which works on a phone, and brings them back when they're done. The portal checks with DocuSeal and records when they signed; the Admin Console's Agents list shows who has signed, when, and a link to each signed copy. The team doesn't sign. The agreement step is on only while both DocuSeal variables below are set.
+
+| Variable | Purpose |
+|----------|---------|
+| `DOCUSEAL_API_KEY` | DocuSeal API key (DocuSeal, Settings, API) |
+| `DOCUSEAL_TEMPLATE_ID` | The "G&N Support and Referral Agreement" template: signer role `Cooperating Agent`, with fields `Agent Name` (text, the blank in the first paragraph), a Signature and a Date on page 3 |
+| `DOCUSEAL_WEBHOOK_SECRET` | Optional. DocuSeal webhook (Settings, Webhooks): URL `https://open-house.synergyrealtors.com/api/agreement/webhook`, events `form.completed` and `form.declined`, secret header `X-OH-Webhook-Secret` with this value |
+| `DOCUSEAL_API_URL` | Optional. `https://api.docuseal.eu` for DocuSeal's EU cloud |
+
 ## Requests and email (Resend)
 
 `POST /api/requests` saves a request (Netlify Blobs) and sends templates 1 and 2. The team opens the Approve or Decline link, which goes to `/respond/`, signs in with Google, and confirms. Approving requires ticking "entered on the MLS" and then sends template 3 with the calendar invite. `netlify/functions/reminders.mjs` runs hourly, sends template 4 at 9:00 AM Central the day before, and expires unanswered requests after the Friday cutoff.

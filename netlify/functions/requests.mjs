@@ -1,21 +1,23 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { offeredListings, snapshot } from "../lib/listings.mjs";
-import { listRequests, saveRequest, newId, overlaps, historyFor } from "../lib/requests.mjs";
+import { listRequests, saveRequest, newId, overlaps, historyFor, openRequestsOf, holdsSlot } from "../lib/requests.mjs";
 import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs";
-import { fmtRange } from "../lib/time.mjs";
+import { fmtRange, chicagoNow } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 
 // GET  /api/requests -> the signed-in agent's own requests (history and status)
 // POST /api/requests -> submit a new request
 export default async (req) => {
   if (req.method === "GET") {
-    const user = await currentUser(req);
+    const [user, all] = await Promise.all([currentUser(req), listRequests()]); // read together
     if (!user) return json(401, { error: "signed_out" });
-    return json(200, { requests: historyFor(await listRequests(), user.email) });
+    if (user.mustSign) return json(403, { error: "agreement_required" });
+    return json(200, { requests: historyFor(all, user.email) });
   }
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
+  if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
 
   const week = await currentWeek();
   const b = await req.json().catch(() => null);
@@ -36,10 +38,10 @@ export default async (req) => {
   }
 
   const all = await listRequests();
-  const mineLive = all.filter((r) => r.agent.email === user.email && (r.status === "pending" || r.status === "approved"));
+  const mineLive = openRequestsOf(all, user.email, chicagoNow().date);
   if (mineLive.length >= 12) return json(429, { error: "too_many", message: "Too many open requests. Wait for some to be answered." });
   if (mineLive.some((r) => overlaps(r, candidate))) return json(409, { error: "overlap", message: "You already have a request that overlaps those hours." });
-  if (all.some((r) => r.status === "approved" && overlaps(r, candidate))) return json(409, { error: "taken", message: "Those hours were just taken. Pick another time." });
+  if (all.some((r) => holdsSlot(r) && overlaps(r, candidate))) return json(409, { error: "taken", message: "Those hours were just taken. Pick another time." });
 
   const record = { id: newId(), ...candidate, listing: snapshot(listing), notes, phone, agent: { email: user.email, name: user.name },
     site: siteFor(new URL(req.url).origin), status: "pending", createdAt: Date.now(), reminderSent: false };

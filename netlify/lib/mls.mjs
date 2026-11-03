@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import { SITE } from "./email.mjs";
-import { chicagoToUtc } from "./time.mjs";
+import { chicagoToUtc, fmtHour } from "./time.mjs";
 import { isMlsNumber } from "./homes.mjs";
 
 // ---- MLS sync: "desired state" model ---------------------------------------
@@ -19,13 +19,21 @@ export const MODES = ["off", "dry_run", "live"];
 // off: nothing is sent; the team enters the MLS by hand (approve page keeps the "entered on MLS" box).
 // dry_run: webhooks are sent with dry_run: true (bot validates, then cancels). live: bot submits.
 export const mode = () => (MODES.includes(process.env.MLS_BOOKING_MODE) ? process.env.MLS_BOOKING_MODE : "off");
+// The AI agent (the MLS bot) can take jobs only when automation is on, its webhook is set, and there's
+// a secret to make each job's callback token with.
+export const agentReady = () => mode() !== "off" && !!process.env.GROKBOT_WEBHOOK_URL && (process.env.MLS_WEBHOOK_SECRET || "").length >= 32;
+// On the approve page the team chooses, per request, to enter the open house on the MLS by hand
+// (r.mlsMethod "manual") or to schedule it with the AI agent ("agent"). With automation off, all by hand.
+export const byHand = (r) => mode() === "off" || r.mlsMethod === "manual";
 
 export const OH_TYPE = "Public";
 const STALL_MS = 30 * 60 * 1000;       // no result from the bot in 30 minutes = stalled
 const MAX_DELIVERY = 3;                 // webhook delivery attempts before giving up
 
-// What the MLS should show for this request: an open house while approved, nothing otherwise.
-export const desiredFor = (r) => (r.status === "approved" ? { iso: r.iso, from: r.from, to: r.to, type: OH_TYPE } : null);
+// What the MLS should show for this request: an open house while approved or being approved with the
+// AI agent (r.approving: the request waits until the AI agent reports it's on the MLS), nothing otherwise.
+export const desiredFor = (r) => (r.status === "approved" || (r.status === "pending" && r.approving)
+  ? { iso: r.iso, from: r.from, to: r.to, type: OH_TYPE } : null);
 export const keyOf = (e) => (e ? `${e.iso}|${e.from}|${e.to}|${e.type}` : "none");
 
 // Job needed to make the MLS match, or null when it already matches.
@@ -44,6 +52,7 @@ const ended = (e, now) => !!e && now >= chicagoToUtc(e.iso, e.to).getTime();
 export function needsDispatch(r, now = Date.now(), runMode = mode()) {
   if (runMode === "off") return null;
   if (!isMlsNumber(r.mls)) return null; // a team-added home not linked to its MLS listing yet
+  if (r.mlsMethod === "manual") return null; // the team keeps this one in step on the MLS by hand
   const action = nextAction(r);
   if (!action) return null;
   const m = r.sync || {};
@@ -60,8 +69,9 @@ export function needsDispatch(r, now = Date.now(), runMode = mode()) {
   return { action, key, from: cur, to: want };
 }
 
-// Webhook body. Matches the payload documented in the mls-open-house skill.
+// One job for the bot (postWebhook sends it as { items: [job] }). Documented in docs/MLS_AUTOMATION.md.
 // `d` is what needsDispatch returned: { action, from (MLS now), to (MLS wanted) }.
+// Times go both as 24-hour "13:00" (start/end) and as the "1:00 PM" Grokbot reads (start_time/end_time).
 // The bot calls back the site the request was made on, so a local copy gets its own callbacks;
 // MLS_CALLBACK_URL overrides that (e.g. a tunnel to a local copy, since a remote bot can't reach localhost).
 export function buildPayload(r, d, jobId, { dryRun = mode() !== "live", site = r.site || SITE } = {}) {
@@ -70,11 +80,13 @@ export function buildPayload(r, d, jobId, { dryRun = mode() !== "live", site = r
   const body = {
     request_id: r.id, job_id: jobId, action,
     mls_number: String(r.mls), address: `${l.addr}, ${l.city}, TX ${l.zip}`,
-    type: target.type, date: target.iso, start: hh(target.from), end: hh(target.to), timezone: "America/Chicago",
+    type: target.type, date: target.iso, start: hh(target.from), end: hh(target.to),
+    start_time: fmtHour(target.from), end_time: fmtHour(target.to), timezone: "America/Chicago",
     approved_by: r.decidedBy || null, approved_at: r.decidedAt ? new Date(r.decidedAt).toISOString() : null,
-    dry_run: dryRun, callback_url: process.env.MLS_CALLBACK_URL || `${site}/api/mls/callback`,
+    dry_run: dryRun, callback_url: process.env.MLS_CALLBACK_URL || `${site}/api/mls/callback`, callback_token: callbackToken(jobId),
   };
-  if (action !== "add") Object.assign(body, { original_date: cur.iso, original_start: hh(cur.from), original_end: hh(cur.to), original_type: cur.type });
+  if (action !== "add") Object.assign(body, { original_date: cur.iso, original_start: hh(cur.from), original_end: hh(cur.to),
+    original_start_time: fmtHour(cur.from), original_end_time: fmtHour(cur.to), original_type: cur.type });
   if (action === "cancel") body.remove_method = "cancel"; // set the entry to Canceled, keep the record
   return body;
 }
@@ -91,6 +103,13 @@ export function applyResult(r, { job_id, result, message }, now = Date.now()) {
   else if (result === "dry_run") m.state = "dry_run_ok";
   else if (result === "needs_login") m.state = "needs_login";
   else m.state = "failed";
+  // Being approved with the AI agent: it's approved only now that it's on the MLS. A dry run submits
+  // nothing, so it doesn't count; the request keeps waiting for a retry, entry by hand, or a decline.
+  if (r.status === "pending" && r.approving && m.state === "synced") {
+    Object.assign(r, { status: "approved", decidedAt: now, decidedBy: r.approving.by, decidedByName: r.approving.byName });
+    delete r.approving;
+    return { state: m.state, approved: true };
+  }
   return { state: m.state };
 }
 
@@ -111,16 +130,36 @@ export function verify(ts, sig, body, now = Date.now()) {
   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good));
 }
 
-export async function postWebhook(payload, now = Date.now()) {
-  const url = process.env.GROKBOT_WEBHOOK_URL;
+// A bot that can't sign (Grokbot in Cursor holds no secret) proves its callback instead by sending back
+// the callback_token that came with the job. It's made from the secret and the job ID, so it only fits
+// that one job, and once the job has a result the portal ignores further callbacks for it.
+export const callbackToken = (jobId) => crypto.createHmac("sha256", webhookSecret()).update(`callback:${jobId}`).digest("hex");
+export function verifyCallbackToken(jobId, token) {
+  if (!jobId || !/^[a-f0-9]{64}$/.test(String(token || ""))) return false;
+  return crypto.timingSafeEqual(Buffer.from(String(token)), Buffer.from(callbackToken(String(jobId))));
+}
+
+// Grokbot runs as a Cursor automation: its webhook takes { items: [...] } and a Bearer token
+// (GROKBOT_WEBHOOK_TOKEN), and answers { success, runUuid }. The signature headers are sent as well,
+// for a receiver that can check them. Returns Cursor's run ID, if any, so the job can be traced there.
+export async function postWebhook(payload, now = Date.now(), timeoutMs = 15000) {
+  // The token alone ("crsr_…"): if Cursor's whole "Bearer crsr_…" header was pasted into Netlify, the prefix is dropped.
+  const url = process.env.GROKBOT_WEBHOOK_URL, token = String(process.env.GROKBOT_WEBHOOK_TOKEN || "").trim().replace(/^bearer\s+/i, "");
   if (!url) throw new Error("GROKBOT_WEBHOOK_URL is not set");
-  const body = JSON.stringify(payload), ts = String(Math.floor(now / 1000));
+  const body = JSON.stringify({ items: [payload] }), ts = String(Math.floor(now / 1000));
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-oh-timestamp": ts, "x-oh-signature": sign(ts, body), "idempotency-key": payload.job_id },
-    body, signal: AbortSignal.timeout(15000),
+    headers: {
+      "content-type": "application/json", "x-oh-timestamp": ts, "x-oh-signature": sign(ts, body), "idempotency-key": payload.job_id,
+      ...(token && { authorization: `Bearer ${token}` }),
+    },
+    body, signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`webhook ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const text = await res.text();
+  if (!res.ok) throw new Error(`webhook ${res.status}: ${text.slice(0, 200)}`);
+  const data = (() => { try { return JSON.parse(text); } catch { return {}; } })();
+  if (data.success === false) throw new Error(`webhook refused the job: ${text.slice(0, 200)}`);
+  return { runId: typeof data.runUuid === "string" ? data.runUuid.slice(0, 100) : null };
 }
 
 export const deliveryBackoff = (attempts) => Math.min(30, 2 ** attempts) * 60000; // 2, 4, 8 ... minutes
@@ -128,7 +167,7 @@ export { STALL_MS, MAX_DELIVERY };
 
 // ---- stores -----------------------------------------------------------------
 const syncStore = () => getStore({ name: "open-house-mls", consistency: "strong" });
-const auditStore = () => getStore("open-house-audit");
+const auditStore = () => getStore({ name: "open-house-audit", consistency: "strong" }); // a request's history shows what just happened
 const shotStore = () => getStore("open-house-screenshots");
 
 // One job in flight at a time across all requests, so parallel runs never share the MLS login.

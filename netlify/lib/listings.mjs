@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
-import { chicagoNow } from "./time.mjs";
+import { chicagoNow, chicagoToUtc } from "./time.mjs";
 import { listHomes, asListing, linkSuggestions, photoUrl } from "./homes.mjs";
+import { readAll } from "./readall.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
 const BASE = "https://api.repliers.io";
@@ -19,7 +20,7 @@ async function repliers(params) {
 // Repliers' `class` is unreliable (single-family homes appear under CondoProperty), so filter on propertyType instead.
 const NOT_RESIDENTIAL = /land|lot|farm|ranch|acre|commercial/i;
 let cache = { at: 0, data: null };
-let freshness = { at: 0, date: null };
+let freshness = { at: 0, stamp: null };
 
 // Active residential sale listings for the two agents (land and commercial excluded).
 async function fetchRaw() {
@@ -38,19 +39,41 @@ async function fetchRaw() {
   return data;
 }
 
-// Date (YYYY-MM-DD) the Repliers data was last updated, so a stale feed is obvious.
-export async function feedUpdatedOn() {
-  if (freshness.date && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.date;
-  const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc" }));
-  freshness = { at: Date.now(), date: String(d.listings?.[0]?.updatedOn || "").slice(0, 10) || null };
-  return freshness.date;
+// When a listing last changed on the MLS: an ISO time ("2026-10-28T05:13:31.000Z"), or just the date if Repliers
+// sends no time. Repliers labels updatedOn as UTC, but it's the MLS's Central time: "2026-10-28T00:13:31.000-00:00"
+// was 12:13 AM CT, and Repliers took it in at 05:46Z (`took`, its timestamps.repliersUpdatedOn). So it's read as
+// Central, unless that would put the change after Repliers took it in (then the label was right).
+export function mlsChangedAt(updatedOn, took) {
+  const raw = String(updatedOn || ""), tookAt = Date.parse(took);
+  if (raw.length <= 10 || Number.isNaN(Date.parse(raw))) return raw.slice(0, 10) || null;
+  const [h, m, s] = raw.slice(11, 19).split(":").map(Number);
+  const central = new Date(+chicagoToUtc(raw.slice(0, 10), h) + (m * 60 + s) * 1000);
+  return (central <= tookAt || Number.isNaN(tookAt) ? central : new Date(raw)).toISOString();
 }
+
+// When the newest MLS change in Repliers was made, so a stale feed is obvious.
+export async function feedUpdatedAt() {
+  if (freshness.stamp && Date.now() - freshness.at < 5 * 60 * 1000) return freshness.stamp;
+  const d = await repliers(new URLSearchParams({ status: "A", resultsPerPage: "1", sortBy: "updatedOnDesc", fields: "updatedOn,timestamps" }));
+  const l = d.listings?.[0] || {};
+  freshness = { at: Date.now(), stamp: mlsChangedAt(l.updatedOn, l.timestamps?.repliersUpdatedOn) };
+  return freshness.stamp;
+}
+
+// The Listings page's Refresh: the next read asks Repliers again instead of reusing the copy from the last 5 minutes.
+export const forgetRepliers = () => { cache = { at: 0, data: null }; freshness = { at: 0, stamp: null }; };
 
 // Amounts like "$1,295,000" or "6,331": digits only. Never use it for coordinates; it drops the minus sign.
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
 // Map coordinates keep their sign: Texas longitudes are negative (-97.18), and without the minus a
 // home lands in western China.
 const coord = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+// Bathrooms as the MLS writes them, full.half. Repliers sends the total and how many of those are half
+// baths: 9 with 3 half is 6 full and 3 half, so 6.3. Without a usable half count, the total stands.
+const baths = (d = {}) => {
+  const total = num(d.numBathrooms), half = num(d.numBathroomsHalf);
+  return half > 0 && half < 10 && half <= total ? ((total - half) * 10 + half) / 10 : total;
+};
 
 export function normalize(l) {
   const a = l.address || {};
@@ -61,10 +84,14 @@ export function normalize(l) {
     city: a.city || "", zip: String(a.zip || "").slice(0, 5),
     lat: coord(l.map?.latitude), lng: coord(l.map?.longitude),
     price: num(l.listPrice), dom: Math.round(num(l.daysOnMarket ?? l.simpleDaysOnMarket)),
-    bd: num(l.details?.numBedrooms), ba: num(l.details?.numBathrooms), sf: Math.round(num(l.details?.sqft)),
+    bd: num(l.details?.numBedrooms), ba: baths(l.details), sf: Math.round(num(l.details?.sqft)),
     img: (l.images && l.images[0]) || "",
+    gallery: (l.images || []).slice(0, GALLERY),
   };
 }
+
+// Photos agents can click through on a home's details: the cover and the next four.
+export const GALLERY = 5;
 
 // Open houses already on the MLS for one listing, as whole-hour blocks in Central time: [{ iso, from, to }].
 // Entries look like { date, startTime: "2026-05-23T18:00:00.000-00:00" (UTC), endTime, type, status }.
@@ -96,33 +123,34 @@ export async function mlsOpenHouses(mls) {
 }
 
 // ---- Team-managed details (not in MLS data) ------------------------------
-const infoStore = () => getStore("open-house-listing-info");
-const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "" };
+const infoStore = () => getStore({ name: "open-house-listing-info", consistency: "strong" }); // publishing shows on the portal at once
+// vacant: no one lives in the home (no occupants). Shown to agents as a "Vacant" tag.
+const blank = { offeredWeek: null, priorityWeek: null, days: ["sat", "sun"], instr: [], access: "", vacant: false };
 
 export const getInfo = async (mls) => ({ ...blank, ...((await infoStore().get(`mls/${mls}`, { type: "json" }).catch(() => null)) || {}) });
 export const saveInfo = (mls, info) => infoStore().setJSON(`mls/${mls}`, info);
 
-export async function allInfo(mlsList) {
-  const entries = await Promise.all(mlsList.map(async (m) => [m, await getInfo(m)]));
-  return Object.fromEntries(entries);
-}
+// Every listing's stored team settings ("mls/<MLS# or home id>"), read in one go so it can run alongside the catalog.
+const storedInfo = async () => new Map((await readAll(infoStore(), "open-house-listing-info", "mls/")).map(([k, v]) => [k.slice(4), v]));
+const infoFor = (mlsList, stored) => Object.fromEntries(mlsList.map((m) => [m, { ...blank, ...(stored.get(m) || {}) }]));
 
 // Homes that always appear, even if Repliers doesn't return them. Live Repliers data wins when present.
 const MANUAL = [
-  { mls: "21297798", addr: "2006 Nighthawk Court", city: "Westlake", zip: "76262", lat: 32.978088, lng: -97.18720096, price: 5950000, dom: 50, bd: 4, ba: 6, sf: 6331, img: "ntreismls/IMG-21297798_0.jpg" },
-  { mls: "21372196", addr: "6900 Rockingham Court", city: "Colleyville", zip: "76034", lat: 32.908375, lng: -97.157547, price: 4350000, dom: 13, bd: 6, ba: 9, sf: 10026, img: "ntreismls/IMG-21372196_4446441738281566696.jpg" },
-  { mls: "21332907", addr: "69 Cortes Drive", city: "Westlake", zip: "76262", lat: 32.983337, lng: -97.18004802, price: 1297000, dom: 32, bd: 3, ba: 4, sf: 2038, img: "ntreismls/IMG-21332907_4446676996495488826.jpg" },
-  { mls: "21346883", addr: "441 Watermere Drive", city: "Southlake", zip: "76092", lat: 32.929991, lng: -97.193693, price: 629000, dom: 28, bd: 2, ba: 3, sf: 2109, img: "ntreismls/IMG-21346883_4444455829925220134.jpg" },
+  { mls: "21297798", addr: "2006 Nighthawk Court", city: "Westlake", zip: "76262", lat: 32.978088, lng: -97.18720096, price: 5950000, dom: 50, bd: 4, ba: 4.2, sf: 6331, img: "ntreismls/IMG-21297798_0.jpg" },
+  { mls: "21372196", addr: "6900 Rockingham Court", city: "Colleyville", zip: "76034", lat: 32.908375, lng: -97.157547, price: 4350000, dom: 13, bd: 6, ba: 6.3, sf: 10026, img: "ntreismls/IMG-21372196_4446441738281566696.jpg" },
+  { mls: "21332907", addr: "69 Cortes Drive", city: "Westlake", zip: "76262", lat: 32.983337, lng: -97.18004802, price: 1297000, dom: 32, bd: 3, ba: 3.1, sf: 2038, img: "ntreismls/IMG-21332907_4446676996495488826.jpg" },
+  { mls: "21346883", addr: "441 Watermere Drive", city: "Southlake", zip: "76092", lat: 32.929991, lng: -97.193693, price: 629000, dom: 28, bd: 2, ba: 2.1, sf: 2109, img: "ntreismls/IMG-21346883_4444455829925220134.jpg" },
 ];
 
 async function catalog(week) {
-  let raw = [], warning = null;
-  try { raw = await fetchRaw(); } catch (e) { console.error(e.message); warning = e.message.slice(0, 300); }
+  let warning = null;
+  // Repliers and the team-added homes (those not linked to an MLS listing yet; see homes.mjs) load together.
+  const [raw, homes] = await Promise.all([
+    fetchRaw().catch((e) => { console.error(e.message); warning = e.message.slice(0, 300); return []; }),
+    listHomes().then((all) => all.filter((h) => !h.linkedMls)).catch((e) => { console.error("team-added homes unavailable", e.message); return []; }),
+  ]);
   const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week) }));
   for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [] });
-  // Homes the team added that aren't linked to an MLS listing yet (see homes.mjs).
-  let homes = [];
-  try { homes = (await listHomes()).filter((h) => !h.linkedMls); } catch (e) { console.error("team-added homes unavailable", e.message); }
   for (const h of homes) list.push({ n: asListing(h), openHouses: [], home: h });
   return { list, warning };
 }
@@ -131,25 +159,27 @@ async function catalog(week) {
 export const mlsListings = async (week) => (await catalog(week)).list.filter((x) => !x.n.teamAdded).map((x) => x.n);
 
 // How a listing's stored team settings read for a given weekend. Publishing and Priority are per
-// weekend; days, instructions and access details stay with the home from week to week.
-export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access });
+// weekend; days, instructions, access details and Vacant stay with the home from week to week.
+export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, vacant: !!i.vacant });
 
 // Listings the team has offered for the current weekend. Never includes access details.
 export async function offeredListings(week) {
-  const { list } = await catalog(week);
-  const info = await allInfo(list.map((x) => x.n.mls));
+  const [{ list }, stored] = await Promise.all([catalog(week), storedInfo()]);
+  const info = infoFor(list.map((x) => x.n.mls), stored);
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
-    .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, external: x.openHouses }))
-    .sort((a, b) => Number(b.priority) - Number(a.priority)); // priority first, otherwise keep order
+    .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, vacant: !!info[x.n.mls].vacant, external: x.openHouses }))
+    .sort((a, b) => Number(b.priority) - Number(a.priority) || b.price - a.price); // Priority first, then highest price first
 }
 
 export async function teamListings(week) {
-  const { list, warning } = await catalog(week);
-  const info = await allInfo(list.map((x) => x.n.mls));
+  const [{ list, warning }, stored, updatedAt] = await Promise.all([catalog(week), storedInfo(), feedUpdatedAt().catch(() => null)]);
+  const info = infoFor(list.map((x) => x.n.mls), stored);
   const mls = list.filter((x) => !x.n.teamAdded).map((x) => x.n);
   return {
     warning,
-    feedUpdatedOn: await feedUpdatedOn().catch(() => null),
+    // The date (Central) for the out-of-date warning, and the time for "Repliers data updated ...".
+    feedUpdatedOn: updatedAt ? (updatedAt.length > 10 ? chicagoNow(new Date(updatedAt)).date : updatedAt) : null,
+    feedUpdatedAt: updatedAt,
     listings: list.map((x) => ({
       ...x.n, ...teamView(info[x.n.mls], week), openHouses: x.openHouses,
       // Team-added homes: their photos, and MLS listings at the same address to link to.
@@ -168,7 +198,7 @@ export async function probe() {
     out.activeAnyClass = (await repliers(q({ status: "A" }))).count;
     const inactive = await repliers((() => { const p = q({}); p.append("status", "A"); p.append("status", "U"); return p; })());
     out.activeAndInactive = inactive.count;
-    out.feedUpdatedOn = await feedUpdatedOn();
+    out.feedUpdatedAt = await feedUpdatedAt();
   } catch (e) { out.error = e.message; }
   return out;
 }
@@ -206,7 +236,13 @@ export const rawSample = async () => {
   return { ...rest, details: d };
 };
 
-export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img, days: l.days, instr: l.instr, priority: !!l.priority, teamAdded: !!l.teamAdded });
+// Instructions every home gets after its own (on the agent portal and in the Confirmed and Reminder emails).
+export const STANDARD_INSTR = ["Please text the George & Noonan Team once you enter the home and when you leave."];
+export const agentInstructions = (instr = []) => [...instr, ...STANDARD_INSTR];
+
+// gallery: up to GALLERY photos, the cover first (built-in listings have only their cover).
+export const publicListing = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, dom: l.dom, bd: l.bd, ba: l.ba, sf: l.sf, img: l.img,
+  gallery: (l.gallery?.length ? l.gallery : [l.img]).filter(Boolean).slice(0, GALLERY), days: l.days, instr: agentInstructions(l.instr), priority: !!l.priority, vacant: !!l.vacant, teamAdded: !!l.teamAdded });
 
 // Snapshot stored on each request so emails and reminders keep working if the listing changes.
 export const snapshot = (l) => ({ mls: l.mls, addr: l.addr, city: l.city, zip: l.zip, lat: l.lat, lng: l.lng, price: l.price, img: l.img, ...(l.teamAdded && { teamAdded: true }) });

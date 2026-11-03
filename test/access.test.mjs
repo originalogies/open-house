@@ -31,7 +31,16 @@ test("session cookie signing", () => {
   assert.equal(readSession(req("e30." + v.split(".")[1])), null);    // body swapped
 });
 
-import { overlaps } from "../netlify/lib/requests.mjs";
+import { overlaps, openRequestsOf } from "../netlify/lib/requests.mjs";
+
+test("open requests count only open houses that haven't happened yet", () => {
+  const me = "kelly@x.com", r = (iso, status, email = me) => ({ iso, status, agent: { email } });
+  const all = [
+    ...Array.from({ length: 30 }, (_, i) => r(`2025-0${(i % 9) + 1}-10`, "approved")), // imported history
+    r("2026-10-23", "approved"), r("2026-10-25", "pending"), r("2026-10-25", "declined"), r("2026-10-31", "pending", "other@x.com"),
+  ];
+  assert.deepEqual(openRequestsOf(all, me, "2026-10-23").map((x) => x.iso), ["2026-10-23", "2026-10-25"]); // today still counts
+});
 import { fmtArrival, fmtRange, addDays, chicagoToUtc, fmtReceived } from "../netlify/lib/time.mjs";
 
 test("overlap rules", () => {
@@ -71,6 +80,10 @@ test("Repliers listing mapping", () => {
     map: { latitude: 32.97, longitude: -97.18 }, details: { numBedrooms: 4, numBathrooms: 6, sqft: "6,331" } });
   assert.deepEqual([n.mls, n.addr, n.zip, n.sf, n.ba, n.img], ["123", "2006 Nighthawk Court", "76262", 6331, 6, "ntreismls/IMG-1.jpg"]);
   assert.deepEqual([n.lat, n.lng], [32.97, -97.18]);   // the minus sign stays: -97.18 is Texas, 97.18 is China
+  // Bathrooms are full.half as on the MLS: Repliers' total of 9 with 3 half baths is 6.3; no half baths, the total.
+  const ba = (d) => normalize({ details: d }).ba;
+  assert.deepEqual([ba({ numBathrooms: 9, numBathroomsHalf: 3 }), ba({ numBathrooms: 3, numBathroomsHalf: 1 }), ba({ numBathrooms: 6, numBathroomsHalf: 0 }), ba({ numBathrooms: 4 }), ba({ numBathrooms: 1, numBathroomsHalf: 2 })],
+    [6.3, 2.1, 6, 4, 1]); // more half baths than the total is bad data: keep the total
   assert.deepEqual([normalize({ map: { latitude: "32.978088", longitude: "-97.18720096" } }).lng, normalize({}).lat], [-97.18720096, 0]);
   const w = getWeek(new Date("2026-10-05T17:00:00Z"));
   // Repliers sends UTC times: 15:00Z on Oct 10 is 10:00 AM Central. Deleted entries are ignored.
@@ -126,9 +139,19 @@ test("email links only point at trusted sites", () => {
   assert.equal(siteFor("http://localhost.evil.com"), SITE);
 });
 
-import { BOARD_AGENT_IDS } from "../netlify/lib/listings.mjs";
+import { BOARD_AGENT_IDS, mlsChangedAt } from "../netlify/lib/listings.mjs";
 test("board agent ids are zero-padded like Repliers stores them", () => {
   assert.deepEqual(BOARD_AGENT_IDS, ["0492946", "0560617"]);
+});
+
+test("Repliers' updatedOn is Central time labeled as UTC", () => {
+  // Seen Oct 28 2026: changed at 12:13 AM CDT, sent as 00:13 "UTC", taken in by Repliers at 05:46Z.
+  assert.equal(mlsChangedAt("2026-10-28T00:13:31.000-00:00", "2026-10-28T05:46:07.658Z"), "2026-10-28T05:13:31.000Z");
+  assert.equal(mlsChangedAt("2026-11-07T09:30:00.000-00:00", "2026-11-07T16:00:00Z"), "2026-11-07T15:30:00.000Z"); // CST
+  // If Repliers starts sending real UTC, reading it as Central would come after Repliers took it in, so the label stands.
+  assert.equal(mlsChangedAt("2026-10-28T05:13:31.000Z", "2026-10-28T05:46:07.658Z"), "2026-10-28T05:13:31.000Z");
+  assert.equal(mlsChangedAt("2026-10-28T00:13:31.000-00:00"), "2026-10-28T05:13:31.000Z"); // no repliersUpdatedOn
+  assert.deepEqual([mlsChangedAt("2026-10-28"), mlsChangedAt(""), mlsChangedAt(undefined)], ["2026-10-28", null, null]);
 });
 
 import { historyFor } from "../netlify/lib/requests.mjs";

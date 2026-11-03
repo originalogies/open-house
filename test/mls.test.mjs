@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 process.env.MLS_WEBHOOK_SECRET = "s".repeat(40);
-const { nextAction, needsDispatch, buildPayload, applyResult, sign, verify, desiredFor } = await import("../netlify/lib/mls.mjs");
+const { nextAction, needsDispatch, buildPayload, applyResult, sign, verify, verifyCallbackToken, desiredFor } = await import("../netlify/lib/mls.mjs");
 const { checkChange, checkCancel, checkCancelRequest, openCancelRequest } = await import("../netlify/lib/changes.mjs");
 const { ics } = await import("../netlify/lib/email.mjs");
 
@@ -36,6 +36,56 @@ test("dispatch rules", () => {
   assert.equal(needsDispatch(req({ sync: { delivery: { key: d.key, attempts: 1, nextTryAt: NOW + 60000 } } }), NOW, "live"), null);
   // past open houses are left alone
   assert.equal(needsDispatch(req({ iso: "2026-10-17" }), NOW, "live"), null);
+  // the team chose to enter this one by hand: never sent, even when it's changed or cancelled later
+  assert.equal(needsDispatch(req({ mlsMethod: "manual" }), NOW, "live"), null);
+  assert.equal(needsDispatch({ ...onMls(req({ mlsMethod: "manual" })), from: 14 }, NOW, "live"), null);
+  assert.equal(needsDispatch(req({ mlsMethod: "agent" }), NOW, "live").action, "add");
+});
+
+test("entered by hand or by the AI agent", async () => {
+  const { byHand, agentReady } = await import("../netlify/lib/mls.mjs");
+  const env = { ...process.env };
+  try {
+    delete process.env.MLS_BOOKING_MODE; process.env.GROKBOT_WEBHOOK_URL = "https://bot.example/hook";
+    assert.equal(agentReady(), false);                                            // automation off
+    assert.equal(byHand(req({ mlsMethod: "agent" })), true);                      // off means everything is by hand
+    process.env.MLS_BOOKING_MODE = "live";
+    assert.equal(agentReady(), true);
+    assert.equal(byHand(req({ mlsMethod: "manual" })), true);
+    assert.equal(byHand(req({ mlsMethod: "agent" })), false);
+    assert.equal(byHand(req()), false);                                           // approved before the choice existed: the bot, as before
+    process.env.MLS_WEBHOOK_SECRET = "short";
+    assert.equal(agentReady(), false);                                            // no usable secret for callback tokens
+    process.env.MLS_WEBHOOK_SECRET = "s".repeat(40); delete process.env.GROKBOT_WEBHOOK_URL;
+    assert.equal(agentReady(), false);                                            // no bot to send to
+  } finally { process.env = env; }
+});
+
+test("jobs go to Grokbot's Cursor webhook as { items: [job] } with its token", async () => {
+  const { postWebhook } = await import("../netlify/lib/mls.mjs");
+  const env = { ...process.env }, realFetch = globalThis.fetch;
+  const job = { request_id: "a".repeat(32), job_id: "job_1", action: "add" };
+  let sent;
+  const answer = (status, body) => { globalThis.fetch = async (url, init) => { sent = { url, ...init }; return new Response(body, { status }); }; };
+  try {
+    process.env.GROKBOT_WEBHOOK_URL = "https://api2.cursor.sh/automations/webhook/test"; process.env.GROKBOT_WEBHOOK_TOKEN = "crsr_test";
+    answer(200, '{"success":true,"runUuid":"run-1"}');
+    assert.deepEqual(await postWebhook(job, NOW), { runId: "run-1" });
+    assert.deepEqual(JSON.parse(sent.body), { items: [job] });
+    assert.equal(sent.headers.authorization, "Bearer crsr_test");
+    assert.ok(verify(sent.headers["x-oh-timestamp"], sent.headers["x-oh-signature"], sent.body, NOW)); // signed over what was sent
+    process.env.GROKBOT_WEBHOOK_TOKEN = " Bearer crsr_test\n"; answer(200, '{"success":true}');     // Cursor's whole header pasted into Netlify
+    await postWebhook(job, NOW);
+    assert.equal(sent.headers.authorization, "Bearer crsr_test");
+    process.env.GROKBOT_WEBHOOK_TOKEN = "crsr_test";
+    answer(200, '{"success":false}');
+    await assert.rejects(postWebhook(job, NOW), /refused/);                         // Cursor took the call but not the job: retried
+    answer(401, "unauthorized");
+    await assert.rejects(postWebhook(job, NOW), /webhook 401/);
+    delete process.env.GROKBOT_WEBHOOK_TOKEN; answer(202, "");
+    assert.deepEqual(await postWebhook(job, NOW), { runId: null });                 // any other receiver: no token, no run ID
+    assert.equal(sent.headers.authorization, undefined);
+  } finally { process.env = env; globalThis.fetch = realFetch; }
 });
 
 test("webhook payload", () => {
@@ -44,6 +94,7 @@ test("webhook payload", () => {
   assert.equal(p.action, "update");
   assert.deepEqual([p.date, p.start, p.end, p.type], ["2026-10-24", "14:00", "17:00", "Public"]);
   assert.deepEqual([p.original_date, p.original_start, p.original_end], ["2026-10-24", "13:00", "16:00"]);
+  assert.deepEqual([p.start_time, p.end_time, p.original_start_time, p.original_end_time], ["2:00 PM", "5:00 PM", "1:00 PM", "4:00 PM"]);
   assert.equal(p.mls_number, "21413668");
   assert.equal(p.address, "1704 Overlook Drive, Grapevine, TX 76051");
   assert.equal(p.callback_url, "https://open-house.synergyrealtors.com/api/mls/callback");
@@ -54,6 +105,32 @@ test("webhook payload", () => {
   assert.equal(pc.callback_url, "https://open-house.synergyrealtors.com/api/mls/callback");      // no site recorded: production
   const local = req({ site: "http://localhost:8888" });
   assert.equal(buildPayload(local, needsDispatch(local, NOW, "live"), "job_3").callback_url, "http://localhost:8888/api/mls/callback");
+});
+
+test("approving with the AI agent: approved only once it's on the MLS", async () => {
+  const { holdsSlot } = await import("../netlify/lib/requests.mjs");
+  const approving = () => req({ status: "pending", mlsMethod: "agent", decidedBy: undefined, decidedAt: undefined,
+    approving: { at: NOW, by: "team@georgeandnoonan.com", byName: "Team Member" } });
+  const a = approving();
+  assert.ok(holdsSlot(a) && !holdsSlot(req({ status: "pending" })));           // the time is held while it's being approved
+  assert.deepEqual(desiredFor(a), { iso: "2026-10-24", from: 13, to: 16, type: "Public" });
+  assert.equal(desiredFor(req({ status: "pending" })), null);
+  const d = needsDispatch(a, NOW, "live");
+  assert.equal(d.action, "add");
+  const sendJob = (r, id) => { r.sync = { state: "booking", job: { id, key: d.key, from: d.from, to: d.to, done: false } }; };
+
+  sendJob(a, "job_a");                                                          // on the MLS: approved now, by whoever approved it
+  assert.deepEqual(applyResult(a, { job_id: "job_a", result: "booked" }, NOW + 5), { state: "synced", approved: true });
+  assert.deepEqual([a.status, a.decidedByName, a.decidedAt, a.approving], ["approved", "Team Member", NOW + 5, undefined]);
+  assert.equal(nextAction(a), null);
+
+  for (const result of ["dry_run", "failed", "needs_login"]) {                  // nothing submitted, or it couldn't: still waiting
+    const b = approving(); sendJob(b, "job_b");
+    const out = applyResult(b, { job_id: "job_b", result });
+    assert.equal(out.approved, undefined);
+    assert.equal(b.status, "pending");
+    assert.ok(b.approving);
+  }
 });
 
 test("bot results update the MLS state", () => {
@@ -81,6 +158,18 @@ test("webhook signatures", () => {
   assert.ok(!verify(ts, sign(ts, body), '{"a":2}', NOW));                       // tampered body
   assert.ok(!verify(ts, sign(ts, body), body, NOW + 6 * 60000));                // replayed after 5 minutes
   assert.ok(!verify(ts, "nope", body, NOW));
+});
+
+test("callback tokens prove a result without the bot holding the secret", () => {
+  const p = buildPayload(req(), needsDispatch(req(), NOW, "live"), "job_1");
+  assert.match(p.callback_token, /^[a-f0-9]{64}$/);
+  assert.ok(verifyCallbackToken("job_1", p.callback_token));
+  assert.ok(!verifyCallbackToken("job_2", p.callback_token));                     // only fits its own job
+  assert.ok(!verifyCallbackToken("job_1", p.callback_token.replace(/^./, (c) => (c === "a" ? "b" : "a"))));
+  assert.ok(!verifyCallbackToken("job_1", "") && !verifyCallbackToken("job_1", "x".repeat(64)) && !verifyCallbackToken("", p.callback_token));
+  const env = { ...process.env };
+  try { process.env.MLS_WEBHOOK_SECRET = "t".repeat(40); assert.ok(!verifyCallbackToken("job_1", p.callback_token)); } // a new secret retires old tokens
+  finally { process.env = env; }
 });
 
 test("team change rules", () => {
@@ -127,6 +216,22 @@ test("calendar invites update and cancel the same event", () => {
   assert.match(up, /METHOD:PUBLISH/); assert.match(up, /SEQUENCE:1/); assert.match(up, /UID:a{32}@/);
   const cx = ics(req({ seq: 2, status: "cancelled" }));
   assert.match(cx, /METHOD:CANCEL/); assert.match(cx, /STATUS:CANCELLED/); assert.match(cx, /UID:a{32}@/);
+});
+
+test("the George & Noonan team is on every calendar invite, and long lines fold", () => {
+  for (const cal of [ics(req()), ics(req({ status: "cancelled" }))]) {
+    const lines = cal.replace(/\r\n /g, "").split("\r\n"); // unfolded
+    assert.ok(lines.some((l) => /^ORGANIZER;CN="George & Noonan Team":mailto:team@georgeandnoonan\.com$/.test(l)));
+    assert.ok(lines.some((l) => /^ATTENDEE;.*:mailto:team@georgeandnoonan\.com$/.test(l)));
+    assert.ok(lines.some((l) => new RegExp(`^ATTENDEE;.*:mailto:${req().agent.email.replace(/\./g, "\\.")}$`).test(l)));
+    assert.ok(cal.split("\r\n").every((l) => Buffer.byteLength(l) <= 75));
+  }
+});
+
+test("every home's instructions end with texting the team", async () => {
+  const { agentInstructions, publicListing } = await import("../netlify/lib/listings.mjs");
+  assert.deepEqual(agentInstructions(["Use Supra to access."]), ["Use Supra to access.", "Please text the George & Noonan Team once you enter the home and when you leave."]);
+  assert.equal(publicListing({ instr: [] }).instr.length, 1);
 });
 
 const { openHouseEntries } = await import("../netlify/lib/listings.mjs");

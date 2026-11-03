@@ -4,10 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Open House Requests | Synergy Realty</title>
+<meta name="description" content="Pick a George &amp; Noonan home and request to host its open house this weekend.">
+<!-- Link previews (iMessage, Slack, email): title, description and the 1200×630 photo card og-image.jpg -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="George &amp; Noonan Real Estate Group">
+<meta property="og:title" content="Open House Requests">
+<meta property="og:description" content="Pick a George &amp; Noonan home and request to host its open house this weekend.">
+<meta property="og:url" content="https://open-house.synergyrealtors.com/">
+<meta property="og:image" content="https://open-house.synergyrealtors.com/og-image.jpg?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="George &amp; Noonan Real Estate Group: Open House, request this weekend">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/favicon.png?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/dialog.css">
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --ink:#16202A; --muted:#5A6570; --line:#DCE0E2;
@@ -30,7 +45,9 @@
   --accent:#5FB3A0; --accent-ink:#0E1A17; --accent-soft:#1D3530; --brass:#CDAA62; --taken:#1F2830; --photo:#24313B;
 }
 *,*::before,*::after{box-sizing:inherit}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* Text stays the size set here. Without this, iPhone browsers (Chrome especially) enlarge blocks of text when the
+   phone is turned sideways and can leave them enlarged after it's turned back. Pinch zoom still works. */
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
 img{max-width:100%;display:block}
 button{font:inherit;color:inherit}
@@ -40,7 +57,6 @@ button{font:inherit;color:inherit}
 
 .intro{padding:36px 0 28px}
 .intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.5rem);line-height:1.12;margin:0 0 8px;letter-spacing:-.01em}
-.intro .sub{margin:0;color:var(--muted);font-size:1.05rem;max-width:62ch}
 .when{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin-top:18px}
 .cal{display:flex;gap:10px}
 .cal div{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;text-align:center;min-width:76px}
@@ -50,38 +66,80 @@ button{font:inherit;color:inherit}
 .deadline em{font-style:normal;color:var(--brass);font-weight:600}
 
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;padding-bottom:64px}
-.card{position:relative;border:0;padding:0;background:var(--photo);border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;aspect-ratio:4/3;width:100%}
+/* Home cards, after Zillow's: the photo on top with its badges, then the address, the city, and the price and size. */
+.card{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);padding:0;background:var(--surface);color:var(--ink);font:inherit;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;width:100%}
+.card .photo{position:relative;aspect-ratio:16/10;background:var(--photo);overflow:hidden}
 .card img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
 .card:hover img{transform:scale(1.03)}
-.card.priority{box-shadow:0 0 0 3px #2F8BE0,0 0 16px 3px rgba(47,139,224,.55)}
-.card .pri-badge{position:absolute;top:14px;right:14px;z-index:2;background:#2F8BE0;color:#fff;font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 11px;border-radius:99px}
+.card.priority{border-color:#2F8BE0;box-shadow:0 0 0 2px #2F8BE0,0 0 16px 3px rgba(47,139,224,.45)}
+.card .pri-badge{position:absolute;top:12px;right:12px;z-index:2;background:#2F8BE0;color:#fff}
 .card .fallback{position:absolute;inset:0;display:none;background:
   linear-gradient(160deg,rgba(255,255,255,.06),rgba(0,0,0,.25)),var(--photo)}
 .card.noimg .fallback{display:block}
 .card.noimg img{display:none}
-.card .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(8,12,16,.82) 100%)}
-.card .meta{position:absolute;left:0;right:0;bottom:0;padding:20px 22px;color:#fff;display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:end}
-.card .addr{font-family:var(--serif);font-size:1.55rem;font-weight:500;line-height:1.15}
-.card .city{font-size:.92rem;opacity:.85}
-.card .price{font-family:var(--serif);font-size:1.55rem;font-weight:500;text-align:right;grid-row:1;grid-column:2}
-.card .facts{font-size:.85rem;opacity:.85;text-align:right;grid-column:2}
-.dom{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.92);color:#16202A;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:999px}
-.dom.fresh{background:#F3E7C9}
+.card .tl{position:absolute;top:12px;left:12px;right:120px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.card .flag{background:rgba(12,16,20,.82);color:#fff} /* "New Listing" or "Coming soon" */
+/* The three rows sit the same distance apart: one gap, and every row's line box only as tall as its text. */
+.card .meta{display:flex;flex-direction:column;gap:8px;padding:16px 18px}
+.card .meta > *{line-height:1.15}
+.card .addr{font-family:var(--serif);font-size:1.4rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .city{font-size:.9rem;color:var(--muted);margin-top:-3px} /* the serif address leaves more room under its letters */
+.card .numbers{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;font-size:.92rem}
+.card .price{font-weight:700;font-size:1.05rem}
+.card .facts{white-space:nowrap}
+.card .facts b{font-weight:700}
+.card .sep{margin:0 7px;color:var(--muted);opacity:.6}
+/* Vacant tag: on the photo card (hover shows what it means) and in the details panel (hover, keyboard focus or tap) */
+.vac{display:inline-flex;align-items:center;gap:5px;background:#E3EEEA;color:#1E5B4F;font-size:.8rem;font-weight:700;padding:5px 10px;border-radius:999px;line-height:1.2}
+/* The badges on a card ("New Listing", "Vacant", "★ Priority") are all one size. */
+.card .flag,.card .vac,.card .pri-badge{display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:28px;padding:0 11px;border-radius:999px;font-size:.78rem;font-weight:600;line-height:1;white-space:nowrap}
+.tip{position:relative;display:inline-flex}
+.tip-i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1.5px solid currentColor;font-size:.64rem;font-weight:800;font-style:normal;line-height:1}
+.tip-text{position:absolute;left:0;top:calc(100% + 8px);z-index:30;width:max-content;max-width:min(240px,75vw);padding:8px 11px;border-radius:8px;background:#16202A;color:#fff;font-size:.82rem;font-weight:500;line-height:1.4;text-align:left;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.tip.open .tip-text,.tip:has(:focus-visible) .tip-text{opacity:1;visibility:visible}
+@media (hover:hover){.tip:hover .tip-text{opacity:1;visibility:visible}}
+button.vac{border:0;cursor:pointer;position:relative}
+button.vac::after{content:"";position:absolute;inset:-9px -4px} /* a bigger target for thumbs */
+.sub .tip{vertical-align:middle;margin-left:8px}
+/* The Vacant tip in the sheet opens below the whole line, from its left edge, so it never runs past the side of the sheet:
+   even hidden, anything wider than the sheet lets it slide sideways on a phone. */
+#sSub{position:relative}
+#sSub .tip{position:static}
+#sSub .tip-text{max-width:min(240px,100%)}
+/* "Choose a time" and its info icon; the tip opens below the whole heading so it stays inside the sheet on a phone. */
+.time-head{position:relative;display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.time-head h3{margin:0}
+.time-head .tip{position:static}
+.time-head .tip-text{max-width:min(300px,100%)}
+button.info{position:relative;display:inline-grid;place-items:center;padding:0;border:0;background:none;color:var(--accent);cursor:pointer}
+button.info::after{content:"";position:absolute;inset:-14px} /* a bigger target for thumbs */
 
 /* Sheet */
 /* Above the top navigation bar (z-index 20), below the sign-in gate (100). */
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(6,10,14,.5);opacity:0;pointer-events:none;transition:opacity .25s}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;z-index:60;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-y:auto;overscroll-behavior:contain;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet{position:fixed;z-index:60;top:0;right:0;height:100%;width:min(520px,100%);background:var(--surface);transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;box-shadow:-20px 0 60px rgba(0,0,0,.18);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet.on{transform:none}
 .sheet .hero{position:relative;aspect-ratio:16/10;background:var(--photo)}
 .sheet .hero img{width:100%;height:100%;object-fit:cover}
 .sheet .hero.noimg img{display:none}
+/* Photo gallery: up to five photos in a strip that swipes on phones and steps with the arrows; "2 / 5" shows where you are. */
+.gal{position:absolute;inset:0;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none}
+.gal::-webkit-scrollbar{display:none}
+.gal:focus-visible{outline-offset:-3px;border-radius:0}
+.sheet .hero .gal img{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always}
+.gal-nav{position:absolute;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;border:0;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;transition:opacity .15s}
+.gal-nav::before{content:"";position:absolute;top:50%;left:50%;width:9px;height:9px;border-top:2.5px solid #16202A;border-right:2.5px solid #16202A}
+.gal-nav.prev{left:12px}.gal-nav.prev::before{transform:translate(-35%,-50%) rotate(-135deg)}
+.gal-nav.next{right:12px}.gal-nav.next::before{transform:translate(-65%,-50%) rotate(45deg)}
+.gal-nav::after{content:"";position:absolute;inset:-4px} /* a bigger target for thumbs */
+.gal-nav:disabled{opacity:0;pointer-events:none}
+.gal-count{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(8,12,16,.68);color:#fff;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:99px;pointer-events:none}
 .close{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#16202A;font-size:1.4rem;cursor:pointer}
 .body{padding:22px 24px 28px}
 .body h2{font-family:var(--serif);font-weight:500;font-size:1.9rem;line-height:1.1;margin:0}
 .sub{color:var(--muted);margin:4px 0 16px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
 .stats div{padding:12px 0}
 .stats b{display:block;font-family:var(--serif);font-size:1.25rem;font-weight:500}
 .stats span{font-size:.8rem;color:var(--muted)}
@@ -92,12 +150,27 @@ h3{font-size:1rem;margin:0 0 10px;font-weight:600}
 .day span{font-size:.82rem;color:var(--muted)}
 .day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .day:disabled{opacity:.45;cursor:not-allowed}
-.slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}
-.hint{font-size:.85rem;color:var(--muted);margin:0 0 20px;min-height:1.3em}
-.slot{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;min-height:44px;cursor:pointer;font-weight:500;font-size:.88rem}
-.slot[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
-.slot:disabled{background:var(--taken);color:var(--muted);cursor:not-allowed}
-.slot small{display:block;font-weight:400;font-size:.75rem;text-decoration:none}
+/* Time picker: the open hours as a day view (see renderSlots). Labels sit on the lines between the hours. */
+.timeline{position:relative;margin:10px 0 24px 68px;border-bottom:1px solid var(--line);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.tl-hr{display:block;box-sizing:border-box;width:100%;height:44px;margin:0;padding:0;border:0;border-top:1px solid var(--line);border-radius:0;background:none;cursor:pointer;touch-action:manipulation}
+.tl-hr:disabled{cursor:default}
+@media (hover:hover){.tl-hr:not(:disabled):hover{background:var(--accent-soft)}}
+.tl-t{position:absolute;left:-68px;width:58px;text-align:right;font-size:.78rem;color:var(--muted);transform:translateY(-50%);white-space:nowrap;pointer-events:none}
+.tl-b{position:absolute;left:4px;right:4px;box-sizing:border-box;border-radius:8px;padding:9px 10px;font-size:.84rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.tl-held{background:var(--taken);border:1.5px solid var(--line);color:var(--muted)}
+.tl-held b,.tl-own b{font-weight:600;margin-right:4px}
+.tl-own{background:var(--accent-soft);border:1.5px dashed var(--accent);color:var(--accent)}
+/* The request being made: drag it to move it, or its handles (top and bottom, at the right) to change the start and end. */
+.tl-sel{background:var(--accent);color:var(--accent-ink);overflow:visible;pointer-events:auto;cursor:grab;touch-action:none;box-shadow:0 2px 10px rgba(0,0,0,.18);z-index:1}
+.tl-sel.dragging{cursor:grabbing;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+.tl-sel b{display:block;font-weight:600}
+.tl-sel span span{display:block;font-size:.8rem;opacity:.85}
+.tl-h{position:absolute;right:6px;width:56px;height:32px;padding:0;border:0;background:none;cursor:ns-resize;touch-action:none}
+.tl-h[data-edge="from"]{top:-16px}
+.tl-h[data-edge="to"]{bottom:-16px}
+.tl-h::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:10px;margin:-5px 0 0 -15px;box-sizing:border-box;border-radius:5px;background:var(--surface);border:2px solid var(--accent)}
+.hint{font-size:.85rem;color:var(--muted);margin:-8px 0 20px;min-height:1.3em}
+.hint.sr{position:absolute;width:1px;height:1px;min-height:0;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap} /* read out, not shown */
 .empty{color:var(--muted);font-size:.9rem;margin:0 0 20px}
 label.note{display:block;font-size:.9rem;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink);font:inherit;resize:vertical}
@@ -111,6 +184,9 @@ textarea{width:100%;min-height:72px;border:1.5px solid var(--line);border-radius
 /* The request button stays within reach at the bottom of the sheet while the times are on screen. */
 .send{position:sticky;bottom:0;z-index:1;background:var(--surface);margin:16px -24px 0;padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 .send .primary{margin-top:0}
+/* Once a time is picked, a soft glow draws the eye to the Request button. */
+#submit:not(:disabled){box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent),0 0 16px color-mix(in srgb,var(--accent) 45%,transparent);animation:glowIn .5s ease}
+@keyframes glowIn{from{box-shadow:none}}
 .fine.err{color:#A12B2B;margin:0 0 8px}
 html.sheet-open{overflow:hidden}
 .fine{font-size:.8rem;color:var(--muted);margin-top:10px}
@@ -153,12 +229,14 @@ html.sheet-open{overflow:hidden}
 .mine-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
 .secondary{width:100%;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:12px;padding:13px;font-weight:600;cursor:pointer;margin-bottom:10px}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+footer .foot-links{margin:0 0 8px;font-size:.88rem;font-weight:600}
+footer .foot-links a{color:inherit}
 
-@media (max-width:420px){.slots{grid-template-columns:repeat(4,1fr)}}
 @media (max-width:760px){
   .intro{padding-top:24px}
   .grid{grid-template-columns:1fr}
-  .card .addr,.card .price{font-size:1.3rem}
+  .card .addr{font-size:1.28rem}
+  .card .meta{padding:14px 16px}
   .sheet{top:auto;bottom:0;height:92%;width:100%;border-radius:18px 18px 0 0;transform:translateY(100%)}
   /* Tighter top of the sheet on phones so "Choose a day" is on the first screen. */
   .sheet .hero{aspect-ratio:auto;height:min(170px,22vh)}
@@ -172,9 +250,16 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   .instr h3{margin-bottom:6px}
   .instr .fine{margin-top:6px}
   .send{margin:16px -18px 0;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}
-  .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* Phones held sideways. Browsers don't let a page lock the orientation, so on a phone turned sideways this covers
+   the page and asks for it to be turned upright; it goes away as soon as it is. Tablets and computers aren't affected. */
+.upright{display:none;position:fixed;inset:0;z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;background:var(--bg);color:var(--ink);text-align:center;touch-action:none}
+.upright svg{color:var(--accent);animation:turnUpright 2.4s ease-in-out infinite}
+.upright b{display:block;font-family:var(--serif);font-weight:500;font-size:1.4rem;margin-bottom:4px}
+.upright p{margin:0;color:var(--muted)}
+@keyframes turnUpright{0%,20%{transform:rotate(-90deg)}55%,100%{transform:rotate(0)}}
+@media (orientation:landscape) and (max-height:500px) and (pointer:coarse){.upright{display:flex}}
 .signed-out .wrap{visibility:hidden}
 .gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg)}
 .gate[hidden]{display:none}
@@ -192,6 +277,14 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 #gBtn{display:flex;justify-content:center;min-height:44px}
 .gate-msg{margin:16px 0 0!important;color:#A12B2B!important}
 @media (prefers-color-scheme: dark){.gate-msg{color:#E58A8A!important}}
+/* Agents who haven't signed the Support and Referral Agreement (auth.js): its button, and who's signed in. */
+.gate-go{display:block;width:100%;min-height:48px;border:0;border-radius:12px;padding:13px 18px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:1rem;cursor:pointer}
+.gate-go:disabled{opacity:.6;cursor:progress}
+.gate-card .gate-who{margin:20px 0 0;font-size:.85rem;overflow-wrap:anywhere}
+.gate-link{min-height:44px;padding:0 8px;border:0;background:none;color:var(--accent);text-decoration:underline;font-size:.9rem;cursor:pointer}
+/* First visit: how a request works, over a short film of one being made (see showWelcome). A site dialog (dialog.css). */
+.welcome-film{display:block;width:100%;aspect-ratio:1;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--bg);object-fit:cover}
+.welcome-film[hidden]{display:none}
 </style>
 </head>
 <body class="signed-out" data-page="weekend">
@@ -203,8 +296,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 <div class="wrap">
 
   <section class="intro">
-    <h1>Host one of our homes this weekend</h1>
-    <p class="sub">Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+    <h1>Host a George &amp; Noonan Home this weekend</h1>
     <div class="when">
       <div class="cal" aria-label="Weekend dates"></div>
       <div class="deadline" hidden></div>
@@ -213,7 +305,12 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
   <section class="grid" id="grid" aria-label="Available homes"></section>
 
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+  <footer><p class="foot-links"><a href="/how-compensation-works/">How compensation works</a></p>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+</div>
+
+<div class="upright">
+  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg>
+  <p><b>Turn your phone upright</b>This page works best with your phone held upright.</p>
 </div>
 
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
@@ -227,9 +324,24 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   </div>
 </div>
 
+<dialog class="ohd" id="welcome" aria-labelledby="welcomeTitle" aria-describedby="welcomeBody">
+  <form method="dialog">
+    <video class="welcome-film" id="welcomeFilm" src="/how-it-works.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+    <h2 class="ohd-title" id="welcomeTitle">How it works</h2>
+    <p class="ohd-body" id="welcomeBody">Pick a home and a time. The George &amp; Noonan team reviews every request, and you'll get a confirmation email with instructions once it's approved.</p>
+    <div class="ohd-actions"><button class="ohd-btn" value="ok">Get started</button></div>
+  </form>
+</dialog>
+
 <div class="scrim" id="scrim"></div>
 <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle" aria-hidden="true">
-  <div class="hero" id="sHero"><img id="sImg" alt=""><button class="close" id="close" aria-label="Close">×</button></div>
+  <div class="hero" id="sHero">
+    <div class="gal" id="gal" tabindex="0" role="group" aria-roledescription="gallery"></div>
+    <button class="gal-nav prev" id="galPrev" aria-label="Previous photo"></button>
+    <button class="gal-nav next" id="galNext" aria-label="Next photo"></button>
+    <span class="gal-count" id="galCount" aria-live="polite"></span>
+    <button class="close" id="close" aria-label="Close">×</button>
+  </div>
   <div class="body">
     <h2 id="sTitle"></h2>
     <div class="sub" id="sSub"></div>
@@ -252,9 +364,12 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
         <div class="days" id="days"></div>
       </section>
       <section class="step" id="stepTime" hidden>
-        <h3>Choose a time</h3>
-        <div class="slots" id="slots"></div>
-        <p class="hint" id="hint"></p>
+        <div class="time-head">
+          <h3>Choose a time</h3>
+          <span class="tip"><button type="button" class="info" aria-label="How to choose a time" aria-describedby="timeTip"><i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="timeTip">Tap the hour you'd like to start. Tap a later hour, or drag the bottom edge, to make it longer. Drag the block to move it, or drag its top or bottom edge to change the time.</span></span>
+        </div>
+        <div class="timeline" id="slots"></div>
+        <p class="hint" id="hint" aria-live="polite"></p>
       </section>
       <section class="step" id="stepSend" hidden>
         <label class="note" for="notes">Notes for the listing team (optional)</label>
@@ -279,6 +394,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 </aside>
 
 <script src="/nav.js"></script>
+<script src="/dialog.js"></script>
 <script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
@@ -295,7 +411,14 @@ const blocked = (d,h) => isTaken(d,h) || isMine(d,h);
 const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?class=" + size;
 // Map query: coordinates for MLS listings, the address for team-added homes (they have none).
 const where = h => h.lat && h.lng ? `${h.lat},${h.lng}` : encodeURIComponent(`${h.addr}, ${h.city}, TX ${h.zip}`);
-const domLabel = h => h.teamAdded ? "Coming soon" : `${h.dom} ${h.dom===1?'day':'days'} on market`;
+// A card's flag: "Coming soon" for a home the team added before it's on the MLS, "New Listing" for one on the market
+// under 8 days. Agents don't see days on market itself; the team does, on Listings.
+const flagOf = h => h.teamAdded ? "Coming soon" : h.dom < 8 ? "New Listing" : "";
+// "4 bds | 3 ba | 3,500 sqft", leaving out any number the listing doesn't have.
+const specsOf = h => [[h.bd, h.bd===1 ? "bd" : "bds"], [h.ba, "ba"], [h.sf && h.sf.toLocaleString("en-US"), "sqft"]]
+  .filter(([n]) => n).map(([n,u]) => `<b>${n}</b> ${u}`).join('<span class="sep" aria-hidden="true">|</span>');
+// What the "Vacant" tag means (the Admin Console's Vacant box says the same).
+const VACANT_TIP = "No one is living in this home, so there are no occupants.";
 
 function imgEl(h, el, wrap){
   if(!h.img){ el.removeAttribute("src"); wrap.classList.add("noimg"); return; }
@@ -304,6 +427,39 @@ function imgEl(h, el, wrap){
   el.onerror = () => wrap.classList.add("noimg");
 }
 
+// Gallery at the top of a home's details: its photos (up to five, the cover first) side by side, swiped on
+// phones or stepped through with the arrows. A photo loads when it's shown or next to the one shown, and
+// one that fails to load drops out.
+const gal = $("gal");
+let galTimer, galTo = null; // galTo: the photo the arrows are scrolling to, until the scroll settles
+function showGallery(h){
+  const list = h.gallery && h.gallery.length ? h.gallery : h.img ? [h.img] : [];
+  gal.innerHTML = list.map((p,k) => `<img alt="${k ? `Photo ${k+1} of` : "Front of"} ${esc(h.addr)}, ${esc(h.city)}" data-src="${esc(photoSrc(p, "medium"))}">`).join("");
+  gal.setAttribute("aria-label", `Photos of ${h.addr}, ${h.city}`);
+  gal.querySelectorAll("img").forEach(img => { img.onerror = () => { img.remove(); galUpdate(); }; });
+  gal.scrollLeft = 0; galTo = null;
+  galUpdate();
+}
+const galAt = () => gal.clientWidth ? Math.round(gal.scrollLeft / gal.clientWidth) : 0;
+function galUpdate(shown = galAt()){
+  const imgs = [...gal.querySelectorAll("img")], n = imgs.length, at = Math.min(shown, Math.max(n-1, 0));
+  imgs.forEach((img,k) => { if(Math.abs(k-at) <= 1 && !img.getAttribute("src")) img.src = img.dataset.src; });
+  $("sHero").classList.toggle("noimg", !n);
+  $("galPrev").hidden = $("galNext").hidden = $("galCount").hidden = n < 2;
+  $("galPrev").disabled = at <= 0; $("galNext").disabled = at >= n-1;
+  $("galCount").textContent = `${at+1} / ${n}`;
+}
+// Quick clicks each count: a step starts from the photo already being scrolled to.
+function galGo(step){
+  galTo = Math.min(Math.max((galTo ?? galAt()) + step, 0), gal.querySelectorAll("img").length - 1);
+  gal.scrollTo({ left: galTo * gal.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  galUpdate(galTo);
+}
+$("galPrev").onclick = () => galGo(-1);
+$("galNext").onclick = () => galGo(1);
+gal.addEventListener("scroll", () => { clearTimeout(galTimer); galTimer = setTimeout(() => { galTo = null; galUpdate(); }, 80); }, { passive: true });
+gal.addEventListener("keydown", e => { if(e.key === "ArrowLeft" || e.key === "ArrowRight"){ e.preventDefault(); galGo(e.key === "ArrowRight" ? 1 : -1); } });
+
 // Cards
 const grid = $("grid");
 function renderGrid(){
@@ -311,13 +467,14 @@ function renderGrid(){
   homes.forEach((h,i) => {
     const b = document.createElement("button");
     b.className = "card" + (h.priority ? " priority" : "");
-    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${h.addr}, ${h.city}, ${money(h.price)}, ${domLabel(h)}. Request an open house.`);
-    b.innerHTML = `<img loading="lazy"><div class="fallback"></div><div class="shade"></div>
-      <span class="dom ${h.teamAdded||h.dom<=14?'fresh':''}">${domLabel(h)}</span>${h.priority?'<span class="pri-badge">★ Priority</span>':""}
+    const flag = flagOf(h);
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${flag ? flag+". " : ""}${h.addr}, ${h.city}, ${money(h.price)}.${h.vacant?" Vacant: "+VACANT_TIP:""} Request an open house.`);
+    b.innerHTML = `<div class="photo"><img loading="lazy"><div class="fallback"></div>
+        <div class="tl">${flag ? `<span class="flag">${flag}</span>` : ""}${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}</div>
       <div class="meta">
-        <div><div class="addr">${h.addr}</div><div class="city">${h.city}, TX ${h.zip}</div></div>
-        <div class="price">${money(h.price)}</div>
-        <div></div><div class="facts">${h.bd} bd, ${h.ba} ba, ${h.sf.toLocaleString()} sq ft</div>
+        <div class="addr">${h.addr}</div>
+        <div class="city">${h.city}, TX ${h.zip}</div>
+        <div class="numbers"><span class="price">${money(h.price)}</span><span class="facts">${specsOf(h)}</span></div>
       </div>`;
     imgEl(h, b.querySelector("img"), b);
     b.onclick = () => openSheet(i, b);
@@ -325,8 +482,10 @@ function renderGrid(){
   });
 }
 
+// The first load is asked for right away, alongside the sign-in check, instead of after it.
+let firstLoad = fetch("/api/listings").catch(() => null);
 async function loadListings(){
-  const r = await fetch("/api/listings").catch(() => null);
+  const r = await (firstLoad || fetch("/api/listings").catch(() => null)); firstLoad = null;
   if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
   const d = await r.json();
   window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; FIRST = d.firstHour; LAST = d.lastHour;
@@ -345,17 +504,36 @@ document.addEventListener("signedin", async () => {
   if(d.cutoffEnabled) dl.innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
   renderGrid();
   if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
+  showWelcome();
 });
 
+// The first visit on this device opens "How it works", with its film playing (shown still, with controls, to
+// anyone who has asked for less motion). Closing it any way, the button, Escape or a tap outside, means it
+// won't open here again. No film to play, and it's the words alone.
+function showWelcome(){
+  try { if(localStorage.getItem("ohWelcomeSeen")) return; } catch { return; } // nowhere to remember it: don't open it every visit
+  const d = $("welcome"), film = $("welcomeFilm");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  film.controls = still;
+  if(still){ film.removeAttribute("aria-hidden"); film.setAttribute("aria-label", "How it works, a 10-second film"); } // its controls must be reachable
+  film.addEventListener("error", () => { film.hidden = true; }, { once:true });
+  film.addEventListener("canplay", () => { if(!still && d.open) film.play().catch(() => {}); }, { once:true });
+  film.preload = "auto"; film.load();
+  d.addEventListener("click", e => { if(e.target === d) d.close(); }); // the backdrop
+  d.addEventListener("close", () => { film.pause(); try { localStorage.setItem("ohWelcomeSeen", "1"); } catch {} }, { once:true });
+  d.showModal();
+}
+
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
-// or keep the open house. Returns true once the request is sent. (My open houses has the same ask.)
+// or keep the open house. Returns true once the request is sent. (My Requests has the same ask.)
 async function askToCancel(id, what, showError){
-  const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
+  const reason = await OHDialog.prompt({ title: "Request cancellation", body: `Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.`,
+    label: "Reason (optional)", placeholder: "For example: a listing appointment came up", ok: "Send request", cancel: "Back" });
   if(reason === null) return false;
   const r = await fetch("/api/requests/cancel-request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id, reason})}).catch(()=>null);
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
-  if(r.status===502) alert(d.message);
+  if(r.status===502) await OHDialog.alert({ title: "Request saved", body: d.message });
   const idx = cur ? homes.indexOf(cur) : -1;
   await loadListings();
   if(idx >= 0) cur = homes[idx];
@@ -363,14 +541,14 @@ async function askToCancel(id, what, showError){
 }
 
 // Sheet
-let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to} hour blocks, to exclusive
+let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to}: the request's start and end, on the hour
 function openSheet(i, trigger){
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
-  $("sHero").classList.remove("noimg"); imgEl(cur, $("sImg"), $("sHero"));
+  showGallery(cur);
   $("sTitle").textContent = cur.addr;
-  $("sSub").textContent = `${cur.city}, TX ${cur.zip}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + cur.mls}`;
+  $("sSub").innerHTML = `${esc(cur.city)}, TX ${esc(cur.zip)}  |  ${cur.teamAdded ? "Not on the MLS yet" : "MLS# " + esc(cur.mls)}`
+    + (cur.vacant ? `<span class="tip"><button type="button" class="vac" aria-describedby="vacTip">Vacant <i class="tip-i" aria-hidden="true">i</i></button><span class="tip-text" role="tooltip" id="vacTip">${VACANT_TIP}</span></span>` : "");
   $("sStats").innerHTML = `<div><b>${money(cur.price)}</b><span>List price</span></div>
-    ${cur.teamAdded ? '<div><b>New</b><span>Coming soon</span></div>' : `<div><b>${cur.dom}</b><span>Days on market</span></div>`}
     <div><b>${cur.bd} / ${cur.ba}</b><span>Beds / baths</span></div>
     <div><b>${cur.sf.toLocaleString()}</b><span>Sq ft</span></div>`;
   $("instrList").innerHTML = cur.instr.map(t=>`<li>${esc(t)}</li>`).join("");
@@ -389,6 +567,12 @@ function closeSheet(){
 }
 $("close").onclick=closeSheet; $("scrim").onclick=closeSheet;
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("sheet").classList.contains("on")) closeSheet(); });
+// Tooltips show on hover and keyboard focus; on phones a tap opens or closes one, and a tap elsewhere closes it.
+document.addEventListener("click",e=>{
+  const t = e.target.closest(".tip button")?.parentElement;
+  document.querySelectorAll(".tip.open").forEach(x=>{ if(x!==t) x.classList.remove("open"); });
+  if(t) t.classList.toggle("open");
+});
 
 function renderDays(){
   const d = $("days"); d.innerHTML="";
@@ -401,30 +585,155 @@ function renderDays(){
     d.appendChild(b);
   });
 }
-function pick(h){
-  if(!sel || sel.to-sel.from>1 || h<sel.from){ sel={from:h,to:h+1}; }
-  else if(h===sel.from){ sel=null; }
-  else {
-    for(let x=sel.from;x<=h;x++){ if(blocked(day,x)){ sel={from:h,to:h+1}; renderSlots(); return; } }
-    sel={from:sel.from,to:h+1};
-  }
-  renderSlots();
+// The time picker is the open hours stacked like a calendar's day view: times sit on the lines and each row is an
+// hour, so a booking from 1:00 to 3:00 is one block that ends on the 3:00 line. Tapping an hour picks it, and
+// tapping a later hour right after stretches the request to it. The request's block drags to move it, and its top
+// and bottom handles drag to change the start and end (the arrow keys do the same). On a computer, dragging
+// across empty hours picks them too; on a phone that drag scrolls the sheet instead.
+const ROW = 44; // px per hour, a comfortable tap target
+const free = (from,to) => { for(let x=from;x<to;x++) if(blocked(day,x)) return false; return true; };
+const hours = n => `${n} ${n===1?"hour":"hours"}`;
+// A block's times, short enough for a narrow phone: "1:00 to 3:00 PM".
+const short = r => (r.from<12)===(r.to<12) ? `${fmt(r.from).slice(0,-3)} to ${fmt(r.to)}` : range(r);
+// Hours held by others for the day, overlapping ones joined (an approved request that's also on the MLS is one block).
+function heldSpans(){
+  const out=[];
+  cur.taken.filter(t=>t.day===day).sort((a,b)=>a.from-b.from).forEach(t=>{
+    const last=out[out.length-1];
+    if(last && t.from<last.to) last.to=Math.max(last.to,t.to); else out.push({from:t.from,to:t.to});
+  });
+  return out;
 }
+const blockAt = (r,cls,html) => `<div class="tl-b ${cls}" style="top:${(r.from-FIRST)*ROW+2}px;height:${(r.to-r.from)*ROW-3}px">${html}</div>`;
 function renderSlots(){
-  const s=$("slots"); s.innerHTML="";
-  if(!day){ $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
-  for(let h=FIRST; h<LAST; h++){
-    const taken=blocked(day,h), own=isMine(day,h), on=sel && h>=sel.from && h<sel.to;
-    const b=document.createElement("button");
-    b.className="slot"; b.disabled=taken; b.setAttribute("aria-pressed", !!on);
-    b.innerHTML = fmt(h) + (taken?`<small>${own?"Yours":"Booked"}</small>`:"");
-    b.setAttribute("aria-label", `${fmt(h)} to ${fmt(h+1)}${taken?(own?", your request":", already booked"):""}`);
-    b.onclick=()=>{ const first=!sel; pick(h); if(first && sel) reveal("stepSend"); };
-    s.appendChild(b);
+  const tl=$("slots");
+  if(!day){ tl.innerHTML=""; $("hint").textContent=""; update(); return; } // the time step stays hidden until a day is chosen
+  let h="";
+  for(let x=FIRST;x<LAST;x++) h += `<button type="button" class="tl-hr" data-h="${x}"${blocked(day,x) ? " disabled" : ""} aria-label="${fmt(x)} to ${fmt(x+1)}${isMine(day,x) ? ", your request" : blocked(day,x) ? ", booked" : ""}"></button>`;
+  for(let x=FIRST;x<=LAST;x++) h += `<span class="tl-t" style="top:${(x-FIRST)*ROW}px" aria-hidden="true">${fmt(x)}</span>`;
+  h += heldSpans().map(r=>blockAt(r,"tl-held",`<b>Booked</b> ${short(r)}`)).join("");
+  h += mine().filter(r=>r.day===day).map(r=>blockAt(r,"tl-own",`<b>${r.status==="approved" ? "Your open house" : "Your request"}</b> ${short(r)}`)).join("");
+  h += `<div class="tl-b tl-sel" id="tlSel" tabindex="0" hidden><span id="tlText"></span>
+    <button type="button" class="tl-h" data-edge="from"></button><button type="button" class="tl-h" data-edge="to"></button></div>`;
+  tl.innerHTML=h;
+  tl.style.height = (LAST-FIRST)*ROW+"px";
+  drawSel();
+}
+// Moves the request's block and its labels to match sel; the block itself stays put so a drag keeps going.
+function drawSel(){
+  const b=$("tlSel");
+  if(b){
+    b.hidden=!sel;
+    if(sel){
+      const n=sel.to-sel.from;
+      b.style.top=(sel.from-FIRST)*ROW+2+"px"; b.style.height=n*ROW-3+"px";
+      $("tlText").innerHTML=`<b>${short(sel)}</b>${n>1 ? `<span>${hours(n)}</span>` : ""}`;
+      b.setAttribute("aria-label",`Your new request, ${range()}. Use the up and down arrow keys to move it.`);
+      b.querySelector('[data-edge="from"]').setAttribute("aria-label",`Start time, ${fmt(sel.from)}. Use the up and down arrow keys to change it.`);
+      b.querySelector('[data-edge="to"]').setAttribute("aria-label",`End time, ${fmt(sel.to)}. Use the up and down arrow keys to change it.`);
+    }
   }
-  $("hint").textContent = sel ? `${fmt(sel.from)} to ${fmt(sel.to)} (${sel.to-sel.from} ${sel.to-sel.from===1?"hour":"hours"}). Tap a later time to extend.` : "Tap a start time, then tap the last hour you'll host.";
+  const n=sel && sel.to-sel.from;
+  // Before a time is picked, the line under the timeline says where to start. After, the hours are on the Request
+  // button, so the line is only read out (it still announces changes made with the arrow keys). How to drag is in
+  // the info tip by "Choose a time".
+  $("hint").textContent = !sel ? "Tap the hour you'd like to start." : `${range()} (${hours(n)})`;
+  $("hint").classList.toggle("sr", !!sel);
   update();
 }
+function setSel(next){
+  if(!next || (sel && next.from===sel.from && next.to===sel.to)) return;
+  const first=!sel; sel=next; drawSel();
+  if(first) keepClear();
+}
+// The notes and the request bar appear once there's a time. The timeline stays where it is so the next tap or drag
+// lands where the agent expects; it only scrolls if the request bar would cover the new block.
+function keepClear(){
+  requestAnimationFrame(()=>{
+    const over=$("tlSel").getBoundingClientRect().bottom+12-$("send").getBoundingClientRect().top;
+    if(over>0) $("sheet").scrollBy({top:over,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  });
+}
+// A tap on an hour picks it; right after picking one hour, a tap on a later hour stretches the request to it.
+function tapHour(h){
+  if(sel && sel.to-sel.from===1 && h>=sel.to && free(sel.from,h+1)) setSel({from:sel.from,to:h+1});
+  else setSel({from:h,to:h+1});
+}
+// Where a drag lands, kept clear of booked hours: an edge stops at the first booked hour in its way; a moved block
+// goes where it's dropped if that's free, or else to the free spot nearest it on the way back.
+function dragTo(kind, y){
+  const top=$("slots").getBoundingClientRect().top;
+  const line=FIRST+Math.round((y-top)/ROW), row=Math.min(LAST-1,Math.max(FIRST,FIRST+Math.floor((y-top)/ROW)));
+  if(kind==="new"){
+    let a=drag.h, b=drag.h+1;
+    while(a>row && !blocked(day,a-1)) a--;
+    while(b<=row && !blocked(day,b)) b++;
+    return {from:a,to:b};
+  }
+  if(kind==="from"){
+    let f=sel.from;
+    if(line<f) while(f>line && f>FIRST && !blocked(day,f-1)) f--; else f=Math.min(line,sel.to-1);
+    return {from:f,to:sel.to};
+  }
+  if(kind==="to"){
+    let t=sel.to;
+    if(line>t) while(t<line && t<LAST && !blocked(day,t)) t++; else t=Math.max(line,sel.from+1);
+    return {from:sel.from,to:t};
+  }
+  const o=drag.orig, n=o.to-o.from; // the block follows the finger, even as the sheet scrolls under it
+  let f=Math.min(LAST-n,Math.max(FIRST,o.from+Math.round((y-top-drag.y)/ROW)));
+  while(f!==o.from && !free(f,f+n)) f += f<o.from ? 1 : -1;
+  return {from:f,to:f+n};
+}
+let drag=null, skipClick=false; // drag = {kind: "new"|"move"|"from"|"to", h, y (from the timeline's top), orig, moved, lastY}
+const tl=$("slots");
+tl.addEventListener("pointerdown",e=>{
+  if(!day || e.button>0) return;
+  const edge=e.target.closest(".tl-h"), block=e.target.closest(".tl-sel"), hr=e.target.closest(".tl-hr");
+  if(edge || block){
+    drag={kind:edge ? edge.dataset.edge : "move", y:e.clientY-tl.getBoundingClientRect().top, orig:{...sel}, moved:true, lastY:e.clientY};
+    e.preventDefault(); tl.setPointerCapture(e.pointerId);
+    $("tlSel").classList.add("dragging"); requestAnimationFrame(edgeScroll);
+  } else if(hr && !hr.disabled && e.pointerType==="mouse"){
+    drag={kind:"new", h:+hr.dataset.h, moved:false, lastY:e.clientY}; // becomes a drag once it leaves this hour
+  }
+});
+tl.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  drag.lastY=e.clientY;
+  if(!drag.moved){
+    if(FIRST+Math.floor((e.clientY-tl.getBoundingClientRect().top)/ROW)===drag.h) return;
+    drag.moved=true; tl.setPointerCapture(e.pointerId); requestAnimationFrame(edgeScroll);
+  }
+  setSel(dragTo(drag.kind,e.clientY));
+});
+const endDrag=()=>{
+  if(drag && drag.kind==="new" && drag.moved){ skipClick=true; setTimeout(()=>skipClick=false); } // the click after a drag isn't a tap
+  drag=null; $("tlSel")?.classList.remove("dragging");
+};
+// On iPhones a finger held still on the block would bring up the text magnifier; this keeps the touch for the drag.
+tl.addEventListener("touchstart",e=>{ if(e.target.closest(".tl-sel")) e.preventDefault(); },{passive:false});
+tl.addEventListener("pointerup",endDrag);
+tl.addEventListener("pointercancel",endDrag);
+tl.addEventListener("click",e=>{
+  const hr=e.target.closest(".tl-hr");
+  if(hr && !hr.disabled && !skipClick) tapHour(+hr.dataset.h);
+});
+// While dragging near the top or bottom of what's on screen, the sheet scrolls so the far hours come into reach.
+function edgeScroll(){
+  if(!drag || !drag.moved) return;
+  const sh=$("sheet"), r=tl.getBoundingClientRect(), top=sh.getBoundingClientRect().top, bottom=$("send").hidden ? sh.getBoundingClientRect().bottom : $("send").getBoundingClientRect().top;
+  const step = drag.lastY>bottom-36 && r.bottom>bottom-12 ? 6 : drag.lastY<top+36 && r.top<top+12 ? -6 : 0;
+  if(step){ const before=sh.scrollTop; sh.scrollTop+=step; if(sh.scrollTop!==before) setSel(dragTo(drag.kind,drag.lastY)); }
+  requestAnimationFrame(edgeScroll);
+}
+tl.addEventListener("keydown",e=>{
+  if(!sel || (e.key!=="ArrowUp" && e.key!=="ArrowDown") || !e.target.closest(".tl-sel")) return;
+  e.preventDefault();
+  const d=e.key==="ArrowUp" ? -1 : 1, edge=e.target.closest(".tl-h")?.dataset.edge;
+  const next = edge==="from" ? {from:sel.from+d,to:sel.to} : edge==="to" ? {from:sel.from,to:sel.to+d} : {from:sel.from+d,to:sel.to+d};
+  if(next.from>=FIRST && next.to<=LAST && next.from<next.to && free(next.from,next.to)) setSel(next);
+});
 const range = (r=sel) => `${fmt(r.from)} to ${fmt(r.to)}`;
 // Progressive disclosure: each step shows only once the one before it is done.
 function update(){
@@ -466,7 +775,7 @@ function showStatus(){
 async function cancelMine(btn){
   const r0 = mine().find(x => x.id === btn.dataset.id);
   btn.disabled = true;
-  const sent = await askToCancel(r0.id, `your ${r0.status==="approved" ? "open house" : "request"} on ${DAYS[r0.day].label}, ${range(r0)}`, msg => { $("mineErr").textContent = msg; $("mineErr").hidden = false; });
+  const sent = await askToCancel(r0.id, `your ${r0.status==="approved" ? "open house" : "request"} at ${cur.addr}, ${cur.city} on ${DAYS[r0.day].label}, ${range(r0)}`, msg => { $("mineErr").textContent = msg; $("mineErr").hidden = false; });
   if(!sent){ btn.disabled = false; return; }
   if(mine().length) showStatus(); else showForm();
 }

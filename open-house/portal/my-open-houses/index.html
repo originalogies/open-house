@@ -4,14 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>My Open Houses | Synergy Realty</title>
+<title>My Requests | Synergy Realty</title>
+<!-- Link previews (iMessage, Slack, email), with the same card as the home page -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="George &amp; Noonan Real Estate Group">
+<meta property="og:title" content="My Requests">
+<meta property="og:description" content="The George &amp; Noonan open houses you've asked to host, upcoming and past.">
+<meta property="og:url" content="https://open-house.synergyrealtors.com/my-open-houses/">
+<meta property="og:image" content="https://open-house.synergyrealtors.com/og-image.jpg?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="George &amp; Noonan Real Estate Group: Open House, request this weekend">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/favicon.png?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/brand.css">
 <link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/dialog.css">
 <style>
-/* My open houses: every request the signed-in agent has made, upcoming and past. */
+/* My Requests: every George & Noonan open house the signed-in agent has asked to host, upcoming and past.
+   (The page was called "My open houses"; its address stays /my-open-houses/ so old links keep working.) */
 .signed-out .wrap{visibility:hidden}
 .intro{display:flex;justify-content:space-between;align-items:flex-end;gap:16px 24px;flex-wrap:wrap}
 .myoh-stats{display:flex;gap:22px}
@@ -37,10 +52,12 @@
 .myoh-list .fbk.sent{font-weight:400;color:var(--muted);text-decoration:none}
 .opill{font-size:.78rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;background:var(--bg);color:var(--muted)}
 .opill.pending{color:var(--brass);background:var(--brass-soft)}
-.opill.approved,.opill.hosted{color:var(--accent);background:var(--accent-soft)}
+.opill.approved{color:var(--accent);background:var(--accent-soft)}
 .opill.declined{color:var(--danger);background:var(--danger-soft)}
 #myohErr{color:var(--danger)}
 footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+footer .foot-links{margin:0 0 8px;font-size:.88rem;font-weight:600}
+footer .foot-links a{color:inherit}
 @media (max-width:600px){.myoh-list li{grid-template-columns:56px 1fr}.myoh-list .thumb{width:56px;height:44px}.myoh-list .side{grid-column:2;align-items:flex-start}.myoh-stats div{text-align:left}}
 </style>
 </head>
@@ -52,8 +69,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 </header>
 <div class="wrap">
   <section class="intro">
-    <div><h1>My open houses</h1>
-      <p class="sub">Every open house you've requested, what's coming up and your history. Open one to see its details and the feedback you left. To cancel one, send the George &amp; Noonan team a cancellation request any time before it starts.</p></div>
+    <div><h1>My Requests</h1>
+      <p class="sub">The George &amp; Noonan open houses you've asked to host: what's coming up and your history. Open one to see its details and the feedback you left. To cancel one, send the George &amp; Noonan team a cancellation request any time before it starts.</p></div>
     <div class="myoh-stats" id="myohStats"></div>
   </section>
   <div class="myoh-tabs" role="tablist">
@@ -62,14 +79,14 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   </div>
   <p class="fine" id="myohErr" role="alert" hidden></p>
   <ul class="myoh-list" id="myohList"><li><span class="empty">Loading…</span></li></ul>
-  <footer>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
+  <footer><p class="foot-links"><a href="/how-compensation-works/">How compensation works</a></p>Synergy Realty, LLC, 221 E Southlake Blvd, Suite 100, Southlake, TX 76092. Listing data from NTREIS via Repliers.</footer>
 </div>
 
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
   <div class="gate-card">
     <img class="logo logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group">
     <img class="logo logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
-    <h2 id="gateTitle">Sign in to see your open houses</h2>
+    <h2 id="gateTitle">Sign in to see your requests</h2>
     <p>Use your Google account. Access is limited to approved Synergy agents.</p>
     <div id="gBtn"></div>
     <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
@@ -77,6 +94,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 </div>
 
 <script src="/nav.js"></script>
+<script src="/dialog.js"></script>
 <script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
@@ -90,7 +108,7 @@ const isUpcoming = r => r.iso >= todayIso() && (r.status === "pending" || r.stat
 let myReqs = [], myTab = "up";
 function myLabel(r){
   if (r.cancelRequested && isUpcoming(r)) return ["pending","Cancellation requested"];
-  if (r.status === "approved") return r.iso < todayIso() ? ["hosted","Hosted"] : ["approved","Approved"];
+  if (r.status === "approved") return ["approved","Approved"];
   return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"], cancelled:["cancelled","Cancelled"] })[r.status] || ["", r.status];
 }
 // Each open house opens on its own page (/feedback/): its details, and after it ends the feedback form or what the agent sent.
@@ -109,7 +127,7 @@ function renderMine(){
   const list = myTab === "up" ? up : past;
   $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li class="go" data-go="${esc(detailUrl(r))}">
       ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
-      <div><div class="a"><a href="${esc(detailUrl(r))}">${esc(r.addr)}, ${esc(r.city)}</a></div><div class="w">${esc(r.day)}, ${esc(r.date)} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
+      <div><div class="a"><a href="${esc(detailUrl(r))}">${esc(r.addr)}, ${esc(r.city)}</a></div><div class="w">${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0,4)!==todayIso().slice(0,4)?`, ${esc(r.iso.slice(0,4))}`:""} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
       <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}${feedbackLink(r)}</span></li>`; }).join("")
     : `<li><span class="empty">${myTab === "up" ? 'No upcoming open houses. <a href="/">Pick a home this weekend</a> to request one.' : "Your past open houses will show up here."}</span></li>`;
   $("myohErr").hidden = true;
@@ -118,24 +136,27 @@ function renderMine(){
   $("myohList").querySelectorAll(".cancel").forEach(b => b.onclick = async () => {
     const r = myReqs.find(x => x.id === b.dataset.id);
     b.disabled = true;
-    const sent = await askToCancel(r.id, `${r.addr} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
+    const sent = await askToCancel(r.id, `your ${r.status === "approved" ? "open house" : "request"} at ${r.addr}, ${r.city} on ${r.day}, ${r.time}`, msg => { $("myohErr").textContent = msg; $("myohErr").hidden = false; });
     if(!sent) b.disabled = false;
   });
 }
 // Agents can't cancel on their own: this asks the George & Noonan team, who approve the cancellation
 // or keep the open house. Returns true once the request is sent. (The weekend page has the same ask.)
 async function askToCancel(id, what, showError){
-  const reason = prompt(`Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.\n\nReason (optional):`, "");
+  const reason = await OHDialog.prompt({ title: "Request cancellation", body: `Ask the George & Noonan team to cancel ${what}? Nothing changes until they answer.`,
+    label: "Reason (optional)", placeholder: "For example: a listing appointment came up", ok: "Send request", cancel: "Back" });
   if(reason === null) return false;
   const r = await fetch("/api/requests/cancel-request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id, reason})}).catch(()=>null);
   const d = r ? await r.json().catch(()=>({})) : {};
   if(!r || (!r.ok && r.status!==502)){ showError(d.message || "Could not send your request. Try again."); return false; }
-  if(r.status===502) alert(d.message);
+  if(r.status===502) await OHDialog.alert({ title: "Request saved", body: d.message });
   await loadMine();
   return true;
 }
+// The first load is asked for right away, alongside the sign-in check, instead of after it.
+let firstLoad = fetch("/api/requests").catch(() => null);
 async function loadMine(){
-  const r = await fetch("/api/requests").catch(() => null);
+  const r = await (firstLoad || fetch("/api/requests").catch(() => null)); firstLoad = null;
   if (!r || !r.ok) { $("myohList").innerHTML = '<li><span class="empty">Could not load your open houses. Refresh to try again.</span></li>'; return; }
   myReqs = (await r.json()).requests;
   renderMine();
@@ -143,6 +164,8 @@ async function loadMine(){
 $("tabUp").onclick = () => { myTab = "up"; renderMine(); };
 $("tabPast").onclick = () => { myTab = "past"; renderMine(); };
 document.addEventListener("signedin", loadMine);
+// Going back to this page can restore it as it was; load the list again so changes show.
+window.addEventListener("pageshow", e => { if (e.persisted && myReqs.length) loadMine(); });
 </script>
 </body>
 </html>

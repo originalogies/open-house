@@ -10,6 +10,7 @@ export default async (req) => {
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
+  if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
   const b = await req.json().catch(() => null);
   const r = b && (await getRequest(String(b.id || "")));
   // Agents only see their own requests; anyone else's id looks like it doesn't exist.

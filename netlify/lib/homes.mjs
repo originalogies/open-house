@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
+import { readAll } from "./readall.mjs";
 
 // ---- Team-added homes -------------------------------------------------------
 // Homes the George & Noonan team adds before they're on the MLS. Each one is used everywhere a
@@ -25,15 +26,16 @@ export function cleanHome(b, { partial = false } = {}) {
     if (v.length > max) return `${label} is too long.`;
     out[k] = v; return null;
   };
-  const num = (k, max, label, step) => {
+  // `places`: decimal places allowed (bathrooms are written full.half as on the MLS: 4 full and 1 half is 4.1).
+  const num = (k, max, label, places) => {
     if (b[k] === undefined && partial) return null;
-    const n = Number(b[k]);
-    if (b[k] === "" || b[k] === null || !Number.isFinite(n) || n < 0 || n > max || Math.round(n / step) * step !== n) return `Enter a valid ${label}.`;
+    const n = Number(b[k]), f = 10 ** places;
+    if (b[k] === "" || b[k] === null || !Number.isFinite(n) || n < 0 || n > max || Math.round(n * f) / f !== n) return `Enter a valid ${label}.`;
     out[k] = n; return null;
   };
   const err = text("addr", 120, "Street address") || text("city", 60, "City")
     || (b.zip === undefined && partial ? null : (/^\d{5}$/.test(String(b.zip ?? "").trim()) ? ((out.zip = String(b.zip).trim()), null) : "Enter a 5-digit ZIP code."))
-    || num("price", 1e9, "price", 1) || num("bd", 50, "bedroom count", 1) || num("ba", 50, "bathroom count", 0.5) || num("sf", 100000, "square footage", 1);
+    || num("price", 1e9, "price", 0) || num("bd", 50, "bedroom count", 1) || num("ba", 50, "bathroom count", 1) || num("sf", 100000, "square footage", 0);
   return err ? { error: err } : { fields: out };
 }
 
@@ -43,14 +45,12 @@ export const photoUrl = (id, p) => `/api/home-photo?id=${id}&p=${p}`;
 export const asListing = (h) => ({
   mls: h.id, addr: h.addr, city: h.city, zip: h.zip, lat: 0, lng: 0,
   price: h.price, dom: 0, bd: h.bd, ba: h.ba, sf: h.sf,
-  img: h.photos?.length ? photoUrl(h.id, h.photos[0]) : "", teamAdded: true,
+  img: h.photos?.length ? photoUrl(h.id, h.photos[0]) : "", gallery: (h.photos || []).map((p) => photoUrl(h.id, p)), teamAdded: true,
 });
 
 export async function listHomes() {
-  const s = homeStore();
-  const { blobs } = await s.list({ prefix: "home/" });
-  const all = await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })));
-  return all.filter(Boolean).sort((a, b) => a.createdAt - b.createdAt);
+  const all = (await readAll(homeStore(), "open-house-homes", "home/")).map(([, h]) => h);
+  return all.sort((a, b) => a.createdAt - b.createdAt);
 }
 export const getHome = async (id) => (isHomeId(id) ? homeStore().get(`home/${id}`, { type: "json" }) : null);
 export const saveHome = (h) => homeStore().setJSON(`home/${h.id}`, h);
@@ -82,7 +82,7 @@ export const addressKey = (addr, zip) => `${String(addr || "").toLowerCase().rep
 export const linkSuggestions = (home, mlsListings) => mlsListings.filter((l) => addressKey(l.addr, l.zip) === addressKey(home.addr, home.zip));
 
 // Team settings for the MLS listing after linking: the home's own, falling back to what the MLS
-// listing already had. Instructions and access details carry over with the home.
+// listing already had. Instructions, access details and Vacant carry over with the home.
 export function mergeInfo(homeInfo, mlsInfo) {
   return {
     offeredWeek: homeInfo.offeredWeek || mlsInfo.offeredWeek || null,
@@ -90,5 +90,6 @@ export function mergeInfo(homeInfo, mlsInfo) {
     days: homeInfo.offeredWeek ? homeInfo.days : mlsInfo.days,
     instr: homeInfo.instr?.length ? homeInfo.instr : mlsInfo.instr || [],
     access: homeInfo.access || mlsInfo.access || "",
+    vacant: !!(homeInfo.vacant || mlsInfo.vacant),
   };
 }

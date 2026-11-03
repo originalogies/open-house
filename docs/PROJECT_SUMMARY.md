@@ -1,6 +1,6 @@
 # Open House Portal: project summary
 
-Last updated: 2026-10-21
+Last updated: 2026-10-24
 
 This document records what has been built, how it fits together, how it is configured, and what is still open. For day-to-day usage see `open-house/README.md`; for email template fields see `open-house/emails/README.md`.
 
@@ -35,11 +35,11 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings, request a time. |
-| `/my-open-houses/` | Signed-in agents | "My open houses": every request the agent has made, upcoming and history, with "Request cancellation". |
+| `/` | Signed-in agents | "This weekend", the page agents land on: browse published listings (Priority first, then highest price first), request a time. A home's details open with a gallery of up to 5 of its photos: swipe on phones, arrows on desktop, "2 / 5" to show where you are. |
+| `/my-open-houses/` | Signed-in agents | "My Requests" (called "My open houses" until Oct 2026; the address is unchanged): every George & Noonan open house the agent has asked to host, upcoming and history, with "Request cancellation". |
 | `/inventory/` | Team | Redirects to the Admin Console's Listings tab (`/admin/#listings`), where the team publishes listings, sets Priority, edits instructions and access details, and admins add homes that aren't on the MLS yet. |
-| `/respond/?id=...` | Team | Approve or Decline a request, or answer an agent's cancellation request. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. With MLS automation off, approving requires ticking "entered on the MLS". |
-| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console: requests and cancellation requests waiting for a decision, every request with its MLS status and an "MLS status" link, Cancel for upcoming approved open houses, weekend listings, agent access, weekly request cutoff. |
+| `/respond/?id=...` | Team | The confirmation page: confirm or decline a request, or answer an agent's cancellation request. Confirming a home on the MLS needs one of two choices: "Submitted manually" or "Schedule Open House with AI Agent" (Start, then live progress; needs MLS automation on). Once confirmed, a 5-second countdown goes to the Open House Portal. After approval: MLS status and screenshot, change the time, cancel, retry a failed MLS job, history. "← Back" returns to the page that opened it (or the Admin Console's Requests list, when opened from an email). |
+| `/admin/` | Team; Agents and Settings tabs for admins (`ADMIN_EMAILS`) | Admin Console. Requests: a time frame by open house date (This week by default, This month, This year, All time, or a custom range with date pickers) sets the stat cards (Requests, Waiting for a decision, Approved, Agents) and the list. Requests and cancellation requests waiting for a decision are pinned at the top of the one list whatever the time frame, with a Review button; status chips and search narrow the list. Filters are kept for the browser tab. Every request shows its MLS status and an "MLS status" link; Cancel for upcoming approved open houses. An agent's page (from Agents or an agent's name) has their stats and every open house they've requested, with a photo of each home, a search by address or MLS#, and pages like the Requests list. Also weekend listings (with the date and time Repliers data was last updated), agent access, weekly request cutoff. |
 
 ## Features
 
@@ -47,6 +47,13 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Google sign-in. Access is deny-by-default: a person can sign in only if their email address, or their email domain, is on the allowlist (or they are an admin).
 - Admins manage the list at `/admin/`. Removing someone ends their access immediately (the list is re-checked on every request).
 - Subdomains and look-alike domains do not match an allowed domain.
+
+**Support and Referral Agreement (DocuSeal)**
+- Agents sign the George & Noonan Support and Referral Agreement once before they can use the portal. Until they do, every agent page shows only the agreement step, and the agent API (`/api/listings`, `/api/requests`, `/api/requests/cancel-request`) answers 403 `agreement_required`. The team (admins and `TEAM_EMAILS`) doesn't sign.
+- "Read and sign" opens the agreement on DocuSeal (the agent's name is filled in; they can correct it), and DocuSeal sends them back to the page they started from. The portal then asks DocuSeal whether that agent completed it and records the signature with DocuSeal's own time of signing (`signedAt`). DocuSeal's webhook (`/api/agreement/webhook`) records it too, for agents who don't come back. Neither trusts the browser or the webhook body: the signature is looked up in DocuSeal.
+- An agent who leaves partway sees "Continue signing" (the same DocuSeal form). An agent who declines can start again.
+- Records live in Netlify Blobs (`open-house-agreements`, `agreement/<email>`). The Admin Console's Agents list has an Agreement column (Signed with the date and time and a link to the signed copy, Started, Declined, Not signed, or Not needed for the team), and an agent's page says when they signed. The signed copy is fetched from DocuSeal each time.
+- It's on only while `DOCUSEAL_API_KEY` and `DOCUSEAL_TEMPLATE_ID` are set. Code: `netlify/lib/agreement.mjs`, `netlify/functions/agreement*.mjs`, `portal/auth.js`.
 
 **Changes and cancellations**
 - Agents can't cancel on their own. They send a cancellation request for their own pending or approved request until the open house starts (the weekly cutoff doesn't apply). The team gets an email like a new booking and approves the cancellation or keeps the open house. Time changes go through the team.
@@ -56,6 +63,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 **Requests and email**
 - Submitting a request sends template 1 (Request Received) to `team@georgeandnoonan.com` and template 2 (Request Sent) to the agent.
 - Approval sends template 3 (Confirmed) to the agent and the team with an `open-house.ics` attachment. Decline sends a short plain note to the agent.
+- The calendar event names the George & Noonan Team (team@georgeandnoonan.com) as organizer and lists it as a guest beside the agent. team@georgeandnoonan.com also gets every email that carries the event (Confirmed, Updated, Cancelled), whatever `TEAM_EMAIL` is set to (`TEAM_CALENDAR` in `netlify/lib/email.mjs`).
+- Every home's instructions end with "Please text the George & Noonan Team once you enter the home and when you leave." on the portal and in the Confirmed and Reminder emails (`STANDARD_INSTR` in `netlify/lib/listings.mjs`); the Admin Console notes it under each home's instructions.
 - Reminder (template 4) runs from an hourly scheduled function and sends at 9:00 AM Central the day before.
 - Access details (gate, lockbox, alarm codes) are stored server-side and appear only in the Confirmed and Reminder emails, never in the browser or request emails.
 - Overlapping hours are blocked for the same agent and listing, and against any approved request or open house already on the MLS. Agents can have up to 12 open requests.
@@ -70,14 +79,19 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Tabs: All homes, Published and Unpublished, each with its count. Every card has a Published or Unpublished badge.
 - **Publish this weekend** controls which listings agents see; days (Sat/Sun) are chosen per listing.
 - **Priority** puts a listing first and highlights its card (blue border and glow, "Priority" badge, same card size). Resets weekly.
+- **Vacant** marks a home no one is living in (no occupants). Agents see a "Vacant" tag on the listing's card and in its details. A tooltip explains it in both places: hover or keyboard focus, and a tap in the details on phones. Stays with the home from week to week.
 - Changes save automatically (switches right away, text after a short pause) and a toast confirms each save. There is no Save button.
 - **Homes not on the MLS yet** (admins): "Add a home" takes the address, price, bedrooms, bathrooms and square feet, then photos (resized in the browser; the first is the cover). These homes work like any listing (publish, Priority, instructions, access details, requests) and show "Coming soon" to agents. Their requests aren't sent to the MLS bot, and approving one doesn't ask for the "entered on the MLS" tick. Stored in Netlify Blobs (`open-house-homes`, photos in `open-house-home-photos`, served publicly by `/api/home-photo` so emails can show them).
 - **Linking:** once the home is on the MLS, its card suggests the MLS listing at the same address (or the team picks one). Linking moves the home's settings, instructions, access details and requests to the MLS number, and approved open houses then go to the MLS bot (or, with automation off, the team is told which to enter by hand).
 - Four listings are built in as a fallback (2006 Nighthawk Court, 6900 Rockingham Court, 69 Cortes Drive, 441 Watermere Drive) and always appear in the inventory list. Live Repliers data replaces them when it returns the same MLS number.
 
 **Design**
-- Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My open houses and (for the team) Admin Console; the Admin Console shows Requests, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
+- Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My Requests and (for the team) Admin Console; the Admin Console shows Requests, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
 - Mobile responsive; admin settings autosave with toast confirmations.
+- Confirmations and questions (cancel, remove, link, a cancellation reason) open the site's own dialog (`dialog.js`, `dialog.css`) instead of the browser's boxes.
+- Addresses read street and city everywhere ("200 Murano Place, Southlake"), including email subjects and the calendar event title.
+- Status labels match across old and new open houses: past approved open houses read "Approved", not "Hosted".
+- Shared links show `og-image.jpg` (1200×630): the logo and "OPEN HOUSE / REQUEST THIS WEEKEND" in white over a modern home under a blue sky. The icons take the same look, white on that sky's blue gradient: the browser tab uses `favicon.png` (the logo's ampersand, 96×96, with `favicon.ico` at 16/32/48 for crawlers), and home screens and link previews use `apple-touch-icon.png` (G&N, 180×180). The page tags carry `?v=2` so browsers and link previews drop the old images; bump it when the images change again.
 
 ## Configuration (Netlify environment variables)
 
@@ -92,16 +106,21 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 | `TEAM_EMAIL` | No | Team inbox(es) that receive request emails. Defaults to `team@georgeandnoonan.com`. |
 | `TEAM_EMAILS` | No | Extra people allowed to use `/inventory/` and approve requests. |
 | `MLS_BOOKING_MODE` | No | `off` (default), `dry_run` or `live`. See `docs/MLS_AUTOMATION.md`. |
-| `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent. |
-| `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters shared with the bot; signs webhooks and callbacks. Mark as secret. |
+| `GROKBOT_WEBHOOK_URL` | For MLS automation | Where MLS jobs are sent: Grokbot's Cursor automation webhook. |
+| `GROKBOT_WEBHOOK_TOKEN` | For MLS automation | The `crsr_…` Bearer token for that webhook. Mark as secret. |
+| `MLS_WEBHOOK_SECRET` | For MLS automation | 32+ random characters; stays on Netlify. Makes each job's one-time callback token and signs outgoing jobs. Mark as secret. |
+| `DOCUSEAL_API_KEY` | For the agreement | DocuSeal API key (DocuSeal, Settings, API). Mark as secret. With this and the template ID set, agents must sign the agreement. |
+| `DOCUSEAL_TEMPLATE_ID` | For the agreement | The DocuSeal template "G&N Support and Referral Agreement" (6672249). Its signer role must be `Cooperating Agent`, with a text field `Agent Name`. |
+| `DOCUSEAL_WEBHOOK_SECRET` | No | 32+ random characters. Set the same value as the DocuSeal webhook's secret, header `X-OH-Webhook-Secret`. |
+| `DOCUSEAL_API_URL` | No | `https://api.docuseal.com` by default; `https://api.docuseal.eu` for DocuSeal's EU cloud. |
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/mls/callback`, `/api/mls/screenshot`, `/api/agreement`, `/api/agreement/webhook`, `/api/admin/agreements`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 
-- Run `npm test` (21 tests, including MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
+- Run `npm test` (50 tests, including the agreement step against a stand-in DocuSeal, MLS sync, webhook signing, change and cancel rules, and calendar updates; the original 9: allowlist rules, session cookie signing, overlap rules, time helpers, weekend and cutoff logic, Repliers field mapping).
 - After editing a file in `open-house/emails/`, run `npm run build:templates` (Netlify also runs it on each build).
 - Push to `main` to deploy. Functions take about a minute longer than static files to appear.
 
@@ -120,6 +139,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 5. **End-to-end check still worth doing:** submit a real request, approve it, and confirm the Confirmed email, calendar invite and (the next morning) the Reminder arrive and look correct, including the logo.
 6. **No team list of approved open houses yet.** The team reaches a request's page from its email link. A dashboard listing every request (with MLS status) is the next step for the admin area.
 7. **Cutoff is global.** It repeats weekly; there is no per-week override.
+8. **Some MLS map pins are wrong.** The agent portal's "View location" map uses the MLS coordinates from Repliers (emails link to the address). Checked Oct 24 2026: 125 Murano Place is about 15 km off and 200 Murano Place about 3.5 km off (Google has both addresses right, in Carillon Parc); every other listing is within about 0.3 km. New streets Google doesn't know yet (the Westlake Entrada homes on Edson, Otter, Molly and Ellis, and 1920 Serendipity Court) carry subdivision placeholder pins that several homes share. The pin can be corrected on the MLS listing itself, which also fixes it on every site that uses MLS data.
 
 ## Decisions worth remembering
 

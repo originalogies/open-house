@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>How compensation works | Synergy Realty</title>
+<!-- Link previews (iMessage, Slack, email), with the same card as the home page -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="George &amp; Noonan Real Estate Group">
+<meta property="og:title" content="How compensation works">
+<meta property="og:description" content="The referral fee on a lead from a George &amp; Noonan open house or Broker introduction, and how the commission is divided.">
+<meta property="og:url" content="https://open-house.synergyrealtors.com/how-compensation-works/">
+<meta property="og:image" content="https://open-house.synergyrealtors.com/og-image.jpg?v=2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="George &amp; Noonan Real Estate Group: Open House, request this weekend">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/favicon.png?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/nav.css">
+<style>
+/* How compensation works: the referral fee owed to Synergy on a lead from a George & Noonan open house or a Broker
+   introduction, and where the money goes at closing. Taken from the two-page summary of the Support & Referral
+   Agreement ("G&N Referral Fee Structure"); the signed agreement controls, as the footer says. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.signed-out .wrap{visibility:hidden}
+.step{padding:26px 0 30px;border-top:1px solid var(--line)}
+.step h2{font-family:var(--serif);font-weight:500;font-size:1.55rem;line-height:1.2;margin:0 0 16px}
+.step h2 small{display:block;font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.step h3{font-size:.76rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin:0 0 16px}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.tile.off{background:transparent}
+.tile .k{font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.tile .big{font-family:var(--serif);font-size:2.6rem;font-weight:500;line-height:1;margin:0 0 10px}
+.tile .v{font-family:var(--serif);font-size:1.35rem;font-weight:500;line-height:1.2;margin:0 0 6px}
+.tile p{margin:0;color:var(--muted);font-size:.95rem}
+.tile p b{color:var(--ink);font-weight:600}
+.note{margin:14px 0 0;font-size:.95rem;color:var(--muted)}
+.note b{color:var(--ink);font-weight:600}
+/* Step 4: one bar per kind of lead, its parts sized by their share of the commission, named underneath. */
+.example{margin:-6px 0 18px;font-size:.92rem;color:var(--muted)}
+.split + .split{margin-top:22px}
+.split-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 16px;margin-bottom:8px;font-size:.92rem}
+.split-head h3{margin:0}
+.split-head span{color:var(--muted)}
+.split-head span b{color:var(--ink)}
+.bar{display:flex;height:38px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block}
+.fee{background:var(--ink)}
+.share{background:var(--brass)}
+.agent{background:var(--surface)}
+.parts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:10px 0 0;padding:0;list-style:none}
+.parts li{font-size:.82rem;color:var(--muted);line-height:1.35}
+.parts b{display:flex;align-items:center;gap:7px;font-size:1rem;color:var(--ink);margin-bottom:2px}
+.parts b::before{content:"";flex:none;width:12px;height:12px;border-radius:3px;border:1px solid var(--line);background:var(--sw)}
+.rules{display:grid;gap:12px 28px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.rules h3{color:var(--brass);margin:0 0 6px}
+.rules p{margin:0;font-size:.95rem;color:var(--muted)}
+/* Flow of funds: boxes joined by arrows; where the money divides, a fork to two boxes side by side. */
+.flowbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:16px}
+.flow{display:flex;flex-direction:column;align-items:center}
+.node{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center;font-size:.98rem;line-height:1.3;width:100%;max-width:300px}
+.node b{display:block;font-weight:600}
+.node span{display:block;font-size:.86rem;color:var(--muted);margin-top:2px}
+.node.fee{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.node.share{background:var(--brass);border-color:var(--brass);color:var(--surface)}
+.node.fee span,.node.share span{color:inherit;opacity:.85}
+.node.agent{background:var(--surface);border:2px solid var(--ink)}
+.down{position:relative;width:2px;height:34px;margin:4px 0 8px;background:var(--muted)}
+.down::after,.fork > .node::after{content:"";position:absolute;left:-5px;bottom:-6px;border:6px solid transparent;border-bottom:0;border-top-color:var(--muted)}
+.down[data-amt]::before{content:attr(data-amt);position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:.85rem;font-weight:600;white-space:nowrap}
+.fork{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:640px;padding-top:44px}
+.fork::before{content:"";position:absolute;top:0;left:calc(50% - 1px);width:2px;height:18px;background:var(--muted)}
+.fork.right::before{left:calc(100% - (100% - 12px) / 4 - 1px)}
+.fork::after{content:"";position:absolute;top:16px;left:calc((100% - 12px) / 4);right:calc((100% - 12px) / 4);height:2px;background:var(--muted)}
+.fork > .node{position:relative;max-width:none}
+.fork > .node::before{content:"";position:absolute;left:calc(50% - 1px);top:-28px;width:2px;height:20px;background:var(--muted)}
+.fork > .node::after{left:calc(50% - 6px);top:-9px;bottom:auto}
+.fork + .fork{margin-top:2px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 28px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.totals h3{color:var(--brass);margin:0 0 4px}
+.totals p{margin:0;font-size:.95rem;color:var(--muted)}
+.totals p b{color:var(--ink)}
+.flowbox .note{margin-top:18px}
+footer{border-top:1px solid var(--line);margin-top:8px;padding:22px 0 40px;font-size:.8rem;color:var(--muted)}
+footer p{margin:0 0 6px}
+footer a{color:inherit}
+@media (max-width:600px){
+  .step h2{font-size:1.4rem}
+  .tile .big{font-size:2.2rem}
+  .flowbox{padding:16px 14px}
+  .node{padding:10px;font-size:.92rem}
+  .node span{font-size:.8rem}
+}
+</style>
+</head>
+<body class="signed-out" data-page="pay">
+<header class="topnav" id="topnav">
+  <div class="wrap topnav-bar">
+    <a class="topnav-brand" href="/"><img class="logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group"><img class="logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group"><span class="topnav-label">Open House Portal</span></a>
+  </div>
+</header>
+<div class="wrap">
+  <section class="intro">
+    <h1>How compensation works</h1>
+    <p class="sub">Four questions decide what is owed to Synergy Realty, LLC on a lead sourced through a George &amp; Noonan open house or Broker introduction.</p>
+  </section>
+
+  <section class="step">
+    <h2><small>Step 1</small>How was the lead sourced?</h2>
+    <div class="tiles">
+      <div class="tile"><p class="big">25%</p><p class="k">Open house lead</p><p>A buyer or seller you meet at a George &amp; Noonan open house.</p></div>
+      <div class="tile"><p class="big">50%</p><p class="k">Broker-provided lead</p><p>Troy George or Lucy Noonan introduces the lead to you, made or confirmed in writing.</p></div>
+    </div>
+    <p class="note"><b>Fits both categories?</b> The higher rate applies. Percentages are of the gross commission on your side.</p>
+  </section>
+
+  <section class="step">
+    <h2><small>Step 2</small>Is it a Qualifying Transaction?</h2>
+    <div class="tiles">
+      <div class="tile"><p class="v">$2,000 or more</p><p>Gross commission on your side, before the fee. <b>Referral fee applies.</b></p></div>
+      <div class="tile off"><p class="v">Under $2,000</p><p>Doesn't count toward the limits in Step 3. <b>No referral fee.</b></p></div>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2><small>Step 3</small>Which side of the transaction?</h2>
+    <div class="tiles">
+      <div class="tile"><p class="k">Seller or landlord side</p><p class="v">Fee on the first</p><p>The first Qualifying Transaction as a seller or landlord.</p></div>
+      <div class="tile"><p class="k">Buyer or tenant side</p><p class="v">Fee on the first</p><p>The first Qualifying Transaction as a buyer or tenant.</p></div>
+      <div class="tile off"><p class="k">Every later transaction</p><p class="v">No fee</p><p>Later transactions on a side that already had its first.</p></div>
+    </div>
+    <p class="note"><b>Buyer purchases the G&amp;N listing itself?</b> No referral fee on that purchase, and it counts as the buyer-side transaction.</p>
+  </section>
+
+  <section class="step">
+    <h2><small>Step 4</small>How the commission is divided</h2>
+    <p class="example">Example: the fee comes off the top of a $30,000 gross side commission, then an 80/20 split.</p>
+    <div class="split">
+      <div class="split-head"><h3>Open house lead · 25%</h3><span>Synergy <b>$12,000</b> · Agent <b>$18,000</b></span></div>
+      <div class="bar" role="img" aria-label="$7,500 referral fee, $4,500 Synergy's 20%, $18,000 the agent's 80%"><i class="fee" style="flex:7500"></i><i class="share" style="flex:4500"></i><i class="agent" style="flex:18000"></i></div>
+      <ul class="parts">
+        <li style="--sw:var(--ink)"><b>$7,500</b>Referral fee to Synergy</li>
+        <li style="--sw:var(--brass)"><b>$4,500</b>Synergy's 20% of the remainder</li>
+        <li style="--sw:var(--surface)"><b>$18,000</b>Agent's 80% of the remainder</li>
+      </ul>
+    </div>
+    <div class="split">
+      <div class="split-head"><h3>Broker-provided lead · 50%</h3><span>Synergy <b>$18,000</b> · Agent <b>$12,000</b></span></div>
+      <div class="bar" role="img" aria-label="$15,000 referral fee, $3,000 Synergy's 20%, $12,000 the agent's 80%"><i class="fee" style="flex:15000"></i><i class="share" style="flex:3000"></i><i class="agent" style="flex:12000"></i></div>
+      <ul class="parts">
+        <li style="--sw:var(--ink)"><b>$15,000</b>Referral fee to Synergy</li>
+        <li style="--sw:var(--brass)"><b>$3,000</b>Synergy's 20% of the remainder</li>
+        <li style="--sw:var(--surface)"><b>$12,000</b>Agent's 80% of the remainder</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="rules">
+      <div><h3>Document it</h3><p>Lead Report within 24 hours. An undocumented lead still owes the fee.</p></div>
+      <div><h3>No expiration</h3><p>While at Synergy, owed until each side's first Qualifying Transaction.</p></div>
+      <div><h3>After departure</h3><p>Owed on contracts signed within 24 months, paid by the new broker.</p></div>
+      <div><h3>Exceptions</h3><p>Request in writing 2 business days before closing. Broker's discretion.</p></div>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2>Flow of funds at closing</h2>
+    <p class="example">Illustration: an open house lead on a $1,000,000 sale paying 3% on the agent's side, a $30,000 gross side commission, with the agent on an 80/20 split. Broker-provided leads follow the same path at 50%.</p>
+
+    <div class="flowbox">
+      <h3>While the agent is sponsored by Synergy · 80/20 split</h3>
+      <div class="flow">
+        <div class="node"><b>Title Company</b><span>Disburses $30,000</span></div>
+        <div class="down" data-amt="$30,000"></div>
+        <div class="node"><b>Synergy Realty, LLC</b><span>Receives the full $30,000</span></div>
+        <div class="fork">
+          <div class="node fee"><b>$7,500 referral fee</b><span>25% kept by Synergy off the top</span></div>
+          <div class="node"><b>$22,500 remaining</b><span>Split 80/20 between agent and Synergy</span></div>
+        </div>
+        <div class="fork right">
+          <div class="node share"><b>$4,500 to Synergy</b><span>20% brokerage share</span></div>
+          <div class="node agent"><b>$18,000 to the agent</b><span>80% share, paid by Synergy</span></div>
+        </div>
+      </div>
+      <div class="totals">
+        <div><h3>Synergy receives</h3><p><b>$12,000</b> · $7,500 referral fee + $4,500 at 20%</p></div>
+        <div><h3>Agent receives</h3><p><b>$18,000</b> · 80% of the $22,500 remaining</p></div>
+      </div>
+    </div>
+
+    <div class="flowbox">
+      <h3>After the agent leaves · contract signed within 24 months of departure</h3>
+      <div class="flow">
+        <div class="node"><b>Title Company</b><span>Disburses $30,000</span></div>
+        <div class="down" data-amt="$30,000"></div>
+        <div class="node"><b>New sponsoring broker</b><span>Receives $30,000</span></div>
+        <div class="fork">
+          <div class="node fee"><b>$7,500 to Synergy</b><span>Paid broker to broker at closing</span></div>
+          <div class="node"><b>$22,500 remaining</b><span>New broker's split, then to the former agent</span></div>
+        </div>
+      </div>
+      <p class="note">If the fee is not paid to Synergy within 30 days after closing, the former agent owes Synergy an equal amount (Section 3.6).</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>The George &amp; Noonan Real Estate Group · 221 E Southlake Blvd., Southlake, TX 76092 · <a href="tel:+18174108769">(817) 410-8769</a> · <a href="mailto:team@georgeandnoonan.com">team@georgeandnoonan.com</a></p>
+    <p>Synergy Realty LLC | Designated Broker: Troy George · Summary only; the signed agreement controls.</p>
+  </footer>
+</div>
+
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle" hidden>
+  <div class="gate-card">
+    <img class="logo logo-light" src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group">
+    <img class="logo logo-dark" src="/gn-logo-white.png" alt="George &amp; Noonan Real Estate Group">
+    <h2 id="gateTitle">Sign in to the Open House Portal</h2>
+    <p>Use your Google account. Access is limited to approved Synergy agents.</p>
+    <div id="gBtn"></div>
+    <p class="gate-msg" id="gateMsg" role="alert" hidden></p>
+  </div>
+</div>
+
+<script src="/nav.js"></script>
+<script src="/auth.js"></script>
+</body>
+</html>

@@ -80,7 +80,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
   </div>
 </header>
 <div class="wrap">
-  <p class="back"><a href="/my-open-houses/">← My open houses</a></p>
+  <p class="back"><a href="/my-open-houses/">← My Requests</a></p>
   <section class="intro" style="padding-top:10px"><div><h1 id="title">Your open house</h1>
     <p class="sub" id="lede"></p></div></section>
   <div class="fb" id="fb"><p class="muted">Loading…</p></div>
@@ -115,7 +115,7 @@ const box = $("fb");
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
 const fmtSent = ms => new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-// Same labels as My open houses.
+// Same labels as My Requests.
 function statusPill(o){
   const ended = Date.now() >= o.endsAt;
   if (o.cancelRequested && !ended) return ["pending", "Cancellation requested"];
@@ -143,7 +143,7 @@ function showSent(o, f, justSent){
       ${f.forSeller ? `<dt>Additional feedback</dt><dd>${esc(f.forSeller)}</dd>` : ""}`}
       <dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : "None"}</dd>
       ${(f.photos || []).length ? `<dt>Photos</dt><dd class="photos">${f.photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house"></a>`).join("")}</dd>` : ""}</dl>
-    <p style="margin:18px 0 0"><a href="/my-open-houses/">Back to my open houses</a></p></div>`;
+    <p style="margin:18px 0 0"><a href="/my-open-houses/">Back to My Requests</a></p></div>`;
 }
 
 // Shrink a photo to at most 1600px on its longest side as a JPEG, so uploads stay small (same as the Admin Console).
