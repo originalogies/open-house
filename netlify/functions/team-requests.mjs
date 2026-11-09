@@ -1,5 +1,5 @@
 import { json, currentUser } from "../lib/shared.mjs";
-import { listRequests } from "../lib/requests.mjs";
+import { listRequests, holdsSlot } from "../lib/requests.mjs";
 import { dayMeta } from "../lib/week.mjs";
 import { fmtRange } from "../lib/time.mjs";
 import { mode, agentReady, byHand } from "../lib/mls.mjs";
@@ -26,6 +26,8 @@ export default async (req) => {
       createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
       cancelledBy: r.cancelledByName || null, imported: !!r.imported, // from the G&N calendar, not requested here
       approving: !!r.approving, // waiting for the AI agent to put it on the MLS before it's approved
+      addedBy: r.addedBy?.name || null, // the team added it for the agent ("Add a request")
+      holds: holdsSlot(r), // its hours are spoken for: nobody else can book or be approved for them
       mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls), byHand: byHand(r),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
       feedback: r.feedback ? withPhotoUrls(r) : null, feedbackDue: !r.feedback && feedbackOpen(r),

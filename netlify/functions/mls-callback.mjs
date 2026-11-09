@@ -33,13 +33,17 @@ export default async (req) => {
 
   await logEvent(r.id, `mls_${b.result}`, { jobId: b.job_id, action: r.sync.job.action, screenshot: r.sync.job.screenshot || null, note: r.sync.message });
   // Approved with the AI agent: now that it's on the MLS, it's approved and the agent gets the confirmation.
+  // Unless the team turned email confirmations off when adding it (team-new-request.mjs).
   if (out.approved) {
-    await logEvent(r.id, "approved", { note: `On the MLS, so it's approved. ${r.agent.name} was emailed the confirmation.` }, r.decidedBy);
-    try { await sendConfirmed(r); }
-    catch (e) {
-      console.error("email failed", e.message);
-      r.confirmEmailFailed = true; await saveRequest(r); // the request page tells the team to let the agent know
-      await sendTeamAlert(r, "confirmation email failed", `It's on the MLS and approved, but the email to ${r.agent.name} didn't send. Let them know directly.`).catch(() => {});
+    const quiet = r.sendEmails === false;
+    await logEvent(r.id, "approved", { note: `On the MLS, so it's approved. ${quiet ? "No emails were sent: email confirmations are off for this one." : `${r.agent.name} was emailed the confirmation.`}` }, r.decidedBy);
+    if (!quiet) {
+      try { await sendConfirmed(r); }
+      catch (e) {
+        console.error("email failed", e.message);
+        r.confirmEmailFailed = true; await saveRequest(r); // the request page tells the team to let the agent know
+        await sendTeamAlert(r, "confirmation email failed", `It's on the MLS and approved, but the email to ${r.agent.name} didn't send. Let them know directly.`).catch(() => {});
+      }
     }
   }
   if (out.state === "failed" || out.state === "needs_login") {

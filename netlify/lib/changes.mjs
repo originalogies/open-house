@@ -32,6 +32,28 @@ export function checkChange(r, next, all, now = Date.now(), external = []) {
   return null;
 }
 
+// The team adds a request for an agent (team-new-request.mjs): `next` is { mls, iso, from, to }. `days` are the days
+// the seller allows ("sat", "sun") and `external` the home's open houses already on the MLS ([{ iso, from, to }], from
+// Repliers). With `enteredByHand` it's being approved as already entered on the MLS by hand, so an MLS open house at
+// exactly those hours is this one. The weekly cutoff doesn't apply to the team. Returns an error message or null.
+export function checkTeamAdd(next, all, { agentEmail = "", days = ["sat", "sun"], external = [], enteredByHand = false, now = Date.now() } = {}) {
+  const { iso, from, to } = next;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso)) || Number.isNaN(Date.parse(`${iso}T12:00:00Z`))) return "Pick a valid date.";
+  const day = dayKeyOf(iso);
+  if (!day) return "Open houses are on Saturday or Sunday.";
+  if (!days.includes(day)) return `The seller doesn't offer ${day === "sat" ? "Saturdays" : "Sundays"} for this home.`;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < FIRST_HOUR || to > LAST_HOUR || from >= to) return "Pick hours between 9:00 AM and 7:00 PM.";
+  if (now >= chicagoToUtc(iso, from).getTime()) return "That time has already passed.";
+  if (all.some((x) => holdsSlot(x) && overlaps(x, next))) return "Another open house already holds those hours.";
+  const email = String(agentEmail).toLowerCase();
+  if (all.some((x) => String(x.agent?.email || "").toLowerCase() === email && x.status === "pending" && overlaps(x, next))) {
+    return "This agent already asked for those hours at this home. Approve their request instead.";
+  }
+  const clash = external.find((e) => e.iso === iso && e.from < to && from < e.to && !(enteredByHand && e.from === from && e.to === to));
+  if (clash) return `That overlaps an open house already on the MLS (${fmtH(clash.from)} to ${fmtH(clash.to)}).`;
+  return null;
+}
+
 // An agent's cancellation request that the team hasn't answered yet.
 export const openCancelRequest = (r) => !!r.cancelRequest && !r.cancelRequest.outcome;
 

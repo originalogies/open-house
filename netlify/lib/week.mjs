@@ -32,6 +32,21 @@ export function cutoffInfo(satIso, cutoff = DEFAULT_CUTOFF) {
   return { ms: chicagoToUtc(iso, h).getTime() + m * 60000, label: `${label(iso)}, ${short(iso)} at ${timeLabel(cutoff.time)}` };
 }
 
+// The days the team can add a request for: this weekend's and the next ones', `weeks` weekends in all. The weekly
+// cutoff doesn't apply to the team. Today is listed while an hour can still start (Central time).
+export function upcomingDays(now = new Date(), weeks = 4) {
+  const { date: today, hour } = chicagoNow(now);
+  let sat = dow(today) === 0 ? addDays(today, -1) : addDays(today, (6 - dow(today) + 7) % 7);
+  const out = [];
+  for (let i = 0; i < weeks; i++, sat = addDays(sat, 7)) {
+    for (const [key, iso] of [["sat", sat], ["sun", addDays(sat, 1)]]) {
+      if (iso < today || (iso === today && hour + 1 >= LAST_HOUR)) continue;
+      out.push({ key, ...dayMeta(iso) });
+    }
+  }
+  return out;
+}
+
 // The weekend currently open for requests: the current or next Saturday/Sunday whose cutoff has not passed.
 export function getWeek(now = new Date(), cutoff = DEFAULT_CUTOFF) {
   const today = chicagoNow(now).date;

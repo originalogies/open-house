@@ -233,7 +233,9 @@
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
     view.innerHTML = `
       <section class="intro"><div><h1>Open house requests</h1>
-        <p class="sub">Requests from Synergy agents. Anything waiting for a decision, including an agent's cancellation request, stays at the top; Review opens it to approve or decline. The first approval locks the time.</p></div></section>
+        <p class="sub">Requests from Synergy agents. Anything waiting for a decision, including an agent's cancellation request, stays at the top; Review opens it to approve or decline. The first approval locks the time.</p></div>
+        <div class="intro-actions"><button class="btn small" id="addReqBtn" aria-expanded="false" aria-controls="addReq">Add a request</button></div></section>
+      <div id="addReq" hidden></div>
       <div class="timeframe">
         <label class="tf-pick"><span>Time frame</span><select class="field" id="range">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === reqRange ? "selected" : ""}>${v}</option>`).join("")}</select></label>
         <span class="tf-dates" id="custom" ${reqRange === "custom" ? "" : "hidden"}>
@@ -271,6 +273,7 @@
     $("prev").onclick = () => turn(-1);
     $("next").onclick = () => turn(1);
     $("csv").onclick = () => exportCsv();
+    $("addReqBtn").onclick = () => ($("addReq").hidden ? addRequest() : closeAddRequest());
     $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); // keeps the saved page, unlike refresh()
   }
 
@@ -313,7 +316,7 @@
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
         <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
-        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${fbNote(r)}</td>
+        <td class="status" data-l="Status">${pill(r.status)}${r.addedBy ? `<div class="sub">Added by ${esc(r.addedBy)}${r.status === "pending" && r.holds ? " · hours held" : ""}</div>` : ""}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${fbNote(r)}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
@@ -341,6 +344,257 @@
     else if (res.data.error === "email_failed") toast(res.data.message || "Saved, but the email failed to send.", true);
     else { toast(res.data.message || "Could not save. Try again.", true); btn.disabled = false; return; }
     renderRequests();
+  }
+
+  // ---- Add a request -------------------------------------------------------
+  // The team adds an open house for an agent who asked them directly (POST /api/team/new-request). One step at a
+  // time: who's hosting, the home, the day (this weekend and the next three; the weekly cutoff doesn't apply), the
+  // time, then Auto-Approve. Approved now, the agent gets the Confirmed email (unless Send Email Confirmations is
+  // unticked); left unticked, it waits for a decision.
+  // Either way its hours are held as soon as it's added. The time picker works like the agent portal's.
+  const fmtH = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
+  const fmtSpan = (r) => `${fmtH(r.from)} to ${fmtH(r.to)}`;
+  const OTHER = "__other";
+  const looksLikeEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+  function closeAddRequest() {
+    $("addReq").hidden = true; $("addReq").innerHTML = "";
+    $("addReqBtn").setAttribute("aria-expanded", "false");
+  }
+
+  async function addRequest() {
+    const box = $("addReq");
+    box.hidden = false; $("addReqBtn").setAttribute("aria-expanded", "true");
+    box.innerHTML = '<div class="card addreq"><p class="fine">Loading…</p></div>';
+    const res = await api("GET", "/api/team/new-request");
+    if (box.hidden) return; // closed while loading
+    if (!res.ok) { box.innerHTML = `<div class="card addreq"><p class="ar-err">${esc(res.data.message || "Couldn't load the homes. Try again.")}</p></div>`; return; }
+    const d = res.data, ROW = 44, FIRST = d.firstHour, LAST = d.lastHour;
+    let home = null, day = null, sel = null;
+
+    const agentOpt = (a) => `<option value="${esc(a.email)}">${esc(a.name)} · ${esc(a.email)}</option>`;
+    const homeOpt = (h) => `<option value="${esc(h.mls)}">${esc(place(h))} · ${h.teamAdded ? "Not on the MLS yet" : `MLS# ${esc(h.mls)}`}</option>`;
+    const published = d.homes.filter((h) => h.offered), others = d.homes.filter((h) => !h.offered);
+    box.innerHTML = `<div class="card addreq">
+      <h3>Add an open house request</h3>
+      <p class="fine">For an agent who asked the team directly. Its hours are held for them as soon as it's added.</p>
+      ${d.warning ? `<p class="ar-err">Repliers couldn't be reached, so only the built-in and team-added homes are listed.</p>` : ""}
+      <section class="step" id="arWho">
+        <label class="label" for="arAgent">Who's hosting the open house?</label>
+        <select class="field" id="arAgent"><option value="">Choose an agent…</option>${d.agents.map(agentOpt).join("")}<option value="${OTHER}">Someone else…</option></select>
+        <div class="pair" id="arOther" hidden>
+          <label class="label">Name<input class="field" id="arName" autocomplete="off" maxlength="80"></label>
+          <label class="label">Email<input class="field" id="arEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        </div>
+      </section>
+      <section class="step" id="arHomeStep" hidden>
+        <label class="label" for="arHome">Home</label>
+        <select class="field" id="arHome"><option value="">Choose a home…</option>
+          ${published.length ? `<optgroup label="Published this weekend">${published.map(homeOpt).join("")}</optgroup>` : ""}
+          ${others.length ? `<optgroup label="${published.length ? "Other homes" : "Homes"}">${others.map(homeOpt).join("")}</optgroup>` : ""}</select>
+      </section>
+      <section class="step" id="arDayStep" hidden>
+        <p class="label">Day</p>
+        <div class="ar-days" id="arDays"></div>
+      </section>
+      <section class="step" id="arTimeStep" hidden>
+        <p class="label">Time</p>
+        <p class="fine" style="margin:0">Tap the hour it starts, then a later hour to make it longer. Drag the block or its edges to change it.</p>
+        <div class="timeline" id="arSlots"></div>
+        <p class="fine" id="arHint" aria-live="polite"></p>
+      </section>
+      <section class="step" id="arSendStep" hidden>
+        <label class="ar-auto"><input type="checkbox" id="arAuto" checked> Auto-Approve Showing Request</label>
+        <label class="ar-auto" id="arEmailsRow"><input type="checkbox" id="arEmails" checked> Send Email Confirmations</label>
+        <p class="fine" id="arAutoNote" style="margin:0"></p>
+        <fieldset class="how" id="arHow" hidden><legend>How is this open house going on the MLS?</legend>
+          <label class="opt"><input type="radio" name="arHow" value="manual"><span><b>Submitted manually</b><span class="fine">I've entered this open house on the MLS (NTREIS) myself.</span></span></label>
+          <label class="opt"><input type="radio" name="arHow" value="agent" ${d.agentReady ? "" : "disabled"}><span><b>Schedule Open House with AI Agent</b><span class="fine">${d.agentReady
+            ? `The AI agent enters it on NTREIS and reports back. It's approved once it's on the MLS.${d.mode === "dry_run" ? " Right now it runs as a <b>dry run</b>: it fills in the form but doesn't submit, so it isn't approved this way." : ""}`
+            : "Not available yet: the AI agent isn't connected."}</span></span></label>
+        </fieldset>
+        <label class="label" for="arNotes">Notes (optional)</label>
+        <textarea class="field" id="arNotes" maxlength="1000" placeholder="Anything the team should know, like a co-host"></textarea>
+        <p class="ar-err" id="arErr" role="alert" hidden></p>
+        <div class="ar-foot"><button class="btn" id="arSubmit" disabled>Add request</button><button class="btn ghost" id="arCancel">Cancel</button></div>
+      </section>
+    </div>`;
+
+    // Who's hosting: someone from the list, or a name and email typed in.
+    const agent = () => {
+      const v = $("arAgent").value;
+      if (v !== OTHER) return d.agents.find((a) => a.email === v) || null;
+      const name = $("arName").value.trim(), email = $("arEmail").value.trim().toLowerCase();
+      return name && looksLikeEmail(email) ? { name, email } : null;
+    };
+    const firstName = () => (agent()?.name || "the agent").split(" ")[0];
+    const method = () => box.querySelector('input[name="arHow"]:checked')?.value || null;
+    const onMls = () => !!home && !home.teamAdded;
+
+    // Bring a step that just appeared into view; on a phone it's often below the fold.
+    const reveal = (id) => requestAnimationFrame(() => $(id).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" }));
+    // Each step shows only once the one before it is done.
+    function steps() {
+      const who = !!agent();
+      const was = { home: !$("arHomeStep").hidden, day: !$("arDayStep").hidden, time: !$("arTimeStep").hidden, send: !$("arSendStep").hidden };
+      $("arHomeStep").hidden = !who;
+      $("arDayStep").hidden = !(who && home);
+      $("arTimeStep").hidden = !(who && home && day);
+      $("arSendStep").hidden = !(who && home && day && sel);
+      if (!was.home && who) reveal("arHomeStep");
+      else if (!was.day && who && home) reveal("arDayStep");
+      else if (!was.time && who && home && day) reveal("arTimeStep");
+      else if (!was.send && !$("arSendStep").hidden) reveal("arSendStep");
+      paintSend();
+    }
+
+    // ---- the day and its hours
+    const held = () => requests.filter((r) => r.mls === home.mls && r.iso === day.iso && r.holds);
+    // Open houses on the MLS that aren't one of ours: shown, but only an exact match entered by hand may share their hours.
+    const onTheMls = () => home.mlsOpenHouses.filter((e) => e.iso === day.iso && !held().some((r) => r.from === e.from && r.to === e.to));
+    const past = (h) => day.iso === d.today.date && h <= d.today.hour;
+    const blocked = (h) => past(h) || held().some((r) => h >= r.from && h < r.to);
+    const free = (a, b) => { for (let x = a; x < b; x++) if (blocked(x)) return false; return true; };
+
+    function paintDays() {
+      $("arDays").innerHTML = d.days.map((x) => {
+        const offered = home.days.includes(x.key);
+        return `<button type="button" class="ar-day" data-iso="${esc(x.iso)}" aria-pressed="${day?.iso === x.iso}" ${offered ? "" : "disabled"}>
+          <b>${esc(x.label)}, ${esc(x.date)}</b><span>${!offered ? "Not offered by the seller" : x.iso === d.today.date ? "Today" : `${fmtH(FIRST)} to ${fmtH(LAST)}`}</span></button>`;
+      }).join("");
+    }
+    const blockAt = (r, cls, html) => `<div class="tl-b ${cls}" style="top:${(r.from - FIRST) * ROW + 2}px;height:${(r.to - r.from) * ROW - 3}px">${html}</div>`;
+    function paintSlots() {
+      let h = "";
+      for (let x = FIRST; x < LAST; x++) h += `<button type="button" class="tl-hr" data-h="${x}" ${blocked(x) ? "disabled" : ""} aria-label="${fmtH(x)} to ${fmtH(x + 1)}${past(x) ? ", already passed" : blocked(x) ? ", booked" : ""}"></button>`;
+      for (let x = FIRST; x <= LAST; x++) h += `<span class="tl-t" style="top:${(x - FIRST) * ROW}px" aria-hidden="true">${fmtH(x)}</span>`;
+      h += held().map((r) => blockAt(r, "tl-held", `<b>${r.status === "approved" ? "Booked" : "Held"}</b>${esc(r.agent.name)}`)).join("");
+      h += onTheMls().map((e) => blockAt(e, "tl-mls", "<b>On the MLS</b>")).join("");
+      h += `<div class="tl-b tl-sel" id="arSel" tabindex="0" hidden><span id="arSelText"></span>
+        <button type="button" class="tl-h" data-edge="from"></button><button type="button" class="tl-h" data-edge="to"></button></div>`;
+      $("arSlots").innerHTML = h;
+      $("arSlots").style.height = `${(LAST - FIRST) * ROW}px`;
+      drawSel();
+    }
+    function drawSel() {
+      const b = $("arSel"), n = sel ? sel.to - sel.from : 0;
+      if (b) {
+        b.hidden = !sel;
+        if (sel) {
+          b.style.top = `${(sel.from - FIRST) * ROW + 2}px`; b.style.height = `${n * ROW - 3}px`;
+          $("arSelText").innerHTML = `<b>${fmtSpan(sel)}</b>${n > 1 ? `<span>${n} hours</span>` : ""}`;
+          b.setAttribute("aria-label", `New open house, ${fmtSpan(sel)}. Use the up and down arrow keys to move it.`);
+          b.querySelector('[data-edge="from"]').setAttribute("aria-label", `Start time, ${fmtH(sel.from)}. Use the up and down arrow keys to change it.`);
+          b.querySelector('[data-edge="to"]').setAttribute("aria-label", `End time, ${fmtH(sel.to)}. Use the up and down arrow keys to change it.`);
+        }
+      }
+      // Others waiting for a decision on this day don't hold their hours, but approving this one means theirs can't be.
+      const waiting = requests.filter((r) => r.mls === home.mls && r.iso === day.iso && r.status === "pending" && !r.holds);
+      $("arHint").innerHTML = [sel ? `${fmtSpan(sel)} (${n} hour${n === 1 ? "" : "s"})` : "",
+        waiting.length ? `Also waiting for a decision: ${waiting.map((r) => `${esc(r.agent.name)}, ${esc(fmtSpan(r))}`).join("; ")}.` : ""].filter(Boolean).join("<br>");
+      steps();
+    }
+    function setSel(next) {
+      if (!next || (sel && next.from === sel.from && next.to === sel.to)) return;
+      sel = next; drawSel();
+    }
+    // A tap on an hour picks it; right after picking one hour, a tap on a later hour stretches the request to it.
+    function tapHour(h) {
+      if (sel && sel.to - sel.from === 1 && h >= sel.to && free(sel.from, h + 1)) setSel({ from: sel.from, to: h + 1 });
+      else setSel({ from: h, to: h + 1 });
+    }
+    // Where a drag lands, kept clear of booked hours: an edge stops at the first booked hour in its way; a moved
+    // block goes where it's dropped if that's free, or else to the free spot nearest it on the way back.
+    let drag = null;
+    function dragTo(y) {
+      const top = $("arSlots").getBoundingClientRect().top, line = FIRST + Math.round((y - top) / ROW);
+      if (drag.kind === "from") {
+        let f = sel.from;
+        if (line < f) while (f > line && f > FIRST && !blocked(f - 1)) f--; else f = Math.min(line, sel.to - 1);
+        return { from: f, to: sel.to };
+      }
+      if (drag.kind === "to") {
+        let t = sel.to;
+        if (line > t) while (t < line && t < LAST && !blocked(t)) t++; else t = Math.max(line, sel.from + 1);
+        return { from: sel.from, to: t };
+      }
+      const o = drag.orig, n = o.to - o.from;
+      let f = Math.min(LAST - n, Math.max(FIRST, o.from + Math.round((y - top - drag.y) / ROW)));
+      while (f !== o.from && !free(f, f + n)) f += f < o.from ? 1 : -1;
+      return { from: f, to: f + n };
+    }
+    const tl = $("arSlots");
+    tl.addEventListener("pointerdown", (e) => {
+      const edge = e.target.closest(".tl-h"), block = e.target.closest(".tl-sel");
+      if (!sel || !(edge || block) || e.button > 0) return;
+      drag = { kind: edge ? edge.dataset.edge : "move", y: e.clientY - tl.getBoundingClientRect().top, orig: { ...sel } };
+      e.preventDefault(); tl.setPointerCapture(e.pointerId); $("arSel").classList.add("dragging");
+    });
+    tl.addEventListener("pointermove", (e) => { if (drag) setSel(dragTo(e.clientY)); });
+    const endDrag = () => { drag = null; $("arSel")?.classList.remove("dragging"); };
+    tl.addEventListener("pointerup", endDrag);
+    tl.addEventListener("pointercancel", endDrag);
+    // On iPhones a finger held still on the block would bring up the text magnifier; this keeps the touch for the drag.
+    tl.addEventListener("touchstart", (e) => { if (e.target.closest(".tl-sel")) e.preventDefault(); }, { passive: false });
+    tl.addEventListener("click", (e) => { const hr = e.target.closest(".tl-hr"); if (hr && !hr.disabled) tapHour(+hr.dataset.h); });
+    tl.addEventListener("keydown", (e) => {
+      if (!sel || (e.key !== "ArrowUp" && e.key !== "ArrowDown") || !e.target.closest(".tl-sel")) return;
+      e.preventDefault();
+      const s = e.key === "ArrowUp" ? -1 : 1, edge = e.target.closest(".tl-h")?.dataset.edge;
+      const next = edge === "from" ? { from: sel.from + s, to: sel.to } : edge === "to" ? { from: sel.from, to: sel.to + s } : { from: sel.from + s, to: sel.to + s };
+      if (next.from >= FIRST && next.to <= LAST && next.from < next.to && free(next.from, next.to)) setSel(next);
+    });
+
+    // ---- approving, and the button
+    // An open house already on the MLS at those hours blocks it, unless it's exactly this one, entered by hand.
+    function mlsClash() {
+      if (!sel) return null;
+      const byHand = $("arAuto").checked && method() === "manual";
+      return onTheMls().find((e) => e.from < sel.to && sel.from < e.to && !(byHand && e.from === sel.from && e.to === sel.to)) || null;
+    }
+    function paintSend() {
+      if ($("arSendStep").hidden) return;
+      const auto = $("arAuto").checked, mail = $("arEmails").checked, how = method(), first = esc(firstName());
+      $("arHow").hidden = !(auto && onMls());
+      $("arEmailsRow").hidden = !auto; // only an approval sends confirmations
+      $("arAutoNote").innerHTML = !auto ? `It waits under Waiting for a decision, with its hours held for ${first}. Nobody is emailed until it's approved.`
+        : onMls() && how === "agent" ? `The AI agent enters it on the MLS. Once it's there, it's approved${mail ? ` and ${first} gets the confirmation email` : ", and nobody is emailed"}.`
+        : onMls() && !how ? "Approved now. Choose how it goes on the MLS."
+        : mail ? `Approved now. ${first} gets the confirmation email with the access details and a calendar invite, and the team gets a copy.`
+        : `Approved now, and nobody is emailed: not ${first}, the team, or the team calendar. Let ${first} know yourself.`;
+      const clash = mlsClash(), exact = clash && clash.from === sel.from && clash.to === sel.to;
+      $("arErr").hidden = !clash;
+      if (clash) $("arErr").textContent = exact ? "Those hours are already on the MLS. If that's this open house, keep Auto-Approve on and choose Submitted manually."
+        : `That overlaps an open house already on the MLS (${fmtSpan(clash)}).`;
+      const when = `${day.label}, ${day.date}, ${fmtSpan(sel)}`;
+      $("arSubmit").textContent = !auto ? `Add request for ${when}` : onMls() && how === "agent" ? `Add and send to the AI agent: ${when}` : `Add and approve ${when}`;
+      $("arSubmit").disabled = !!clash || (auto && onMls() && !how);
+    }
+
+    $("arAgent").onchange = () => { $("arOther").hidden = $("arAgent").value !== OTHER; if (!$("arOther").hidden) $("arName").focus(); steps(); };
+    $("arName").oninput = $("arEmail").oninput = steps;
+    $("arHome").onchange = () => { home = d.homes.find((h) => h.mls === $("arHome").value) || null; day = null; sel = null; if (home) paintDays(); steps(); };
+    $("arDays").onclick = (e) => {
+      const b = e.target.closest(".ar-day"); if (!b || b.disabled) return;
+      day = d.days.find((x) => x.iso === b.dataset.iso); sel = null; paintDays(); paintSlots();
+    };
+    $("arAuto").onchange = $("arEmails").onchange = paintSend;
+    box.querySelectorAll('input[name="arHow"]').forEach((i) => { i.onchange = paintSend; });
+    $("arCancel").onclick = closeAddRequest;
+    $("arSubmit").onclick = async () => {
+      const btn = $("arSubmit"), a = agent(), auto = $("arAuto").checked, mail = !auto || $("arEmails").checked;
+      btn.disabled = true; $("arErr").hidden = true;
+      const r = await api("POST", "/api/team/new-request", { agent: a, mls: home.mls, iso: day.iso, from: sel.from, to: sel.to,
+        notes: $("arNotes").value, autoApprove: auto, method: auto && onMls() ? method() : null, sendEmails: mail });
+      if (!r.ok && r.status !== 502) { $("arErr").textContent = r.data.message || "Couldn't add the request. Try again."; $("arErr").hidden = false; btn.disabled = false; return; }
+      const first = firstName();
+      if (r.status === 502) toast(r.data.message || `Added, but the email to ${first} failed to send.`, true);
+      else if (r.data.approving) return void (location.href = `/respond/?id=${encodeURIComponent(r.data.id)}`); // follow the AI agent there
+      else toast(r.data.status !== "approved" ? `Added. It's waiting for a decision, with ${first}'s hours held.`
+        : mail ? `Added and approved. ${first} was emailed the confirmation.` : "Added and approved. Nobody was emailed.");
+      renderRequests();
+    };
+    $("arAgent").focus();
   }
 
   function exportCsv(list = filtered(), name = "open-house-requests") {

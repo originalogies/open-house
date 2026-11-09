@@ -182,7 +182,7 @@ async function load() {
 }
 
 const detailsOf = (d) => `<dl><dt>Property</dt><dd>${esc(d.address)} (${d.mls ? `MLS# ${esc(d.mls)}` : "MLS# not found"})</dd><dt>When</dt><dd>${esc(d.when)}</dd>
-    <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
+    <dt>Agent</dt><dd>${esc(d.agent)}${d.phone ? "<br>" + esc(d.phone) : ""}</dd>${d.addedBy ? `<dt>Added by</dt><dd>${esc(d.addedBy)} (George &amp; Noonan team)</dd>` : ""}${d.noEmails ? `<dt>Emails</dt><dd>Off: no confirmation emails are sent</dd>` : ""}${d.notes ? `<dt>Notes</dt><dd>${esc(d.notes)}</dd>` : ""}</dl>`;
 let presetUsed = false;
 
 // Decline, with an optional reason that goes to the agent in the decline email.
@@ -216,7 +216,7 @@ function confirmed(d, { line = "", warn = "" } = {}) {
     <div class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
     <h1 id="doneTitle" tabindex="-1">Open house confirmed</h1>
     <p style="margin:0">${esc(d.address)}<br>${esc(d.when)}</p>
-    <p class="muted">${esc(line)} ${warn ? "" : `${esc(d.agentName)} has been emailed the confirmation.`}</p>
+    <p class="muted">${esc(line)} ${warn ? "" : d.noEmails ? "Nobody was emailed: email confirmations are off for this one." : `${esc(d.agentName)} has been emailed the confirmation.`}</p>
     ${warn ? `<p class="err">${esc(warn)} Let ${esc(d.agentName)} know directly.</p>`
       : `<div class="count"><div class="bar"><span></span></div><p class="muted">Taking you to the Open House Portal in <b id="secs">5 seconds</b>.</p></div>`}
     <div class="row"><a class="btn go" href="${PORTAL}">${warn ? "Go to the Open House Portal" : "Go now"}</a><button class="no" id="stay">Stay on this page</button></div></div>`);
@@ -258,7 +258,7 @@ async function follow() {
   if (!d) return setTimeout(follow, 3000);
   if (d.status === "approved") { // the AI agent put it on the MLS, so it's approved
     step(1, "done", "Sent."); step(2, "done", "On the MLS ✓");
-    step(3, d.emailFailed ? "done warn" : "done", d.emailFailed ? `Approved, but the email to ${d.agentName} didn't send.` : `Approved. ${d.agentName} has been emailed.`);
+    step(3, d.emailFailed ? "done warn" : "done", d.emailFailed ? `Approved, but the email to ${d.agentName} didn't send.` : `Approved. ${d.noEmails ? "Nobody was emailed." : `${d.agentName} has been emailed.`}`);
     return setTimeout(() => confirmed(d, { warn: d.emailFailed ? `The confirmation email to ${d.agentName} didn't send.` : "", line: "The AI agent entered it on the MLS (NTREIS)." }), 1200);
   }
   if (d.status !== "pending" || !d.approving) return load(); // declined, cancelled or entered by hand meanwhile
@@ -279,7 +279,7 @@ async function follow() {
       step(2, "bad", s.state === "dry_run_ok" ? "Dry run passed, but nothing was submitted, so it isn't on the MLS."
         : s.state === "needs_login" ? `The AI agent couldn't sign in to the MLS. ${s.message || ""}` : s.message || "The AI agent couldn't finish.");
     }
-    step(3, "bad", `Not approved yet. ${d.agentName} hasn't been emailed.`);
+    step(3, "bad", d.noEmails ? "Not approved yet." : `Not approved yet. ${d.agentName} hasn't been emailed.`);
     return stuck(d);
   }
   setTimeout(follow, 3000);
@@ -299,7 +299,7 @@ function stuck(d) {
   $("declineA").onclick = () => declineView(d, detailsOf(d));
 }
 async function approveByHand(d) {
-  if (!(await OHDialog.confirm({ title: "Approve it as entered by hand?", body: `Approve ${d.address} as entered on the MLS by hand. ${d.agentName} will be emailed the confirmation.`, ok: "Approve" }))) return;
+  if (!(await OHDialog.confirm({ title: "Approve it as entered by hand?", body: `Approve ${d.address} as entered on the MLS by hand. ${d.noEmails ? "Nobody is emailed: email confirmations are off for this one." : `${d.agentName} will be emailed the confirmation.`}`, ok: "Approve" }))) return;
   $("next").querySelectorAll("button").forEach((b) => (b.disabled = true));
   const r = await post("/api/respond", { action: "approve", method: "manual", mlsEntered: true });
   const j = r ? await r.json().catch(() => ({})) : {};
@@ -316,7 +316,7 @@ const STATE = {
   not_on_mls: ["", "Home not on the MLS yet"],
 };
 const EVENT = {
-  approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
+  added: "Added by the team", approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
   approving: "Approving with the AI agent", mls_manual: "Switched to entered by hand",
   mls_job_sent: "Sent to the AI agent", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
   mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "AI agent failed", mls_needs_login: "MLS sign-in needed",

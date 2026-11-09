@@ -149,9 +149,10 @@ async function catalog(week) {
     fetchRaw().catch((e) => { console.error(e.message); warning = e.message.slice(0, 300); return []; }),
     listHomes().then((all) => all.filter((h) => !h.linkedMls)).catch((e) => { console.error("team-added homes unavailable", e.message); return []; }),
   ]);
-  const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week) }));
-  for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [] });
-  for (const h of homes) list.push({ n: asListing(h), openHouses: [], home: h });
+  // openHouses: the offered weekend's open houses on the MLS, by day; entries: all of them, any date.
+  const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week), entries: openHouseEntries(l) }));
+  for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [], entries: [] });
+  for (const h of homes) list.push({ n: asListing(h), openHouses: [], entries: [], home: h });
   return { list, warning };
 }
 
@@ -169,6 +170,17 @@ export async function offeredListings(week) {
   return list.filter((x) => info[x.n.mls].offeredWeek === week.satIso)
     .map((x) => ({ ...x.n, priority: info[x.n.mls].priorityWeek === week.satIso, days: info[x.n.mls].days, instr: info[x.n.mls].instr, vacant: !!info[x.n.mls].vacant, external: x.openHouses }))
     .sort((a, b) => Number(b.priority) - Number(a.priority) || b.price - a.price); // Priority first, then highest price first
+}
+
+// Every home the team can add a request for (team-new-request.mjs): MLS listings and team-added homes, with whether
+// it's published this weekend, the days the seller allows, and its open houses already on the MLS, any date.
+// Published homes come first. Never includes access details.
+export async function bookableHomes(week) {
+  const [{ list, warning }, stored] = await Promise.all([catalog(week), storedInfo()]);
+  const info = infoFor(list.map((x) => x.n.mls), stored);
+  const homes = list.map((x) => ({ ...x.n, offered: info[x.n.mls].offeredWeek === week.satIso, days: info[x.n.mls].days, mlsOpenHouses: x.entries }))
+    .sort((a, b) => Number(b.offered) - Number(a.offered) || a.addr.localeCompare(b.addr));
+  return { homes, warning };
 }
 
 export async function teamListings(week) {

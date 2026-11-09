@@ -1,7 +1,7 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
-import { getRequest, saveRequest, isTeam, holdsSlot } from "../lib/requests.mjs";
+import { getRequest, saveRequest, isTeam } from "../lib/requests.mjs";
 import { cancelRequest, changeRequest, keepRequest } from "../lib/actions.mjs";
-import { logEvent, byHand } from "../lib/mls.mjs";
+import { logEvent, byHand, desiredFor } from "../lib/mls.mjs";
 import { runSync } from "../lib/sync.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
 
@@ -30,7 +30,7 @@ export default async (req) => {
   else if (b.action === "cancel") out = await cancelRequest(r, { ...user, team: true });
   else if (b.action === "keep") out = await keepRequest(r, user);
   else if (b.action === "start") {
-    if (!holdsSlot(r) || !isMlsNumber(r.mls) || byHand(r)) return json(409, { error: "nothing_to_start", message: "This open house isn't scheduled with the AI agent." });
+    if (!desiredFor(r) || !isMlsNumber(r.mls) || byHand(r)) // approved, or being approved with the AI agent return json(409, { error: "nothing_to_start", message: "This open house isn't scheduled with the AI agent." });
     // The bot takes one job at a time, soonest open house first, so this may send another request's
     // job and leave this one queued; the approve page shows which.
     await sendNow();

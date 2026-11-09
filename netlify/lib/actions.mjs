@@ -1,11 +1,52 @@
-import { saveRequest, listRequests } from "./requests.mjs";
-import { sendUpdated, sendCancelled, sendWithdrawn, sendCancelRequested, sendCancelKept } from "./email.mjs";
+import { saveRequest, listRequests, holdsSlot, overlaps } from "./requests.mjs";
+import { sendUpdated, sendCancelled, sendWithdrawn, sendCancelRequested, sendCancelKept, sendConfirmed } from "./email.mjs";
 import { checkChange, checkCancel, checkCancelRequest, openCancelRequest, dayKeyOf } from "./changes.mjs";
-import { logEvent, mode, byHand, desiredFor } from "./mls.mjs";
+import { logEvent, mode, byHand, desiredFor, agentReady } from "./mls.mjs";
 import { mlsOpenHouses, getInfo, saveInfo } from "./listings.mjs";
 import { saveHome, mergeInfo, isMlsNumber } from "./homes.mjs";
 import { dayMeta } from "./week.mjs";
 import { fmtRange, chicagoToUtc } from "./time.mjs";
+
+// Team approves a pending request: from its request page (POST /api/respond), or as it's added for an agent
+// (team-new-request.mjs, with `all` already read and an `added` note). To approve a home that's on the MLS the
+// team picks how it goes on the MLS: method "manual" (they entered it by hand and tick mlsEntered) or "agent" (the
+// AI agent enters it). With the AI agent the request keeps waiting, its hours held, until the AI agent reports the
+// open house is on the MLS; then it's approved and the agent emailed (mls-callback.mjs). A team-added home that
+// isn't on the MLS yet has nothing to enter. Returns { status, body } for the response.
+export async function approveRequest(r, user, { method: how, mlsEntered } = {}, { all = null, added = "" } = {}) {
+  const fail = (status, error, message) => ({ status, body: { error, message } });
+  const onMls = isMlsNumber(r.mls);
+  const method = how === "agent" ? "agent" : how === "manual" || mlsEntered === true ? "manual" : null;
+  if (onMls && !method) return fail(400, "method_required", "Choose how this open house goes on the MLS first.");
+  if (onMls && method === "manual" && mlsEntered !== true) return fail(400, "mls_required", "Confirm the open house is entered on the MLS first.");
+  if (onMls && method === "agent" && !agentReady()) return fail(409, "agent_unavailable", "The AI agent isn't connected yet. Enter this open house on the MLS by hand.");
+  if (onMls && method === "agent" && r.approving) return fail(409, "already_approving", "This request is already being approved with the AI agent.");
+  if ((all || (await listRequests())).some((x) => x.id !== r.id && holdsSlot(x) && overlaps(x, r))) {
+    return fail(409, "taken", "Another request already holds those hours.");
+  }
+  const note = (s) => [added, s].filter(Boolean).join(". ");
+  const quiet = r.sendEmails === false; // the team turned off email confirmations when adding it (team-new-request.mjs)
+  if (onMls && method === "agent") {
+    r.mlsMethod = "agent"; r.approving = { at: Date.now(), by: user.email, byName: user.name };
+    r.sync = { current: null, state: "idle" };
+    await saveRequest(r);
+    await logEvent(r.id, "approving", { note: note(`Approved once the AI agent has it on the MLS${mode() === "dry_run" ? ". Dry run: it fills in the form but doesn't submit, so it won't be approved this way" : ""}. ${quiet ? "Nobody is emailed: email confirmations are off" : `${r.agent.name} is emailed then`}`) }, user.email);
+    return { status: 200, body: { ok: true, status: "pending", approving: true } };
+  }
+  r.status = "approved";
+  r.decidedAt = Date.now(); r.decidedBy = user.email; r.decidedByName = user.name;
+  const wasApproving = !!r.approving; delete r.approving; // entered by hand after trying the AI agent
+  // By hand: the team already entered it, so the MLS matches. A home not on the MLS yet has nothing to enter.
+  if (onMls) r.mlsMethod = method;
+  r.sync = !onMls ? { current: null, state: "not_on_mls" } : { current: desiredFor(r), state: "manual" };
+  await saveRequest(r); // single use: status is no longer pending
+  const entered = !onMls ? "Home isn't on the MLS yet" : wasApproving ? "Entered on the MLS by hand instead of the AI agent" : "Entered on the MLS by hand";
+  await logEvent(r.id, "approved", { note: note(quiet ? `${entered}. No emails were sent` : entered) }, user.email);
+  if (quiet) return { status: 200, body: { ok: true, status: r.status } };
+  try { await sendConfirmed(r); }
+  catch (e) { console.error("email failed", e.message); return fail(502, "email_failed", "Saved, but the email to the agent failed to send."); }
+  return { status: 200, body: { ok: true, status: r.status } };
+}
 
 // Team cancels a pending or approved request, on its own or because the agent asked. The MLS entry
 // (if any) is cancelled by the sync job, because the request's desired MLS state becomes "nothing".

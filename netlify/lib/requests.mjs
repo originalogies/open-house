@@ -12,9 +12,10 @@ const store = () => getStore({ name: "open-house-requests", consistency: "strong
 export const newId = () => crypto.randomBytes(16).toString("hex");
 export const overlaps = (a, b) => a.mls === b.mls && a.iso === b.iso && a.from < b.to && b.from < a.to;
 
-// The time is spoken for: approved, or being approved with the AI agent (still waiting until the AI agent
-// reports it's on the MLS; see respond.mjs). Nobody else can request or be approved for those hours.
-export const holdsSlot = (r) => r.status === "approved" || (r.status === "pending" && !!r.approving);
+// The time is spoken for: approved, being approved with the AI agent (still waiting until the AI agent
+// reports it's on the MLS; see respond.mjs), or added by the team for an agent and still waiting for a
+// decision (r.addedBy; team-new-request.mjs). Nobody else can request or be approved for those hours.
+export const holdsSlot = (r) => r.status === "approved" || (r.status === "pending" && (!!r.approving || !!r.addedBy));
 
 // An agent's open requests: waiting or approved, for open houses that haven't happened yet (today counts).
 // Past open houses, including the history imported from the G&N calendar, don't count toward the limit.
@@ -40,6 +41,25 @@ export const historyFor = (all, email) => {
         feedback: r.feedback ? "sent" : feedbackOpen(r) ? "due" : null, visitors: r.feedback ? r.feedback.visitors : null };
     });
 };
+
+// Everyone the team can add a request for, by name: agents who have asked for or hosted an open house, and
+// agents who signed the Support and Referral Agreement. The newest name and phone on their requests win.
+export function knownAgents(all, agreements = []) {
+  const by = new Map();
+  for (const r of [...all].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))) {
+    const email = String(r.agent?.email || "").toLowerCase();
+    if (!email) continue;
+    const p = by.get(email) || { email, name: "", phone: "" };
+    if (r.agent.name) p.name = r.agent.name;
+    if (r.phone) p.phone = r.phone;
+    by.set(email, p);
+  }
+  for (const a of agreements) {
+    const email = String(a.email || "").toLowerCase(), p = by.get(email);
+    if (email && a.signedName && !p?.name) by.set(email, { phone: "", ...p, email, name: a.signedName });
+  }
+  return [...by.values()].filter((p) => p.name).sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
+}
 
 export const getRequest =(id) => (/^[a-f0-9]{32}$/.test(id) ? store().get(`req/${id}`, { type: "json" }) : null);
 export const saveRequest = (r) => store().setJSON(`req/${r.id}`, r);
