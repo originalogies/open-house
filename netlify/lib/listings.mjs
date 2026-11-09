@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { chicagoNow, chicagoToUtc } from "./time.mjs";
-import { listHomes, asListing, linkSuggestions, photoUrl } from "./homes.mjs";
+import { listHomes, asListing, linkSuggestions, photoUrl, addressKey } from "./homes.mjs";
 import { readAll } from "./readall.mjs";
 
 // ---- Repliers (read-only) -----------------------------------------------
@@ -154,6 +154,14 @@ async function catalog(week) {
   for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [], entries: [] });
   for (const h of homes) list.push({ n: asListing(h), openHouses: [], entries: [], home: h });
   return { list, warning };
+}
+
+// The homes on the market now, the same ones the Listings page shows (MLS listings and team-added homes), by
+// address and by MLS number: the Feedback tab's Active filter (markActive in feedback.mjs). With a warning,
+// Repliers couldn't be reached, so the MLS listings among them are unknown.
+export async function currentHomes(week) {
+  const { list, warning } = await catalog(week);
+  return { keys: new Set(list.map((x) => addressKey(x.n.addr, x.n.zip))), mls: new Set(list.map((x) => x.n.mls)), warning };
 }
 
 // MLS listings only (Repliers plus the built-in ones), for linking a team-added home.

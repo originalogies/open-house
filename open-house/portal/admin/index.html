@@ -181,7 +181,16 @@ dl.fb .wide{grid-column:1/-1}
 .stat b.words{font-size:1.25rem;line-height:1.5}
 .homecell{display:flex;gap:12px;align-items:center}
 .homecell .thumb{width:64px;height:48px;border-radius:8px;background:var(--photo);object-fit:cover;flex:none}
-.lfb{font-size:.88rem;margin-top:6px}
+.lfb{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.lfb .count{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 12px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);font-size:.86rem;text-decoration:none}
+.lfb a.count:hover,.lfb a.count:focus-visible{border-color:var(--accent);color:var(--accent)}
+.lfb .count b{font-weight:700}
+.lfb .count.none{color:var(--muted)}
+.lfb .count.flagged{color:var(--danger);border-color:var(--danger)}
+.ohshow{margin:-4px 0 14px}
+.fbwait{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+.fbwait .btn{flex:none}
+@media (max-width:720px){.lfb .count{min-height:44px;padding:8px 14px}.ohshow .chip,#fbStatus .chip{min-height:44px}.fbwait .btn{flex:1 1 100%;min-height:44px}}
 .said{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .said .card{padding:16px 18px}
 .said h3{font-family:var(--serif);font-weight:500;font-size:1.1rem;margin:0 0 6px}

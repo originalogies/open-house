@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { feedbackOpen, feedbackStep, cleanFeedback, endMs, feedbackByHome } from "../netlify/lib/feedback.mjs";
+import { feedbackOpen, feedbackStep, cleanFeedback, endMs, feedbackByHome, checkFeedbackReminder, REMIND_GAP, markActive } from "../netlify/lib/feedback.mjs";
 
 const H = 60 * 60 * 1000;
 // Saturday Oct 24 2026, 1 to 3 PM Central (CDT): ends 20:00 UTC.
@@ -82,4 +82,36 @@ test("feedback is grouped by home, across MLS numbers, newest open house first",
   assert.equal(b.addr, "6900 Rockingham Court");
   assert.equal(b.lastIso, "2026-10-24");
   assert.ok(!("access" in a) && !("notes" in a.openHouses[0])); // nothing private goes to the console
+  // Emailed a feedback link: only open houses the hourly job asked about, never imported history.
+  const oak = (iso, extra = {}) => home("444", "12 Oak Lane", { iso, ...extra });
+  const [h] = feedbackByHome([oak("2026-10-17", { feedbackAskedAt: 1 }), oak("2026-10-11", { feedbackAskedAt: 1, imported: { source: "Added by hand" } }), oak("2026-10-04")], end + H);
+  assert.deepEqual(h.openHouses.map((o) => o.emailed), [true, false, false]);
+});
+
+test("the team can email a reminder once the open house has ended and while there's no feedback", () => {
+  const agent = { name: "Darby Schabel", email: "darby@x.com" };
+  assert.equal(checkFeedbackReminder(r({ agent }), end + H), null);
+  assert.equal(checkFeedbackReminder(r({ agent, imported: { source: "G&N Calendar" } }), end + 400 * 24 * H), null); // old history too
+  assert.match(checkFeedbackReminder(r({ agent }), end - 1), /hasn't ended yet/);
+  assert.match(checkFeedbackReminder(r({ agent, status: "cancelled" }), end + H), /didn't take place/);
+  assert.match(checkFeedbackReminder(r({ agent, feedback: { at: 1 } }), end + H), /^Darby already sent feedback/);
+  // a few minutes between reminders, so a double press sends one email
+  const sent = r({ agent, feedbackReminders: [{ at: end + H, byName: "Team" }] });
+  assert.match(checkFeedbackReminder(sent, end + H + 1000), /already went to Darby/);
+  assert.equal(checkFeedbackReminder(sent, end + H + REMIND_GAP), null);
+  // the home's page shows the latest reminder and how many
+  const [h] = feedbackByHome([{ ...sent, id: "a".repeat(32), mls: "1", listing: { addr: "1 A St", zip: "76092" },
+    feedbackReminders: [{ at: 5, byName: "Kelly" }, { at: 9, byName: "London" }] }], end + H);
+  assert.deepEqual([h.openHouses[0].reminders, h.openHouses[0].reminded], [2, { at: 9, byName: "London" }]);
+});
+
+test("a home is active while it's on the market: same address (even relisted) or one of its MLS numbers", () => {
+  const current = { keys: new Set(["1704 overlook dr|76051", "12 oak ln|76092"]), mls: new Set(["21413668", "H0123456789"]) };
+  const h = (key, mls) => ({ key, mls });
+  assert.deepEqual(markActive([
+    h("1704 overlook dr|76051", ["111"]),        // relisted under a new MLS number: still the same home
+    h("200 murano pl|76092", ["21136267"]),      // not on the market now: past
+    h("9 elm st|76092", ["21413668"]),           // its MLS number is current
+    h("12 oak ln|76092", ["H0123456789"]),       // a team-added home on the Listings page
+  ], current).map((x) => x.active), [true, false, true, true]);
 });

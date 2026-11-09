@@ -123,7 +123,7 @@
 
   function route() {
     flushSaves(); // finish any listing edits still waiting to autosave
-    const [hashName, arg] = location.hash.slice(1).split("/");
+    const [hashName, arg, sub] = location.hash.slice(1).split("/");
     let name = hashName || "requests";
     if (name === "agent" && arg) {
       OHNav.setCurrent(me.admin ? "agents" : "requests");
@@ -135,7 +135,7 @@
     if (name === "home" && arg) {
       OHNav.setCurrent("feedback");
       view.innerHTML = '<p class="empty">Loading…</p>';
-      renderHome(decodeURIComponent(arg));
+      renderHome(decodeURIComponent(arg), sub);
       window.scrollTo(0, 0);
       return;
     }
@@ -676,56 +676,86 @@
 
   // ---- Feedback by home ----------------------------------------------------
   // Every home that's hosted an open house, with what the agents said, kept after the home sells.
-  // Links to one home look like #home/<key>; the key is the home's street address and ZIP.
-  const homeLink = (h, label) => `<a href="#home/${encodeURIComponent(h.key)}">${esc(label)}</a>`;
+  // Links to one home look like #home/<key>, or #home/<key>/feedback for only the open houses with feedback;
+  // the key is the home's street address and ZIP.
+  const homeHref = (h, show = "") => `#home/${encodeURIComponent(h.key)}${show && show !== "all" ? `/${show}` : ""}`;
+  const homeLink = (h, label) => `<a href="${homeHref(h)}">${esc(label)}</a>`;
+  // Which of a home's open houses its page lists.
+  const SHOW = { all: ["All", () => true], feedback: ["With feedback", (o) => !!o.feedback], none: ["No feedback", (o) => !o.feedback] };
+  // A home's two numbers on its Listings card: open houses hosted, and how many have feedback. Each opens the
+  // home's history; the second shows only the open houses with feedback.
+  const homeCounts = (h) => `<a class="count" href="${homeHref(h)}"><b>${h.hosted}</b> open house${h.hosted === 1 ? "" : "s"}</a>`
+    + (h.withFeedback ? `<a class="count" href="${homeHref(h, "feedback")}"><b>${h.withFeedback}</b> with feedback</a>` : '<span class="count none">No feedback yet</span>')
+    + (h.flags ? `<a class="count flagged" href="${homeHref(h, "feedback")}">⚠ ${h.flags} flagged</a>` : "");
   // Older open houses show their year: the history goes back further than this season.
   const withYear = (o) => `${o.day}, ${o.date}${o.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${o.iso.slice(0, 4)}` : ""}`;
   const priceMix = (h) => Object.entries(PRICE).filter(([k]) => k !== "none" && h.price[k]).map(([k, v]) => `${v} ${h.price[k]}`).join(" · ") || "—";
   const interestMix = (h) => Object.entries(INTEREST).filter(([k]) => h.interest[k]).map(([k, v]) => `${v} ${h.interest[k]}`).join(" · ") || "—";
   let fbSearch = "";
+  // Feedback tab: Active (on the market now, the Listings page's homes) by default, or Past (sold, expired or
+  // withdrawn), or All. Kept while the console is open, so "All homes" on a home's page comes back to it.
+  let fbStatus = "active";
+  const HOME_STATUS = { active: ["Active", (h) => h.active], past: ["Past", (h) => !h.active], all: ["All", () => true] };
 
-  async function loadHomes() {
-    const r = await api("GET", "/api/team/feedback");
-    return r.ok ? r.data.homes : null;
+  async function loadHomes(withStatus = false) {
+    const r = await api("GET", `/api/team/feedback${withStatus ? "?active=1" : ""}`);
+    return r.ok ? (withStatus ? r.data : r.data.homes) : null;
   }
 
   async function renderFeedback() {
-    const homes = await loadHomes();
-    if (!homes) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
-    const sum = (k) => homes.reduce((n, h) => n + h[k], 0);
+    const d = await loadHomes(true);
+    if (!d) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
+    const { homes, statusKnown } = d;
     view.innerHTML = `
       <section class="intro"><div><h1>Feedback by home</h1>
         <p class="sub">What agents said after hosting, collected for each home. Homes flagged for the broker are at the top. The history stays here after a home sells or is relisted.</p></div></section>
-      <div class="stats">
-        <div class="card stat"><b>${homes.length}</b><span>Homes hosted</span></div>
-        <div class="card stat"><b>${sum("hosted")}</b><span>Open houses hosted</span></div>
-        <div class="card stat"><b>${sum("withFeedback")}</b><span>With feedback</span></div>
-        <div class="card stat"><b>${sum("visitors")}</b><span>Visitors reported</span></div>
-      </div>
+      <div class="stats" id="fbStats"></div>
       <div class="toolbar">
+        ${statusKnown ? `<div class="chips" id="fbStatus" role="group" aria-label="Homes">${Object.entries(HOME_STATUS).map(([k, [label, f]]) =>
+          `<button class="chip" data-status="${k}">${label} (${homes.filter(f).length})</button>`).join("")}</div>`
+          : '<p class="fine" style="margin:0">Repliers couldn\'t be reached, so active and past homes can\'t be told apart right now. Showing all homes.</p>'}
         <input class="field" id="fbSearch" type="search" placeholder="Search address or city" value="${esc(fbSearch)}" aria-label="Search homes">
         <span class="spacer"></span>
         ${homes.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
       </div>
       <div class="card table-wrap"><table class="stack"><thead><tr><th>Home</th><th>Open houses</th><th>Visitors</th><th>Interest</th><th>Last hosted</th></tr></thead><tbody id="homeRows"></tbody></table></div>`;
+    const status = () => (statusKnown ? fbStatus : "all");
+    const matches = (h) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls].join(" ").toLowerCase().includes(q); };
+    const inStatus = () => homes.filter(HOME_STATUS[status()][1]);
+    let shown = [];
     const fill = () => {
-      const q = fbSearch.trim().toLowerCase();
-      const shown = homes.filter((h) => !q || [h.addr, h.city, h.zip, ...h.mls].join(" ").toLowerCase().includes(q));
+      const pool = inStatus(), sum = (k) => pool.reduce((n, h) => n + h[k], 0);
+      shown = pool.filter(matches);
+      $("fbStats").innerHTML = `
+        <div class="card stat"><b>${pool.length}</b><span>Homes hosted</span></div>
+        <div class="card stat"><b>${sum("hosted")}</b><span>Open houses hosted</span></div>
+        <div class="card stat"><b>${sum("withFeedback")}</b><span>With feedback</span></div>
+        <div class="card stat"><b>${sum("visitors")}</b><span>Visitors reported</span></div>`;
+      view.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === status())));
+      // Nothing here, but the search finds homes under another filter: offer those.
+      const elsewhere = !shown.length && fbSearch.trim() && status() !== "all" && homes.some(matches);
+      const empty = !homes.length ? "No open houses hosted yet. Homes show up here once an approved open house has ended."
+        : elsewhere ? `No ${HOME_STATUS[status()][0].toLowerCase()} homes match. <button class="link" data-status="all">Search all homes</button>`
+        : fbSearch.trim() ? "No homes match."
+        : status() === "active" ? "No homes on the market now have hosted an open house." : "No past homes yet.";
       $("homeRows").innerHTML = shown.length ? shown.map((h) => `<tr>
           <td data-l="Home"><div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
-            <div><b>${homeLink(h, h.addr)}</b><div class="sub">${esc(h.city)}${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged for broker</b>` : ""}</div></div></div></td>
-          <td data-l="Open houses">${h.hosted}<div class="sub">${h.withFeedback === h.hosted ? "All with feedback" : `${h.hosted - h.withFeedback} waiting on feedback`}</div></td>
+            <div><b>${homeLink(h, h.addr)}</b><div class="sub">${esc(h.city)}${status() === "all" && statusKnown ? ` · ${h.active ? "Active" : "Past"}` : ""}${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged for broker</b>` : ""}</div></div></div></td>
+          <td data-l="Open houses">${h.hosted}<div class="sub">${h.withFeedback ? `<a href="${homeHref(h, "feedback")}">${h.withFeedback} with feedback</a>` : "No feedback yet"}</div></td>
           <td data-l="Visitors">${h.withFeedback ? h.visitors : '<span class="sub">—</span>'}</td>
           <td data-l="Interest">${esc(interestMix(h))}</td>
           <td data-l="Last hosted">${esc(withYear(h.openHouses[0]))}</td>
-        </tr>`).join("") : `<tr><td colspan="5" class="empty">${homes.length ? "No homes match." : "No open houses hosted yet. Homes show up here once an approved open house has ended."}</td></tr>`;
+        </tr>`).join("") : `<tr><td colspan="5" class="empty">${empty}</td></tr>`;
     };
     $("fbSearch").oninput = (e) => { fbSearch = e.target.value; fill(); };
-    if (homes.length) $("csv").onclick = () => exportFeedbackCsv(homes, "open-house-feedback");
+    const pick = (e) => { const b = e.target.closest("[data-status]"); if (b && statusKnown) { fbStatus = b.dataset.status; fill(); } };
+    if (statusKnown) $("fbStatus").onclick = pick;
+    $("homeRows").onclick = pick; // "Search all homes" when the search finds nothing under this filter
+    if (homes.length) $("csv").onclick = () => exportFeedbackCsv(shown, `open-house-feedback${status() === "all" ? "" : `-${status()}`}`);
     fill();
   }
 
-  async function renderHome(key) {
+  async function renderHome(key, sub) {
     const homes = await loadHomes();
     if (!homes) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
     const h = homes.find((x) => x.key === key);
@@ -743,12 +773,47 @@
       </div>
       ${sellerSummary(h)}
       <h2 class="section">Every open house, newest first</h2>
-      <div class="fbq">${h.openHouses.map((o) => `<article class="card fbcard${o.feedback?.brokerFlag ? " flag" : ""}">
+      <div class="chips ohshow" role="group" aria-label="Show">${Object.entries(SHOW).map(([k, [label, f]]) =>
+        `<button class="chip" data-show="${k}">${label} (${h.openHouses.filter(f).length})</button>`).join("")}</div>
+      <div class="fbq" id="ohList"></div>`;
+    const card = (o) => `<article class="card fbcard${o.feedback?.brokerFlag ? " flag" : ""}">
         <div>
           <h3>${esc(withYear(o))} · ${esc(o.time)} ${o.feedback?.brokerFlag ? '<span class="pill declined">⚠ Flagged for broker</span>' : ""}</h3>
           <div class="meta">Hosted by ${agentLink(o.agent.email, o.agent.name)}${o.feedback ? ` · feedback sent ${esc(fmtDate(o.feedback.at))}` : ""}</div>
-          ${o.feedback ? fbText(o.feedback) : '<div class="notes">No feedback yet. The agent was emailed a link after the open house.</div>'}
-        </div></article>`).join("")}</div>`;
+          ${o.feedback ? fbText(o.feedback) : waiting(o)}
+        </div></article>`;
+    // No feedback: who was emailed about it, and a button to email the agent a reminder with the feedback link.
+    const waiting = (o) => {
+      const first = esc(o.agent.name.split(" ")[0]);
+      const said = o.reminded ? `No feedback yet. ${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} reminders so far)` : ""}.`
+        : o.emailed ? "No feedback yet. The agent was emailed a link after the open house." : "No feedback for this open house.";
+      return `<div class="notes fbwait"><span>${said}</span>
+        <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Send another reminder" : `Email ${first} a reminder`}</button></div>`;
+    };
+    let show = SHOW[sub] ? sub : "all";
+    const paint = () => {
+      const list = h.openHouses.filter(SHOW[show][1]);
+      $("ohList").innerHTML = list.length ? list.map(card).join("")
+        : `<p class="empty">${show === "feedback" ? "No feedback for this home yet." : "Every open house here has feedback."}</p>`;
+      view.querySelectorAll("[data-show]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.show === show)));
+    };
+    $("ohList").onclick = async (e) => {
+      const btn = e.target.closest("[data-remind]"); if (!btn) return;
+      const o = h.openHouses.find((x) => x.id === btn.dataset.remind); if (!o) return;
+      if (!(await OHDialog.confirm({ title: `Email ${o.agent.name} a reminder?`, ok: "Send reminder",
+        body: `${o.agent.name.split(" ")[0]} gets an email asking how the ${withYear(o)} open house at ${h.addr} went, with a link to leave feedback.` }))) return;
+      btn.disabled = true; btn.textContent = "Sending…";
+      const r = await api("POST", "/api/team/feedback", { id: o.id, action: "remind" });
+      if (!r.ok) { toast(r.data.message || "The reminder didn't send. Try again.", true); paint(); return; }
+      Object.assign(o, { reminded: r.data.reminded, reminders: r.data.reminders });
+      toast(`Reminder sent to ${o.agent.name}.`);
+      paint();
+    };
+    view.querySelector(".ohshow").onclick = (e) => {
+      const b = e.target.closest("[data-show]"); if (!b) return;
+      show = b.dataset.show; history.replaceState(null, "", homeHref(h, show)); paint();
+    };
+    paint();
     $("csv").onclick = () => exportFeedbackCsv([h], `feedback-${h.addr.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
   }
 
@@ -910,7 +975,7 @@
       <div class="body">
         <h3><span class="addr">${esc(place(l))}</span><span class="badges">${badges()}</span></h3>
         <div class="fine facts">${facts()}</div>
-        ${fb ? `<div class="lfb">${homeLink(fb, `Feedback from ${fb.hosted} open house${fb.hosted === 1 ? "" : "s"}`)}${fb.flags ? ` · <b class="flagged">⚠ ${fb.flags} flagged</b>` : ""}</div>` : ""}
+        ${fb ? `<div class="lfb">${homeCounts(fb)}</div>` : ""}
         ${oh}
         <div class="toggles">
           <label class="check"><input type="checkbox" data-f="offered" ${l.offered ? "checked" : ""}> Publish this weekend</label>

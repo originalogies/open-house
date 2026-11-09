@@ -33,6 +33,19 @@ export function feedbackStep(r, now = Date.now()) {
   return null;
 }
 
+// The team emails the agent a reminder to send feedback (the Admin Console, on a home's page). Returns why it
+// can't be sent, or null. A few minutes must pass between reminders, so a double press sends one email.
+// Each reminder is kept on the request as r.feedbackReminders: [{ at, by, byName }].
+export const REMIND_GAP = 5 * 60 * 1000;
+export function checkFeedbackReminder(r, now = Date.now()) {
+  const first = (r.agent?.name || "the agent").split(" ")[0];
+  if (r.feedback) return `${first} already sent feedback for this open house.`;
+  if (!feedbackOpen(r, now)) return r.status === "approved" ? "The open house hasn't ended yet." : "This open house didn't take place.";
+  const last = (r.feedbackReminders || []).at(-1);
+  if (last && now - last.at < REMIND_GAP) return `A reminder already went to ${first} a few minutes ago.`;
+  return null;
+}
+
 // Checks and cleans what the agent sent. `photos` are the ids already uploaded for this open house
 // (the server's list, not the browser's). Returns { error } or { feedback }.
 export function cleanFeedback(b, now = Date.now(), photos = []) {
@@ -98,10 +111,19 @@ export function feedbackByHome(requests, now = Date.now()) {
       price: Object.fromEntries(Object.keys(PRICE).map((k) => [k, sent.filter((f) => f.price === k).length])),
       flags: sent.filter((f) => f.brokerFlag).length, lastIso: entries[0].iso,
       openHouses: entries.map((r) => ({ id: r.id, mls: r.mls, iso: r.iso, from: r.from, to: r.to,
-        agent: { name: r.agent.name, email: r.agent.email }, feedback: r.feedback ? withPhotoUrls(r) : null })),
+        agent: { name: r.agent.name, email: r.agent.email }, feedback: r.feedback ? withPhotoUrls(r) : null,
+        // Whether the agent was emailed a feedback link. History imported from the calendar or added by hand never is.
+        emailed: !!r.feedbackAskedAt && !r.imported,
+        // Reminders the team sent from the Admin Console: how many, and the latest.
+        reminders: (r.feedbackReminders || []).length,
+        reminded: (r.feedbackReminders || []).length ? { at: r.feedbackReminders.at(-1).at, byName: r.feedbackReminders.at(-1).byName } : null })),
     };
   }).sort((a, b) => Number(b.flags > 0) - Number(a.flags > 0) || b.lastIso.localeCompare(a.lastIso));
 }
+
+// Which homes from feedbackByHome are on the market now (currentHomes in listings.mjs): the same address, even
+// relisted under a new MLS number, or one of its MLS numbers. The rest are past homes: sold, expired or withdrawn.
+export const markActive = (homes, current) => homes.map((h) => ({ ...h, active: current.keys.has(h.key) || h.mls.some((m) => current.mls.has(m)) }));
 
 // The feedback as the pages show it: photo ids become links (team and the hosting agent only).
 export const withPhotoUrls = (r) => ({ ...r.feedback, photos: (r.feedback.photos || []).map((p) => feedbackPhotoUrl(r.id, p)) });
