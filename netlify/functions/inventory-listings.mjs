@@ -1,6 +1,7 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { teamListings, getInfo, saveInfo, rawSample, probe, forgetRepliers, STANDARD_INSTR } from "../lib/listings.mjs";
 import { currentWeek } from "../lib/settings.mjs";
+import { DAY_KEYS } from "../lib/week.mjs";
 
 // Inventory page API. GET lists every active listing for the two agents with the team's settings.
 // PUT { mls, offered, priority, days, instr[], access, vacant } saves one listing. GET ?raw=1 shows one raw Repliers
@@ -17,7 +18,7 @@ export default async (req) => {
       const q = new URL(req.url).searchParams;
       if (q.get("raw")) return json(200, { sample: await rawSample(), probe: await probe() });
       if (q.get("fresh")) forgetRepliers();
-      return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, closesLabel: week.closesLabel, standardInstr: STANDARD_INSTR, ...(await teamListings(week)) });
+      return json(200, { week: { label: week.label, days: week.days }, closesLabel: week.closesLabel, standardInstr: STANDARD_INSTR, ...(await teamListings(week)) });
     } catch (e) { console.error(e.message); return json(502, { error: "listings_unavailable", message: e.message.slice(0, 200) }); }
   }
 
@@ -26,7 +27,7 @@ export default async (req) => {
     const b = await req.json().catch(() => null);
     if (!b || !/^[A-Za-z0-9]+$/.test(String(b.mls || ""))) return json(400, { error: "invalid_request" });
     const cur = await getInfo(b.mls);
-    const days = (Array.isArray(b.days) ? b.days : cur.days).filter((d) => d === "sat" || d === "sun");
+    const days = DAY_KEYS.filter((k) => (Array.isArray(b.days) ? b.days : cur.days).includes(k)); // any of Monday to Sunday, in week order
     const instr = (Array.isArray(b.instr) ? b.instr : cur.instr).map((s) => String(s).trim().slice(0, 300)).filter(Boolean).slice(0, 15);
     const access = String(b.access ?? cur.access).slice(0, 500);
     const priorityWeek = b.priority === true ? week.satIso : b.priority === false ? null : cur.priorityWeek;

@@ -38,6 +38,10 @@
     : `<span class="sub">${r.imported ? "Imported" : "—"}</span>`;
   // What "Vacant" means; agents see the same sentence on the portal.
   const VACANT_TIP = "No one is living in this home, so there are no occupants.";
+  // The days of the week an open house can be on, Monday first: [key, short, full]. Each home allows some of them.
+  const WEEKDAYS = [["mon", "Mon", "Monday"], ["tue", "Tue", "Tuesday"], ["wed", "Wed", "Wednesday"], ["thu", "Thu", "Thursday"],
+    ["fri", "Fri", "Friday"], ["sat", "Sat", "Saturday"], ["sun", "Sun", "Sunday"]];
+  const SHORT_DAY = Object.fromEntries(WEEKDAYS.map(([k, s]) => [k, s]));
   // The Support and Referral Agreement each agent signs in DocuSeal before using the portal (GET /api/admin/agreements).
   // "Signed Oct 28, 2026, 3:14 PM", with a link to the signed copy.
   const fmtSigned = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -73,6 +77,14 @@
 
   let me = null;
   let requests = [];
+
+  // An "i" button opens its note on a tap (phones have no hover); tapping anywhere else or Escape closes it.
+  document.addEventListener("click", (e) => {
+    const i = e.target.closest("button.tip-i");
+    document.querySelectorAll(".tip.open").forEach((t) => { if (t !== i?.parentElement) t.classList.remove("open"); });
+    if (i) i.parentElement.classList.toggle("open");
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".tip.open").forEach((t) => t.classList.remove("open")); });
 
   let toastTimer;
   function toast(text, err) {
@@ -348,7 +360,7 @@
 
   // ---- Add a request -------------------------------------------------------
   // The team adds an open house for an agent who asked them directly (POST /api/team/new-request). One step at a
-  // time: who's hosting, the home, the day (this weekend and the next three; the weekly cutoff doesn't apply), the
+  // time: who's hosting, the home, the day (any day the seller allows, this week and the next three; the weekly cutoff doesn't apply), the
   // time, then Auto-Approve. Approved now, the agent gets the Confirmed email (unless Send Email Confirmations is
   // unticked); left unticked, it waits for a decision.
   // Either way its hours are held as soon as it's added. The time picker works like the agent portal's.
@@ -390,7 +402,7 @@
       <section class="step" id="arHomeStep" hidden>
         <label class="label" for="arHome">Home</label>
         <select class="field" id="arHome"><option value="">Choose a home…</option>
-          ${published.length ? `<optgroup label="Published this weekend">${published.map(homeOpt).join("")}</optgroup>` : ""}
+          ${published.length ? `<optgroup label="Published this week">${published.map(homeOpt).join("")}</optgroup>` : ""}
           ${others.length ? `<optgroup label="${published.length ? "Other homes" : "Homes"}">${others.map(homeOpt).join("")}</optgroup>` : ""}</select>
       </section>
       <section class="step" id="arDayStep" hidden>
@@ -456,12 +468,12 @@
     const blocked = (h) => past(h) || held().some((r) => h >= r.from && h < r.to);
     const free = (a, b) => { for (let x = a; x < b; x++) if (blocked(x)) return false; return true; };
 
+    // The days the home's seller allows, from today to the end of the week three weeks out.
     function paintDays() {
-      $("arDays").innerHTML = d.days.map((x) => {
-        const offered = home.days.includes(x.key);
-        return `<button type="button" class="ar-day" data-iso="${esc(x.iso)}" aria-pressed="${day?.iso === x.iso}" ${offered ? "" : "disabled"}>
-          <b>${esc(x.label)}, ${esc(x.date)}</b><span>${!offered ? "Not offered by the seller" : x.iso === d.today.date ? "Today" : `${fmtH(FIRST)} to ${fmtH(LAST)}`}</span></button>`;
-      }).join("");
+      const offered = d.days.filter((x) => home.days.includes(x.key));
+      $("arDays").innerHTML = offered.length ? offered.map((x) => `<button type="button" class="ar-day" data-iso="${esc(x.iso)}" aria-pressed="${day?.iso === x.iso}">
+          <b>${esc(x.label)}, ${esc(x.date)}</b><span>${x.iso === d.today.date ? "Today" : `${fmtH(FIRST)} to ${fmtH(LAST)}`}</span></button>`).join("")
+        : '<p class="fine" style="margin:0">This home has no open house days set. Choose its days on Listings.</p>';
     }
     const blockAt = (r, cls, html) => `<div class="tl-b ${cls}" style="top:${(r.from - FIRST) * ROW + 2}px;height:${(r.to - r.from) * ROW - 3}px">${html}</div>`;
     function paintSlots() {
@@ -682,11 +694,13 @@
   const homeLink = (h, label) => `<a href="${homeHref(h)}">${esc(label)}</a>`;
   // Which of a home's open houses its page lists.
   const SHOW = { all: ["All", () => true], feedback: ["With feedback", (o) => !!o.feedback], none: ["No feedback", (o) => !o.feedback] };
-  // A home's two numbers on its Listings card: open houses hosted, and how many have feedback. Each opens the
-  // home's history; the second shows only the open houses with feedback.
-  const homeCounts = (h) => `<a class="count" href="${homeHref(h)}"><b>${h.hosted}</b> open house${h.hosted === 1 ? "" : "s"}</a>`
-    + (h.withFeedback ? `<a class="count" href="${homeHref(h, "feedback")}"><b>${h.withFeedback}</b> with feedback</a>` : '<span class="count none">No feedback yet</span>')
-    + (h.flags ? `<a class="count flagged" href="${homeHref(h, "feedback")}">⚠ ${h.flags} flagged</a>` : "");
+  // A home's two numbers on its Listings card, on one line: open houses hosted, and how many have feedback. Each
+  // opens the home's history; the second shows only the open houses with feedback (all of them while there's none).
+  const homeCounts = (h) => [
+    `<a href="${homeHref(h)}">${h.hosted} open house${h.hosted === 1 ? "" : "s"}</a>`,
+    h.withFeedback ? `<a href="${homeHref(h, "feedback")}">${h.withFeedback} with feedback</a>` : `<a href="${homeHref(h)}">No feedback yet</a>`,
+    h.flags ? `<a class="flagged" href="${homeHref(h, "feedback")}">⚠ ${h.flags} flagged</a>` : "",
+  ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
   // Older open houses show their year: the history goes back further than this season.
   const withYear = (o) => `${o.day}, ${o.date}${o.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${o.iso.slice(0, 4)}` : ""}`;
   const priceMix = (h) => Object.entries(PRICE).filter(([k]) => k !== "none" && h.price[k]).map(([k, v]) => `${v} ${h.price[k]}`).join(" · ") || "—";
@@ -776,10 +790,10 @@
       <div class="chips ohshow" role="group" aria-label="Show">${Object.entries(SHOW).map(([k, [label, f]]) =>
         `<button class="chip" data-show="${k}">${label} (${h.openHouses.filter(f).length})</button>`).join("")}</div>
       <div class="fbq" id="ohList"></div>`;
-    const card = (o) => `<article class="card fbcard${o.feedback?.brokerFlag ? " flag" : ""}">
+    const card = (o) => `<article class="card fbcard${o.feedback?.brokerFlag ? " flag" : ""}" data-oh="${esc(o.id)}">
         <div>
           <h3>${esc(withYear(o))} · ${esc(o.time)} ${o.feedback?.brokerFlag ? '<span class="pill declined">⚠ Flagged for broker</span>' : ""}</h3>
-          <div class="meta">Hosted by ${agentLink(o.agent.email, o.agent.name)}${o.feedback ? ` · feedback sent ${esc(fmtDate(o.feedback.at))}` : ""}</div>
+          <div class="meta">Hosted by ${agentLink(o.agent.email, o.agent.name)}${o.feedback ? ` · ${o.feedback.enteredBy ? `feedback entered by ${esc(o.feedback.enteredBy.name || "the team")}` : "feedback sent"} ${esc(fmtDate(o.feedback.at))}` : ""}</div>
           ${o.feedback ? fbText(o.feedback) : waiting(o)}
         </div></article>`;
     // No feedback: who was emailed about it, and a button to email the agent a reminder with the feedback link.
@@ -787,8 +801,44 @@
       const first = esc(o.agent.name.split(" ")[0]);
       const said = o.reminded ? `No feedback yet. ${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} reminders so far)` : ""}.`
         : o.emailed ? "No feedback yet. The agent was emailed a link after the open house." : "No feedback for this open house.";
-      return `<div class="notes fbwait"><span>${said}</span>
-        <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Send another reminder" : `Email ${first} a reminder`}</button></div>`;
+      return `<div class="notes fbwait"><span>${said}</span><span class="fbacts">
+        <button class="btn ghost small" data-enter="${esc(o.id)}">Leave Feedback</button>
+        <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Send another reminder" : `Email ${first} a reminder`}</button></span></div>`;
+    };
+    // The team enters the feedback themselves (what the agent told them): the agent's questions, saved as their
+    // feedback with nobody emailed (POST /api/team/feedback, action "feedback").
+    const enterForm = (o) => {
+      const id = esc(o.id), first = esc(o.agent.name.split(" ")[0]);
+      const seg = (name, opts) => `<div class="seg" role="radiogroup" aria-labelledby="${name}L-${id}">${Object.entries(opts).map(([k, v]) =>
+        `<label><input type="radio" name="${name}-${id}" value="${k}"><span>${esc(v)}</span></label>`).join("")}</div>`;
+      return `<form class="fbenter" data-id="${id}" novalidate>
+        <p class="fine">Enter what ${first} told you about this open house. It's saved as their feedback, and nobody is emailed.</p>
+        <div class="fbrow">
+          <div><label class="label" for="fv-${id}">Guests</label><input class="field" id="fv-${id}" data-k="visitors" type="number" inputmode="numeric" min="0" max="999"></div>
+          <div><span class="label" id="interestL-${id}">Interest</span>${seg("interest", INTEREST)}</div>
+          <div><span class="label" id="priceL-${id}">Price</span>${seg("price", PRICE)}</div>
+        </div>
+        <div class="two">
+          <div><label class="label" for="fl-${id}">What guests liked</label><textarea class="field" id="fl-${id}" data-k="liked" maxlength="5000"></textarea></div>
+          <div><label class="label" for="fd-${id}">What guests didn't like</label><textarea class="field" id="fd-${id}" data-k="disliked" maxlength="5000"></textarea></div>
+        </div>
+        <label class="label" for="fs-${id}">Additional feedback <span class="opt">(optional)</span></label>
+        <textarea class="field" id="fs-${id}" data-k="forSeller" maxlength="5000" rows="2"></textarea>
+        <label class="label" for="ft-${id}">Notes for the team <span class="opt">(optional)</span></label>
+        <textarea class="field" id="ft-${id}" data-k="teamNotes" maxlength="5000" rows="2"></textarea>
+        <label class="fbflag"><input type="checkbox" data-k="brokerFlag"> Flag for the broker <span class="opt">(describe it in the notes for the team)</span></label>
+        <div class="fbph"><label class="btn ghost small">Add photos<input type="file" accept="image/*" multiple data-ph></label><span class="fine" data-phmsg role="status"></span></div>
+        <div class="fbpend" data-phgrid></div>
+        <p class="ar-err" role="alert" hidden></p>
+        <div class="ar-foot"><button class="btn" type="submit">Save feedback</button><button class="btn ghost" type="button" data-cancel>Cancel</button></div>
+      </form>`;
+    };
+    const formFor = (el) => el.closest("form.fbenter");
+    const ohOf = (form) => h.openHouses.find((x) => x.id === form.dataset.id);
+    const paintPending = (form, photos) => {
+      form.photos = photos;
+      form.querySelector("[data-phgrid]").innerHTML = photos.map((p) => `<span class="fbp"><img src="${esc(p.url)}" alt="Photo added to this feedback">
+        <button type="button" data-unph="${esc(p.id)}" aria-label="Remove photo">×</button></span>`).join("");
     };
     let show = SHOW[sub] ? sub : "all";
     const paint = () => {
@@ -798,6 +848,28 @@
       view.querySelectorAll("[data-show]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.show === show)));
     };
     $("ohList").onclick = async (e) => {
+      // Leave Feedback: the form opens in the open house's card, in place of the buttons.
+      const enter = e.target.closest("[data-enter]");
+      if (enter) {
+        const wait = enter.closest(".fbwait"), o = h.openHouses.find((x) => x.id === enter.dataset.enter);
+        wait.hidden = true; wait.insertAdjacentHTML("afterend", enterForm(o));
+        wait.nextElementSibling.querySelector("input").focus();
+        return;
+      }
+      const cancel = e.target.closest("[data-cancel]");
+      if (cancel) {
+        const form = formFor(cancel), mine = form.added || [];
+        form.previousElementSibling.hidden = false; form.remove();
+        for (const p of mine) api("POST", "/api/team/feedback", { id: form.dataset.id, action: "unphoto", photo: p }); // photos added here, then cancelled
+        return;
+      }
+      const unph = e.target.closest("[data-unph]");
+      if (unph) {
+        const form = formFor(unph); unph.disabled = true;
+        const r = await api("POST", "/api/team/feedback", { id: form.dataset.id, action: "unphoto", photo: unph.dataset.unph });
+        if (r.ok) paintPending(form, r.data.photos); else { unph.disabled = false; toast(r.data.message || "Couldn't remove that photo. Try again.", true); }
+        return;
+      }
       const btn = e.target.closest("[data-remind]"); if (!btn) return;
       const o = h.openHouses.find((x) => x.id === btn.dataset.remind); if (!o) return;
       if (!(await OHDialog.confirm({ title: `Email ${o.agent.name} a reminder?`, ok: "Send reminder",
@@ -808,6 +880,39 @@
       Object.assign(o, { reminded: r.data.reminded, reminders: r.data.reminders });
       toast(`Reminder sent to ${o.agent.name}.`);
       paint();
+    };
+    // Photos for the feedback: shrunk, then uploaded one at a time.
+    $("ohList").onchange = async (e) => {
+      const input = e.target.closest("[data-ph]"); if (!input) return;
+      const form = formFor(input), files = [...input.files], msg = form.querySelector("[data-phmsg]"), save = form.querySelector('[type="submit"]');
+      input.value = ""; if (!files.length || form.uploading) return;
+      form.uploading = true; save.disabled = true; form.added = form.added || [];
+      for (const [i, f] of files.entries()) {
+        msg.textContent = `Uploading photo ${i + 1} of ${files.length}…`;
+        const data = await shrink(f).catch(() => null);
+        const r = data ? await api("POST", "/api/team/feedback", { id: form.dataset.id, action: "photo", data }) : { ok: false, data: { message: `Couldn't read ${f.name}. Use a JPEG or PNG.` } };
+        if (!r.ok) { msg.textContent = r.data.message || "A photo didn't upload. Try again."; if (r.data.error === "too_many_photos") break; continue; }
+        const before = new Set((form.photos || []).map((p) => p.id));
+        form.added.push(...r.data.photos.filter((p) => !before.has(p.id)).map((p) => p.id));
+        paintPending(form, r.data.photos); msg.textContent = "";
+      }
+      form.uploading = false; save.disabled = false;
+    };
+    $("ohList").onsubmit = async (e) => {
+      const form = e.target.closest("form.fbenter"); if (!form) return;
+      e.preventDefault();
+      const o = ohOf(form), val = (k) => form.querySelector(`[data-k="${k}"]`).value, pick = (n) => form.querySelector(`input[name="${n}-${o.id}"]:checked`)?.value || "";
+      const err = form.querySelector(".ar-err"), save = form.querySelector('[type="submit"]');
+      const r = await (save.disabled = true, err.hidden = true, api("POST", "/api/team/feedback", { id: o.id, action: "feedback",
+        visitors: val("visitors") === "" ? "" : Number(val("visitors")), interest: pick("interest"), price: pick("price"), liked: val("liked"),
+        disliked: val("disliked"), forSeller: val("forSeller"), teamNotes: val("teamNotes"), brokerFlag: form.querySelector('[data-k="brokerFlag"]').checked }));
+      if (!r.ok) { err.textContent = r.data.message || "Couldn't save the feedback. Try again."; err.hidden = false; save.disabled = false; return; }
+      toast(`Saved ${o.agent.name}'s feedback.`);
+      // Show the home again with its new totals, the saved feedback in view.
+      const next = show === "none" ? "all" : show;
+      history.replaceState(null, "", homeHref(h, next));
+      await renderHome(h.key, next);
+      view.querySelector(`[data-oh="${o.id}"]`)?.scrollIntoView({ block: "center" });
     };
     view.querySelector(".ohshow").onclick = (e) => {
       const b = e.target.closest("[data-show]"); if (!b) return;
@@ -899,8 +1004,8 @@
       ? new Date(d.feedUpdatedAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d+:)/, " at $1")
       : d.feedUpdatedOn ? fmtIso(d.feedUpdatedOn) : "";
     view.innerHTML = `
-      <section class="intro"><div><h1>Publish this weekend's homes</h1>
-        <p class="sub">Weekend of ${esc(d.week.sat.date)} and ${esc(d.week.sun.date)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
+      <section class="intro"><div><h1>Publish this week's homes</h1>
+        <p class="sub">Week of ${esc(d.week.label)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
         ${me.admin ? '<div class="intro-actions"><button class="btn small" id="addHomeBtn">Add a home</button></div>' : ""}</section>
       ${me.admin ? `<div class="card panel" id="addHome" hidden>
         <h3>Add a home that isn't on the MLS yet</h3>
@@ -926,7 +1031,7 @@
     const paint = () => {
       list.innerHTML = "";
       const shown = d.listings.filter(FILTERS[listFilter][1]);
-      if (!shown.length) list.innerHTML = `<div class="card empty">${{ all: "No active listings found in Repliers.", published: "No homes published yet this weekend.", unpublished: "Every home is published this weekend." }[listFilter]}</div>`;
+      if (!shown.length) list.innerHTML = `<div class="card empty">${{ all: "No active listings found in Repliers.", published: "No homes published yet this week.", unpublished: "Every home is published this week." }[listFilter]}</div>`;
       shown.forEach((l) => list.append(listingCard(l, d, counts, fbFor(l.mls))));
     };
     $("lchips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; flushSaves(); listFilter = b.dataset.f; $("lchips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); paint(); };
@@ -963,9 +1068,14 @@
     return d;
   }
 
+  // A field's label with an "i" that shows a note about it: on hover, on keyboard focus, or tapped on a phone.
+  const fieldLabel = (id, text, note) => `<div class="lab"><label class="label" for="${esc(id)}">${esc(text)}</label>${note ? `<span class="tip">
+      <button type="button" class="tip-i" aria-label="About ${esc(text.replace(/ \(.*\)$/, "").toLowerCase())}" aria-describedby="${esc(id)}-tip">i</button>
+      <span class="tip-text" role="tooltip" id="${esc(id)}-tip">${esc(note)}</span></span>` : ""}</div>`;
+
   function listingCard(l, d, onSaved, fb) {
     const c = document.createElement("article"); c.className = "card lcard" + (l.priority ? " pri" : ""); c.dataset.mls = l.mls;
-    const oh = l.openHouses.length ? `<div class="mls-oh">Already on the MLS: ${l.openHouses.map((o) => `${o.day === "sat" ? "Sat" : "Sun"} ${o.from}:00–${o.to}:00`).join(", ")}</div>` : "";
+    const oh = l.openHouses.length ? `<div class="mls-oh">Already on the MLS: ${l.openHouses.map((o) => `${SHORT_DAY[o.day] || ""} ${o.from}:00–${o.to}:00`).join(", ")}</div>` : "";
     const badges = () => `${l.offered ? '<span class="pill approved">Published</span>' : '<span class="pill">Unpublished</span>'}${l.priority ? '<span class="pill priority">★ Priority</span>' : ""}${l.teamAdded ? '<span class="pill pending">Not on the MLS yet</span>' : ""}`;
     const facts = () => `${l.teamAdded ? "Added by the team" : `MLS# ${esc(l.mls)}`} · ${money(l.price)}${l.bd ? ` · ${esc(l.bd)} bd / ${esc(l.ba)} ba` : ""}${l.sf ? ` · ${Number(l.sf).toLocaleString()} sq ft` : ""}`;
     const cover = () => (l.img ? `<img src="${esc(photo(l.img, "medium"))}" alt="" loading="lazy">` : "");
@@ -978,30 +1088,35 @@
         ${fb ? `<div class="lfb">${homeCounts(fb)}</div>` : ""}
         ${oh}
         <div class="toggles">
-          <label class="check"><input type="checkbox" data-f="offered" ${l.offered ? "checked" : ""}> Publish this weekend</label>
-          <label class="check"><input type="checkbox" data-f="sat" ${l.days.includes("sat") ? "checked" : ""}> Saturday</label>
-          <label class="check"><input type="checkbox" data-f="sun" ${l.days.includes("sun") ? "checked" : ""}> Sunday</label>
+          <label class="check"><input type="checkbox" data-f="offered" ${l.offered ? "checked" : ""}> Publish this week</label>
           <label class="check"><input type="checkbox" data-f="priority" ${l.priority ? "checked" : ""}> Priority</label>
           <label class="check tip"><input type="checkbox" data-f="vacant" ${l.vacant ? "checked" : ""} aria-describedby="vacTip-${esc(l.mls)}"> Vacant <span class="tip-i" aria-hidden="true">i</span>
             <span class="tip-text" role="tooltip" id="vacTip-${esc(l.mls)}">${esc(VACANT_TIP)} Agents see a Vacant tag on this listing.</span></label>
         </div>
+        <div class="daypick">
+          <span class="dp-label" id="dpl-${esc(l.mls)}">Open house days</span>
+          <div class="dp-days" role="group" aria-labelledby="dpl-${esc(l.mls)}">${WEEKDAYS.map(([k, s, full]) =>
+            `<button type="button" class="dp-day" data-day="${k}" aria-pressed="${l.days.includes(k)}" aria-label="${full}">${s}</button>`).join("")}</div>
+        </div>
         <div class="two">
-          <div><label class="label">Instructions for agents (one per line)</label><textarea class="field" data-f="instr">${esc(l.instr.join("\n"))}</textarea>
-            ${d.standardInstr?.length ? `<div class="fine">Every home also tells agents: ${esc(d.standardInstr.join(" "))}</div>` : ""}</div>
-          <div><label class="label">Access details (private)</label><textarea class="field" data-f="access" placeholder="Gate, lockbox, alarm codes">${esc(l.access)}</textarea>
-            <div class="fine">Only sent in the Confirmed and Reminder emails. Never shown to agents on the site.</div></div>
+          <div>${fieldLabel(`instr-${l.mls}`, "Instructions for agents (one per line)", d.standardInstr?.length ? `Every home also tells agents: ${d.standardInstr.join(" ")}` : "")}
+            <textarea class="field" id="instr-${esc(l.mls)}" data-f="instr">${esc(l.instr.join("\n"))}</textarea></div>
+          <div>${fieldLabel(`access-${l.mls}`, "Access details (private)", "Only sent in the Confirmed and Reminder emails. Never shown to agents on the site.")}
+            <textarea class="field" id="access-${esc(l.mls)}" data-f="access" placeholder="Gate, lockbox, alarm codes">${esc(l.access)}</textarea></div>
         </div>
         ${editable ? homeEditor(l, d) : ""}
       </div>`;
 
     // Publishing, days, Priority, Vacant, instructions and access details save as they change.
     const q = (f) => c.querySelector(`[data-f="${f}"]`);
+    const dayBtns = [...c.querySelectorAll(".dp-day")];
+    const showDays = (days) => dayBtns.forEach((b) => b.setAttribute("aria-pressed", String(days.includes(b.dataset.day))));
     const settings = autosave(async () => {
-      const days = ["sat", "sun"].filter((x) => q(x).checked), instr = q("instr").value.split("\n"), access = q("access").value;
+      const days = dayBtns.filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.day), instr = q("instr").value.split("\n"), access = q("access").value;
       const res = await api("PUT", "/api/inventory/listings", { mls: l.mls, offered: q("offered").checked, priority: q("priority").checked, vacant: q("vacant").checked, days, instr, access });
       if (!res.ok) {
         // Put the switches back to what's saved; typed text stays so nothing is lost.
-        q("offered").checked = l.offered; q("priority").checked = l.priority; q("vacant").checked = l.vacant; ["sat", "sun"].forEach((x) => { q(x).checked = l.days.includes(x); });
+        q("offered").checked = l.offered; q("priority").checked = l.priority; q("vacant").checked = l.vacant; showDays(l.days);
         return toast(res.data.message || "Couldn't save. Your change was not applied.", true);
       }
       Object.assign(l, { offered: q("offered").checked, priority: q("priority").checked, vacant: q("vacant").checked, days, instr: instr.map((s) => s.trim()).filter(Boolean), access });
@@ -1011,6 +1126,7 @@
       onSaved();
     });
     c.querySelectorAll(".toggles input").forEach((i) => { i.onchange = settings.now; });
+    dayBtns.forEach((b) => { b.onclick = () => { b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")); settings.now(); }; });
     ["instr", "access"].forEach((f) => { q(f).oninput = settings.soon; q(f).onblur = settings.flush; });
     if (editable) wireHomeEditor(c, l, d, { settings, badges, facts, cover });
     return c;
@@ -1201,14 +1317,20 @@
             <span>at</span><input class="field" id="cTime" type="time" step="900" aria-label="Time"><span class="fine">Central time</span></div>
         </div>
         <div class="summary" id="cSum"></div>
-      </div>`;
+      </div>
+      <section class="card panel emails" aria-labelledby="emailsTitle">
+        <h3 id="emailsTitle">Emails</h3>
+        <p class="fine" id="emailsAbout">Every email the Open House platform sends.</p>
+        <div id="emailList"><p class="fine">Loading…</p></div>
+      </section>`;
+    renderEmails();
     let last = r.data, seq = 0;
     const show = (d) => {
       last = d;
       $("cOn").checked = d.cutoff.enabled; $("cMore").hidden = !d.cutoff.enabled;
       $("cDay").value = String(d.cutoff.day); $("cTime").value = d.cutoff.time;
       $("cState").textContent = d.cutoff.enabled ? "Requests stop at the day and time you choose." : "Off. Requests stay open until Sunday evening.";
-      $("cSum").innerHTML = `Requests for the weekend of <b>${esc(d.weekend)}</b> close <b>${esc(d.closesLabel)}</b>.`;
+      $("cSum").innerHTML = `Requests for the week of <b>${esc(d.week)}</b> close <b>${esc(d.closesLabel)}</b>.`;
     };
     const save = async () => {
       const time = $("cTime").value; if (!/^\d\d:\d\d$/.test(time)) return;
@@ -1221,6 +1343,44 @@
     $("cOn").onchange = () => { $("cMore").hidden = !$("cOn").checked; save(); };
     $("cDay").onchange = save; $("cTime").onchange = save;
     show(last);
+  }
+
+  // ---- Settings > Emails: every email the platform sends, previewed with a sample open house --------------
+  // Each opens to its recipients, subject, attachments and the email itself, drawn in a frame that runs no scripts.
+  // Links in a preview don't open: they'd point at a sample request that doesn't exist.
+  async function renderEmails() {
+    const r = await api("GET", "/api/admin/emails");
+    if (!$("emailList")) return; // left Settings meanwhile
+    if (!r.ok) { $("emailList").innerHTML = '<p class="fine">Couldn\'t load the email previews. Reload to try again.</p>'; return; }
+    const { emails, team, calendar, home } = r.data;
+    $("emailsAbout").innerHTML = `Every email the Open House platform sends, shown for a sample open house at ${esc(home)} with a made-up agent. Nothing is sent from here.
+      "The team" is ${team.map((t) => `<b>${esc(t)}</b>`).join(", ")}; "the team calendar" is ${esc(calendar)}.`;
+    const groups = [...new Set(emails.map((e) => e.group))];
+    $("emailList").innerHTML = groups.map((g) => `<h4 class="eg">${esc(g)}</h4>${emails.filter((e) => e.group === g).map((e) => `
+      <details class="email" data-key="${esc(e.key)}">
+        <summary><span><span class="en">${esc(e.name)}</span><span class="ew">To ${esc(e.to.charAt(0).toLowerCase() + e.to.slice(1))}. ${esc(e.when)}</span></span><span class="ev" aria-hidden="true"></span></summary>
+        <dl class="emeta"><dt>To</dt><dd>${esc(e.to)}</dd><dt>Subject</dt><dd>${esc(e.subject)}</dd>
+          ${e.attachments.length ? `<dt>Attached</dt><dd>${e.attachments.map((a) => (a.endsWith(".ics") ? `Calendar file (${esc(a)})` : esc(a))).join(", ")}</dd>` : ""}</dl>
+        <iframe class="eprev" sandbox="allow-same-origin" title="Preview of the ${esc(e.name)} email"></iframe>
+      </details>`).join("")}`).join("");
+    const byKey = Object.fromEntries(emails.map((e) => [e.key, e]));
+    $("emailList").querySelectorAll("details.email").forEach((d) => d.addEventListener("toggle", () => {
+      const f = d.querySelector("iframe");
+      if (!d.open || f.srcdoc) return;
+      const html = byKey[d.dataset.key].html, keep = '<base target="_blank"><style>a{pointer-events:none;cursor:default}</style>';
+      f.srcdoc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + keep)
+        : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${keep}</head><body style="margin:16px">${html}</body></html>`;
+      // Fit the frame to the email, and again as its photo loads. An email wider than the frame (on a phone) is
+      // scaled down to fit, as a phone's mail app would show it.
+      f.onload = () => {
+        const doc = f.contentDocument; if (!doc) return;
+        const root = doc.documentElement, scale = Math.min(1, f.clientWidth / root.scrollWidth);
+        if (scale < 1) root.style.zoom = String(scale);
+        const fit = () => { f.style.height = `${Math.max(120, Math.ceil(root.scrollHeight))}px`; };
+        fit();
+        doc.querySelectorAll("img").forEach((img) => { if (!img.complete) img.addEventListener("load", fit); });
+      };
+    }));
   }
 
   start();

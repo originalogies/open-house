@@ -7,6 +7,15 @@ const short = (iso) => fmt(iso, { month: "short", day: "numeric" });
 
 export const dayMeta = (iso) => ({ iso, label: label(iso), date: short(iso) });
 
+// Open houses can be on any day the seller allows (a home's days, set on Listings; Saturday and Sunday unless the
+// team changes them). The keys, in week order: weeks run Monday to Sunday.
+export const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
+export const dayKeyOf = (iso) => DAY_KEYS[(dow(iso) + 6) % 7];
+// The Saturday of the Monday-to-Sunday week a date falls in. It names the week: publishing and Priority are saved
+// against it (offeredWeek, priorityWeek), and the weekly cutoff is set relative to it.
+export const weekSatOf = (iso) => addDays(iso, dow(iso) === 0 ? -1 : 6 - dow(iso));
+
 export const FIRST_HOUR = 9, LAST_HOUR = 19;
 // Cutoff setting: weekly, optional. day: 0 = Sunday .. 6 = Saturday, time: "HH:MM" Central.
 export const DEFAULT_CUTOFF = { enabled: true, day: 5, time: "17:00" };
@@ -32,29 +41,29 @@ export function cutoffInfo(satIso, cutoff = DEFAULT_CUTOFF) {
   return { ms: chicagoToUtc(iso, h).getTime() + m * 60000, label: `${label(iso)}, ${short(iso)} at ${timeLabel(cutoff.time)}` };
 }
 
-// The days the team can add a request for: this weekend's and the next ones', `weeks` weekends in all. The weekly
-// cutoff doesn't apply to the team. Today is listed while an hour can still start (Central time).
+// A day an open house can still start on: a later day, or today while an hour can still start (Central time).
+const stillOpen = (iso, { date, hour }) => iso > date || (iso === date && hour + 1 < LAST_HOUR);
+
+// The days the team can add a request for: from today to the end of the week `weeks` weeks out (this week and the
+// next three), every day of the week; the form offers the ones the home's seller allows. The weekly cutoff doesn't
+// apply to the team.
 export function upcomingDays(now = new Date(), weeks = 4) {
-  const { date: today, hour } = chicagoNow(now);
-  let sat = dow(today) === 0 ? addDays(today, -1) : addDays(today, (6 - dow(today) + 7) % 7);
+  const today = chicagoNow(now), last = addDays(weekSatOf(today.date), 1 + 7 * (weeks - 1));
   const out = [];
-  for (let i = 0; i < weeks; i++, sat = addDays(sat, 7)) {
-    for (const [key, iso] of [["sat", sat], ["sun", addDays(sat, 1)]]) {
-      if (iso < today || (iso === today && hour + 1 >= LAST_HOUR)) continue;
-      out.push({ key, ...dayMeta(iso) });
-    }
-  }
+  for (let iso = today.date; iso <= last; iso = addDays(iso, 1)) if (stillOpen(iso, today)) out.push({ key: dayKeyOf(iso), ...dayMeta(iso) });
   return out;
 }
 
-// The weekend currently open for requests: the current or next Saturday/Sunday whose cutoff has not passed.
+// The week agents can request open houses for: Monday to Sunday, the current week or, once its cutoff has passed,
+// the next. days: all seven, by key. Days already past stay in it (requests made for them still show), but agents
+// can only request the ones openDays lists.
 export function getWeek(now = new Date(), cutoff = DEFAULT_CUTOFF) {
-  const today = chicagoNow(now).date;
-  let sat = dow(today) === 0 ? addDays(today, -1) : addDays(today, (6 - dow(today) + 7) % 7);
+  let sat = weekSatOf(chicagoNow(now).date);
   while (now.getTime() > cutoffInfo(sat, cutoff).ms) sat = addDays(sat, 7);
-  const c = cutoffInfo(sat, cutoff);
+  const c = cutoffInfo(sat, cutoff), mon = addDays(sat, -5);
   return {
-    days: { sat: dayMeta(sat), sun: dayMeta(addDays(sat, 1)) },
+    days: Object.fromEntries(DAY_KEYS.map((k, i) => [k, dayMeta(addDays(mon, i))])),
+    label: `${short(mon)} to ${short(addDays(sat, 1))}`, // "Nov 9 to Nov 15"
     satIso: sat,
     closes: c.ms,
     cutoffEnabled: cutoff.enabled,
@@ -63,3 +72,6 @@ export function getWeek(now = new Date(), cutoff = DEFAULT_CUTOFF) {
     lastHour: LAST_HOUR,
   };
 }
+
+// The days of the week agents can still request (getWeek): today while an hour can still start, and the days after.
+export const openDays = (week, now = new Date()) => DAY_KEYS.filter((k) => stillOpen(week.days[k].iso, chicagoNow(now)));

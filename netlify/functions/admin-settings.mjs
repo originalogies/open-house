@@ -10,7 +10,7 @@ export default async (req) => {
 
   const summary = (cutoff) => {
     const w = getWeek(new Date(), cutoff);
-    return { weekend: `${w.days.sat.date} and ${w.days.sun.date}`, closesLabel: w.closesLabel };
+    return { week: w.label, closesLabel: w.closesLabel };
   };
 
   if (req.method === "GET") {

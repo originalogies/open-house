@@ -61,7 +61,7 @@ test("time helpers", () => {
   assert.match(fmtReceived(Date.UTC(2026, 9, 3, 19, 15)), /^Oct 3, 2026 at 2:15 PM CT$/);
 });
 
-import { getWeek } from "../netlify/lib/week.mjs";
+import { getWeek, openDays, dayKeyOf, weekSatOf, DAY_KEYS } from "../netlify/lib/week.mjs";
 import { normalize, openHouseBlocks } from "../netlify/lib/listings.mjs";
 
 test("weekend rolls over at Friday 5 PM Central", () => {
@@ -72,6 +72,17 @@ test("weekend rolls over at Friday 5 PM Central", () => {
   const w = getWeek(new Date("2026-10-05T17:00:00Z"));
   assert.equal(w.days.sun.date, "Oct 11");
   assert.equal(w.closesLabel, "Friday, Oct 9 at 5:00 PM");
+});
+
+test("the week runs Monday to Sunday, and agents can request the days still ahead", () => {
+  const w = getWeek(new Date("2026-10-07T15:00:00Z")); // Wednesday Oct 7, 10 AM Central
+  assert.deepEqual(DAY_KEYS.map((k) => w.days[k].iso), ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"]);
+  assert.equal(w.days.wed.label, "Wednesday");
+  assert.equal(w.label, "Oct 5 to Oct 11");
+  assert.deepEqual(openDays(w, new Date("2026-10-07T15:00:00Z")), ["wed", "thu", "fri", "sat", "sun"]); // today still has hours
+  assert.deepEqual(openDays(w, new Date("2026-10-07T23:30:00Z")), ["thu", "fri", "sat", "sun"]);      // 6:30 PM: today's done
+  assert.deepEqual(["2026-10-05", "2026-10-07", "2026-10-10", "2026-10-11"].map(dayKeyOf), ["mon", "wed", "sat", "sun"]);
+  assert.deepEqual(["2026-10-05", "2026-10-10", "2026-10-11"].map(weekSatOf), ["2026-10-10", "2026-10-10", "2026-10-10"]);
 });
 
 test("Repliers listing mapping", () => {

@@ -175,7 +175,7 @@ test("callback tokens prove a result without the bot holding the secret", () => 
 test("team change rules", () => {
   const r = req();
   assert.equal(checkChange(r, { iso: "2026-10-25", from: 14, to: 16 }, [r], NOW), null);
-  assert.match(checkChange(r, { iso: "2026-10-23", from: 14, to: 16 }, [r], NOW), /Saturday or Sunday/);
+  assert.equal(checkChange(r, { iso: "2026-10-26", from: 14, to: 16 }, [r], NOW), null); // any day of the week (a Monday)
   assert.match(checkChange(r, { iso: "2026-10-25", from: 8, to: 10 }, [r], NOW), /9:00 AM and 7:00 PM/);
   assert.match(checkChange(r, { iso: "2026-10-25", from: 16, to: 14 }, [r], NOW), /9:00 AM and 7:00 PM/);
   assert.match(checkChange(r, { iso: "2026-10-24", from: 13, to: 16 }, [r], NOW), /same time/);

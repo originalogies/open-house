@@ -21,7 +21,10 @@ test("a request the team adds holds its hours while it waits", () => {
 
 test("team add rules", () => {
   assert.equal(check(next()), null);
-  assert.equal(check(next({ iso: "2026-11-13" })), "Open houses are on Saturday or Sunday.");
+  // any day of the week the seller allows: Saturday and Sunday unless the team changes the home's days
+  assert.equal(check(next({ iso: "2026-11-13" })), "The seller doesn't offer Fridays for this home.");
+  assert.equal(check(next({ iso: "2026-11-13" }), [], { days: ["fri", "sat"] }), null);
+  assert.equal(check(next({ iso: "2026-11-11" }), [], { days: ["wed"] }), null);
   assert.equal(check(next({ iso: "nope" })), "Pick a valid date.");
   assert.match(check(next({ iso: SUN }), [], { days: ["sat"] }), /doesn't offer Sundays/);
   assert.match(check(next({ from: 8 })), /between 9:00 AM and 7:00 PM/);
@@ -51,15 +54,16 @@ test("team adds and open houses already on the MLS", () => {
   assert.equal(check(next({ iso: SUN }), [], { external }), null);
 });
 
-test("the days the team can add for: four weekends from today", () => {
-  const iso = (now) => upcomingDays(new Date(now)).map((d) => d.iso);
-  assert.deepEqual(iso(NOW), ["2026-11-14", "2026-11-15", "2026-11-21", "2026-11-22", "2026-11-28", "2026-11-29", "2026-12-05", "2026-12-06"]);
-  assert.equal(upcomingDays(new Date(NOW))[0].label, "Saturday");
-  // Sunday morning: today is listed, yesterday isn't
-  assert.equal(iso("2026-11-15T15:00:00Z")[0], "2026-11-15");
-  assert.equal(iso("2026-11-15T15:00:00Z").length, 7);
-  // Sunday at 6:30 PM: no full hour left today
-  assert.equal(iso("2026-11-16T00:30:00Z")[0], "2026-11-21");
+test("the days the team can add for: every day from today to the end of the week three weeks out", () => {
+  const days = (now) => upcomingDays(new Date(now));
+  const mon = days(NOW); // Monday Nov 9, 10 AM: today through Sunday Dec 6
+  assert.equal(mon.length, 28);
+  assert.deepEqual([mon[0], mon.at(-1)].map((d) => [d.iso, d.key, d.label]), [["2026-11-09", "mon", "Monday"], ["2026-12-06", "sun", "Sunday"]]);
+  assert.deepEqual(mon.slice(0, 7).map((d) => d.key), ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
+  // Sunday morning: today is listed, then the next three weeks
+  assert.deepEqual([days("2026-11-15T15:00:00Z")[0].iso, days("2026-11-15T15:00:00Z").length], ["2026-11-15", 22]);
+  // Sunday at 6:30 PM: no full hour left today, so it starts Monday
+  assert.equal(days("2026-11-16T00:30:00Z")[0].iso, "2026-11-16");
 });
 
 test("who the team can add a request for", () => {

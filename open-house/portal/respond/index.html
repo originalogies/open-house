@@ -316,7 +316,7 @@ const STATE = {
   not_on_mls: ["", "Home not on the MLS yet"],
 };
 const EVENT = {
-  added: "Added by the team", feedback_reminder: "Feedback reminder sent", approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
+  added: "Added by the team", feedback_reminder: "Feedback reminder sent", feedback_entered: "Feedback entered by the team", approved: "Approved", declined: "Declined", changed: "Time changed", cancelled: "Cancelled", retry: "MLS job retried",
   approving: "Approving with the AI agent", mls_manual: "Switched to entered by hand",
   mls_job_sent: "Sent to the AI agent", mls_booked: "Booked on the MLS", mls_updated: "Updated on the MLS", mls_cancelled: "Cancelled on the MLS",
   mls_already_done: "Already on the MLS", mls_dry_run: "Dry run finished", mls_failed: "AI agent failed", mls_needs_login: "MLS sign-in needed",
@@ -360,7 +360,7 @@ function feedbackSection(d) {
   const f = d.feedback;
   if (!f) return d.feedbackDue ? '<h2>Feedback</h2><div class="box"><p class="muted" style="margin:0">Waiting on feedback. The agent was emailed a link after the open house.</p></div>' : "";
   const item = (label, text) => `<dt>${label}</dt><dd class="pre">${text ? esc(text) : '<span class="muted">Nothing noted</span>'}</dd>`;
-  return `<h2>Feedback</h2><div class="box">${f.brokerFlag ? '<p class="err" style="margin:0 0 6px"><b>⚠ Flagged for the broker</b></p>' : ""}
+  return `<h2>Feedback</h2><div class="box">${f.enteredBy ? `<p class="muted" style="margin:0 0 6px">Entered by ${esc(f.enteredBy.name || "the team")} for ${esc(d.agentName)}.</p>` : ""}${f.brokerFlag ? '<p class="err" style="margin:0 0 6px"><b>⚠ Flagged for the broker</b></p>' : ""}
     <dl style="margin:0"><dt>Visitors · Interest${f.price ? " · Price" : ""}</dt><dd>${f.visitors} · ${esc(INTEREST[f.interest] || f.interest)}${f.price ? ` · ${esc(PRICE[f.price])}` : ""}</dd>
       ${f.happened != null ? item("What happened", f.happened) : item("What guests liked", f.liked) + item("What guests didn't like or would change", f.disliked) + (f.forSeller ? item("Additional feedback", f.forSeller) : "")}
       ${item("Notes for the team", f.teamNotes)}

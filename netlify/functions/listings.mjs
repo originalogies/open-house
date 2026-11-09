@@ -2,6 +2,7 @@ import { json, currentUser } from "../lib/shared.mjs";
 import { offeredListings, publicListing } from "../lib/listings.mjs";
 import { listRequests, holdsSlot } from "../lib/requests.mjs";
 import { currentWeek } from "../lib/settings.mjs";
+import { openDays } from "../lib/week.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 
 export default async (req) => {
@@ -14,6 +15,10 @@ export default async (req) => {
   try { offered = await offeredListings(week); }
   catch (e) { console.error(e.message); requests.catch(() => {}); return json(502, { error: "listings_unavailable" }); }
 
+  // week: all seven days, Monday to Sunday; open: the ones still ahead, which agents can request. A home whose
+  // days have all passed this week isn't listed.
+  const open = openDays(week);
+  offered = offered.filter((l) => l.days.some((k) => open.includes(k)));
   const all = (await requests).filter((r) => Object.values(week.days).some((d) => d.iso === r.iso));
   const live = (r) => r.status === "pending" || r.status === "approved";
   const dayKey = (iso) => Object.keys(week.days).find((k) => week.days[k].iso === iso);
@@ -26,6 +31,6 @@ export default async (req) => {
     ],
     mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status, cancelRequested: openCancelRequest(r) })),
   }));
-  return json(200, { week: { sat: week.days.sat, sun: week.days.sun }, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, listings });
+  return json(200, { week: week.days, open, weekLabel: week.label, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, listings });
 };
 export const config = { path: "/api/listings" };

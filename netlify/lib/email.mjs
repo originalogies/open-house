@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import Handlebars from "handlebars";
 import * as T from "./templates.generated.mjs";
 import { getInfo, agentInstructions } from "./listings.mjs";
@@ -87,7 +88,20 @@ function fold(line) {
   return [...parts, cur].join("\r\n ");
 }
 
+// Email previews (Settings > Emails, email-previews.mjs): inside capture(), send() keeps each message instead of
+// sending it, and a listing's access details and instructions come from the sample. It's scoped to that call, so
+// an email being sent for real at the same moment still goes out.
+const previewing = new AsyncLocalStorage();
+export async function capture(fn, info) {
+  const box = { sent: [], info };
+  await previewing.run(box, fn);
+  return box.sent;
+}
+const infoOf = (mls) => previewing.getStore()?.info || getInfo(mls);
+
 async function send({ to, subject, html, replyTo, attachments }) {
+  const box = previewing.getStore();
+  if (box) { box.sent.push({ to, subject, html, replyTo, attachments }); return; }
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error("RESEND_API_KEY is not set");
   const res = await fetch("https://api.resend.com/emails", {
@@ -120,7 +134,7 @@ export const sendRequestSent = (req) =>
 
 // Confirmed -> agent + team, with calendar invite and access details.
 export const sendConfirmed = async (req) => {
-  const l = req.listing, d = dayMeta(req.iso), info = await getInfo(req.mls);
+  const l = req.listing, d = dayMeta(req.iso), info = await infoOf(req.mls);
   return send({
     to: withCalendar([req.agent.email, ...TEAM_TO()]), replyTo: TEAM_TO()[0],
     subject: `Confirmed: open house at ${place(l)}, ${d.label} ${d.date}, ${fmtRange(req.from, req.to)}`,
@@ -131,7 +145,7 @@ export const sendConfirmed = async (req) => {
 
 // Reminder -> agent + team, day before at 9:00 AM CT.
 export const sendReminder = async (req) => {
-  const l = req.listing, info = await getInfo(req.mls);
+  const l = req.listing, info = await infoOf(req.mls);
   return send({
     to: [req.agent.email, ...TEAM_TO()], replyTo: TEAM_TO()[0],
     subject: `Reminder: open house at ${place(l)} tomorrow, ${fmtRange(req.from, req.to)}`,

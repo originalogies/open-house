@@ -2,8 +2,9 @@ import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { offeredListings, snapshot } from "../lib/listings.mjs";
 import { listRequests, saveRequest, newId, overlaps, historyFor, openRequestsOf, holdsSlot } from "../lib/requests.mjs";
 import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs";
-import { fmtRange, chicagoNow } from "../lib/time.mjs";
+import { fmtRange, chicagoNow, chicagoToUtc } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
+import { openDays } from "../lib/week.mjs";
 
 // GET  /api/requests -> the signed-in agent's own requests (history and status)
 // POST /api/requests -> submit a new request
@@ -25,11 +26,13 @@ export default async (req) => {
   try { offered = await offeredListings(week); } catch { return json(502, { error: "listings_unavailable", message: "Listings are unavailable right now. Try again shortly." }); }
   const listing = b && offered.find((l) => l.mls === String(b.mls));
   const from = Number(b?.from), to = Number(b?.to);
-  if (!listing || !listing.days.includes(b.day) || !week.days[b.day] || !Number.isInteger(from) || !Number.isInteger(to)
+  // A day the seller allows that's still ahead this week (any day, Monday to Sunday).
+  if (!listing || !listing.days.includes(b.day) || !openDays(week).includes(b.day) || !Number.isInteger(from) || !Number.isInteger(to)
       || from < week.firstHour || to > week.lastHour || from >= to) {
     return json(400, { error: "invalid_request" });
   }
   const iso = week.days[b.day].iso;
+  if (Date.now() >= chicagoToUtc(iso, from).getTime()) return json(409, { error: "passed", message: "That time has already passed. Pick a later time." });
   const notes = String(b.notes || "").slice(0, 1000).trim();
   const phone = String(b.phone || "").slice(0, 30).trim();
   const candidate = { mls: listing.mls, day: b.day, iso, from, to };

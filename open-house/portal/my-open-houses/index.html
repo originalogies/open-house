@@ -129,7 +129,7 @@ function renderMine(){
       ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
       <div><div class="a"><a href="${esc(detailUrl(r))}">${esc(r.addr)}, ${esc(r.city)}</a></div><div class="w">${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0,4)!==todayIso().slice(0,4)?`, ${esc(r.iso.slice(0,4))}`:""} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
       <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}${feedbackLink(r)}</span></li>`; }).join("")
-    : `<li><span class="empty">${myTab === "up" ? 'No upcoming open houses. <a href="/">Pick a home this weekend</a> to request one.' : "Your past open houses will show up here."}</span></li>`;
+    : `<li><span class="empty">${myTab === "up" ? 'No upcoming open houses. <a href="/">Pick a home</a> to request one.' : "Your past open houses will show up here."}</span></li>`;
   $("myohErr").hidden = true;
   // The whole row opens the open house; its own links and buttons still do their thing.
   $("myohList").querySelectorAll("li.go").forEach(li => li.onclick = e => { if (!e.target.closest("a,button")) location.href = li.dataset.go; });

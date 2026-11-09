@@ -58,7 +58,7 @@ button{font:inherit;color:inherit}
 .intro{padding:36px 0 28px}
 .intro h1{font-family:var(--serif);font-weight:500;font-size:clamp(1.8rem,3.6vw,2.5rem);line-height:1.12;margin:0 0 8px;letter-spacing:-.01em}
 .when{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin-top:18px}
-.cal{display:flex;gap:10px}
+.cal{display:flex;gap:10px;flex-wrap:wrap}
 .cal div{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 14px;text-align:center;min-width:76px}
 .cal b{display:block;font-family:var(--serif);font-size:1.6rem;font-weight:500;line-height:1}
 .cal span{font-size:.78rem;color:var(--muted)}
@@ -296,9 +296,9 @@ footer .foot-links a{color:inherit}
 <div class="wrap">
 
   <section class="intro">
-    <h1>Host a George &amp; Noonan Home this weekend</h1>
+    <h1 id="headline">Host a George &amp; Noonan Home this weekend</h1>
     <div class="when">
-      <div class="cal" aria-label="Weekend dates"></div>
+      <div class="cal" aria-label="Open house dates"></div>
       <div class="deadline" hidden></div>
     </div>
   </section>
@@ -398,7 +398,11 @@ footer .foot-links a{color:inherit}
 <script src="/auth.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
-let homes = [], DAYS = {}, FIRST = 9, LAST = 19; // loaded from /api/listings after sign-in
+// Loaded from /api/listings after sign-in. DAYS: this week's seven days, Monday to Sunday, by key ("mon" .. "sun");
+// OPEN: the ones still ahead, which agents can request. Each home offers the days its seller allows.
+let homes = [], DAYS = {}, OPEN = [], FIRST = 9, LAST = 19;
+// The days a home can still be requested for this week.
+const daysFor = h => OPEN.filter(k => h.days.includes(k));
 const $ = id => document.getElementById(id);
 const money = n => "$" + n.toLocaleString("en-US");
 const fmt = h => { const ap=h>=12?"PM":"AM"; const x=h%12||12; return x+":00 "+ap; };
@@ -488,14 +492,20 @@ async function loadListings(){
   const r = await (firstLoad || fetch("/api/listings").catch(() => null)); firstLoad = null;
   if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
   const d = await r.json();
-  window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; FIRST = d.firstHour; LAST = d.lastHour;
+  window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; OPEN = d.open || Object.keys(d.week); FIRST = d.firstHour; LAST = d.lastHour;
   return d;
 }
 document.addEventListener("signedin", async () => {
   const d = await loadListings();
   if(!d) return;
   const part = (iso,o) => new Date(iso+"T12:00:00Z").toLocaleDateString("en-US",Object.assign({timeZone:"UTC"},o));
-  document.querySelector(".cal").innerHTML = ["sat","sun"].map(k => {
+  // The dates homes can be requested for: the days still ahead that any published home offers (Saturday and
+  // Sunday when no home is published yet). "This weekend" while those are all weekend days, else "this week".
+  const shown = OPEN.filter(k => homes.some(h => h.days.includes(k)));
+  const dates = shown.length ? shown : OPEN.filter(k => k === "sat" || k === "sun");
+  const weekendOnly = dates.every(k => k === "sat" || k === "sun");
+  $("headline").textContent = `Host a George & Noonan Home this ${weekendOnly ? "weekend" : "week"}`;
+  document.querySelector(".cal").innerHTML = dates.map(k => {
     const w = d.week[k];
     return '<div><b>'+part(w.iso,{day:"numeric"})+'</b><span>'+part(w.iso,{weekday:"short"})+', '+part(w.iso,{month:"short"})+'</span></div>';
   }).join("");
@@ -503,7 +513,7 @@ document.addEventListener("signedin", async () => {
   dl.hidden = !d.cutoffEnabled; // no cutoff, no deadline message
   if(d.cutoffEnabled) dl.innerHTML = 'Requests close <em>'+esc(d.closesLabel)+'</em>.';
   renderGrid();
-  if(!homes.length) grid.innerHTML = '<p class="empty">No homes are open for requests yet this weekend. Check back soon.</p>';
+  if(!homes.length) grid.innerHTML = `<p class="empty">No homes are open for requests yet this ${weekendOnly ? "weekend" : "week"}. Check back soon.</p>`;
   showWelcome();
 });
 
@@ -576,11 +586,10 @@ document.addEventListener("click",e=>{
 
 function renderDays(){
   const d = $("days"); d.innerHTML="";
-  Object.keys(DAYS).forEach(k=>{
-    const offered = cur.days.includes(k);
+  daysFor(cur).forEach(k=>{
     const b = document.createElement("button");
-    b.className="day"; b.setAttribute("aria-pressed", day===k); b.disabled=!offered;
-    b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${offered ? fmt(FIRST)+" to "+fmt(LAST) : "Not offered by the seller"}</span>`;
+    b.className="day"; b.setAttribute("aria-pressed", day===k);
+    b.innerHTML = `<b>${DAYS[k].label}, ${DAYS[k].date}</b><span>${fmt(FIRST)} to ${fmt(LAST)}</span>`;
     b.onclick=()=>{day=k; sel=null; renderDays(); renderSlots(); reveal("stepTime");};
     d.appendChild(b);
   });
@@ -757,7 +766,7 @@ $("mapBtn").onclick=()=>{
 };
 function showForm(){
   // A home offered on just one day skips straight to choosing a time.
-  const offered = Object.keys(DAYS).filter(k => cur.days.includes(k));
+  const offered = daysFor(cur);
   day = offered.length === 1 ? offered[0] : null; sel=null; $("notes").value="";
   $("formErr").hidden = true;
   $("form").style.display=""; $("status").classList.remove("on");

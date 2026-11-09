@@ -108,7 +108,7 @@ export function openHouseEntries(raw) {
   return out;
 }
 
-// The same, limited to the weekend being offered and keyed by day ("sat"/"sun"). Repliers is read-only for us.
+// The same, limited to the week being offered and keyed by day ("mon" .. "sun"). Repliers is read-only for us.
 export function openHouseBlocks(raw, week) {
   return openHouseEntries(raw).flatMap(({ iso, from, to }) => {
     const day = Object.keys(week.days).find((k) => week.days[k].iso === iso);
@@ -149,7 +149,7 @@ async function catalog(week) {
     fetchRaw().catch((e) => { console.error(e.message); warning = e.message.slice(0, 300); return []; }),
     listHomes().then((all) => all.filter((h) => !h.linkedMls)).catch((e) => { console.error("team-added homes unavailable", e.message); return []; }),
   ]);
-  // openHouses: the offered weekend's open houses on the MLS, by day; entries: all of them, any date.
+  // openHouses: the offered week's open houses on the MLS, by day; entries: all of them, any date.
   const list = raw.map((l) => ({ n: normalize(l), openHouses: openHouseBlocks(l, week), entries: openHouseEntries(l) }));
   for (const m of MANUAL) if (!list.some((x) => x.n.mls === m.mls)) list.push({ n: m, openHouses: [], entries: [] });
   for (const h of homes) list.push({ n: asListing(h), openHouses: [], entries: [], home: h });
@@ -167,11 +167,11 @@ export async function currentHomes(week) {
 // MLS listings only (Repliers plus the built-in ones), for linking a team-added home.
 export const mlsListings = async (week) => (await catalog(week)).list.filter((x) => !x.n.teamAdded).map((x) => x.n);
 
-// How a listing's stored team settings read for a given weekend. Publishing and Priority are per
-// weekend; days, instructions, access details and Vacant stay with the home from week to week.
+// How a listing's stored team settings read for a given week. Publishing and Priority are per week;
+// days (any of Monday to Sunday), instructions, access details and Vacant stay with the home from week to week.
 export const teamView = (i, week) => ({ offered: i.offeredWeek === week.satIso, priority: i.priorityWeek === week.satIso, days: i.days, instr: i.instr, access: i.access, vacant: !!i.vacant });
 
-// Listings the team has offered for the current weekend. Never includes access details.
+// Listings the team has offered for the current week. Never includes access details.
 export async function offeredListings(week) {
   const [{ list }, stored] = await Promise.all([catalog(week), storedInfo()]);
   const info = infoFor(list.map((x) => x.n.mls), stored);
@@ -181,7 +181,7 @@ export async function offeredListings(week) {
 }
 
 // Every home the team can add a request for (team-new-request.mjs): MLS listings and team-added homes, with whether
-// it's published this weekend, the days the seller allows, and its open houses already on the MLS, any date.
+// it's published this week, the days the seller allows, and its open houses already on the MLS, any date.
 // Published homes come first. Never includes access details.
 export async function bookableHomes(week) {
   const [{ list, warning }, stored] = await Promise.all([catalog(week), storedInfo()]);

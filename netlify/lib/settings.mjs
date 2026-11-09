@@ -9,7 +9,7 @@ export async function getCutoff() {
 }
 export const saveCutoff = (c) => store().setJSON("cutoff", c);
 
-// The weekend open for requests under the current cutoff setting.
+// The week (Monday to Sunday) open for requests under the current cutoff setting.
 export async function currentWeek() {
   return getWeek(new Date(), await getCutoff());
 }
