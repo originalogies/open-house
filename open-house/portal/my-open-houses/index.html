@@ -38,6 +38,9 @@
 .myoh-tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 .myoh-list{list-style:none;margin:0 0 56px;padding:0}
 .myoh-list li{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.myoh-list li.go{cursor:pointer}
+.myoh-list li.go:hover .a a{text-decoration:underline}
+.myoh-list .a a{color:inherit;text-decoration:none}
 .myoh-list .thumb{width:72px;height:54px;border-radius:8px;background:var(--photo);object-fit:cover}
 .myoh-list .a{font-family:var(--serif);font-size:1.12rem;font-weight:500;line-height:1.2}
 .myoh-list .w{font-size:.9rem;color:var(--muted)}
@@ -45,6 +48,8 @@
 .myoh-list .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .myoh-list .cancel{background:none;border:0;padding:12px 0;margin:-12px 0;font:inherit;font-size:.85rem;color:var(--muted);text-decoration:underline;cursor:pointer}
 .myoh-list .cancel:disabled{opacity:.5;cursor:wait}
+.myoh-list .fbk{font-size:.85rem;font-weight:600}
+.myoh-list .fbk.sent{font-weight:400;color:var(--muted);text-decoration:none}
 .opill{font-size:.78rem;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;background:var(--bg);color:var(--muted)}
 .opill.pending{color:var(--brass);background:var(--brass-soft)}
 .opill.approved{color:var(--accent);background:var(--accent-soft)}
@@ -65,7 +70,7 @@ footer .foot-links a{color:inherit}
 <div class="wrap">
   <section class="intro">
     <div><h1>My Requests</h1>
-      <p class="sub">The George &amp; Noonan open houses you've asked to host: what's coming up and your history. To cancel one, send the George &amp; Noonan team a cancellation request any time before it starts.</p></div>
+      <p class="sub">The George &amp; Noonan open houses you've asked to host: what's coming up and your history. Open one to see its details and the feedback you left. To cancel one, send the George &amp; Noonan team a cancellation request any time before it starts.</p></div>
     <div class="myoh-stats" id="myohStats"></div>
   </section>
   <div class="myoh-tabs" role="tablist">
@@ -106,19 +111,28 @@ function myLabel(r){
   if (r.status === "approved") return ["approved","Approved"];
   return ({ pending:["pending","Waiting for approval"], declined:["declined","Declined"], expired:["expired","Expired, not answered"], cancelled:["cancelled","Cancelled"] })[r.status] || ["", r.status];
 }
+// Each open house opens on its own page (/feedback/): its details, and after it ends the feedback form or what the agent sent.
+const detailUrl = r => "/feedback/?id=" + encodeURIComponent(r.id);
+// After an approved open house ends the agent can tell the team how it went.
+const feedbackLink = r => r.feedback === "due" ? `<a class="fbk" href="${esc(detailUrl(r))}">Leave feedback</a>`
+  : r.feedback === "sent" ? `<a class="fbk sent" href="${esc(detailUrl(r))}">Feedback sent</a>` : "";
 function renderMine(){
   const up = myReqs.filter(isUpcoming).sort((a,b) => a.iso.localeCompare(b.iso) || a.from - b.from);
   const past = myReqs.filter(r => !isUpcoming(r));
-  $("myohStats").innerHTML = `<div><b>${past.filter(r => r.status === "approved").length}</b><span>Hosted</span></div><div><b>${up.filter(r => r.status === "approved").length}</b><span>Upcoming</span></div>`;
+  const hosted = past.filter(r => r.status === "approved");
+  $("myohStats").innerHTML = `<div><b>${hosted.length}</b><span>Hosted</span></div><div><b>${new Set(hosted.map(r => `${r.addr}|${r.zip}`)).size}</b><span>Homes</span></div>`
+    + `<div><b>${hosted.reduce((n, r) => n + (r.visitors || 0), 0)}</b><span>Visitors</span></div><div><b>${up.filter(r => r.status === "approved").length}</b><span>Upcoming</span></div>`;
   $("tabUp").textContent = `Upcoming (${up.length})`; $("tabPast").textContent = `History (${past.length})`;
   $("tabUp").setAttribute("aria-selected", myTab === "up"); $("tabPast").setAttribute("aria-selected", myTab === "past");
   const list = myTab === "up" ? up : past;
-  $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li>
+  $("myohList").innerHTML = list.length ? list.map(r => { const [c,t] = myLabel(r); return `<li class="go" data-go="${esc(detailUrl(r))}">
       ${r.img ? `<img class="thumb" src="${esc(photoSrc(r.img, "small"))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="thumb"></div>'}
-      <div><div class="a">${esc(r.addr)}, ${esc(r.city)}</div><div class="w">${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0,4)!==todayIso().slice(0,4)?`, ${esc(r.iso.slice(0,4))}`:""} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
-      <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}</span></li>`; }).join("")
+      <div><div class="a"><a href="${esc(detailUrl(r))}">${esc(r.addr)}, ${esc(r.city)}</a></div><div class="w">${esc(r.day)}, ${esc(r.date)}${r.iso.slice(0,4)!==todayIso().slice(0,4)?`, ${esc(r.iso.slice(0,4))}`:""} · ${esc(r.time)}${r.status==="approved"&&r.decidedBy?` · approved by ${esc(r.decidedBy)}`:""}</div></div>
+      <span class="side"><span class="opill ${c}">${t}</span>${isUpcoming(r) && !r.cancelRequested ? `<button class="cancel" data-id="${esc(r.id)}">Request cancellation</button>` : ""}${feedbackLink(r)}</span></li>`; }).join("")
     : `<li><span class="empty">${myTab === "up" ? 'No upcoming open houses. <a href="/">Pick a home this weekend</a> to request one.' : "Your past open houses will show up here."}</span></li>`;
   $("myohErr").hidden = true;
+  // The whole row opens the open house; its own links and buttons still do their thing.
+  $("myohList").querySelectorAll("li.go").forEach(li => li.onclick = e => { if (!e.target.closest("a,button")) location.href = li.dataset.go; });
   $("myohList").querySelectorAll(".cancel").forEach(b => b.onclick = async () => {
     const r = myReqs.find(x => x.id === b.dataset.id);
     b.disabled = true;

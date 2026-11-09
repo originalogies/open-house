@@ -5,9 +5,10 @@ import { fmtRange } from "../lib/time.mjs";
 import { mode, agentReady, byHand } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
+import { feedbackOpen, withPhotoUrls } from "../lib/feedback.mjs";
 
 // GET /api/team/requests -> every request, newest first, for the Admin Console, with its MLS status
-// and any open cancellation request from the agent. Approve and decline go through POST /api/respond;
+// any open cancellation request from the agent, and the agent's feedback after hosting. Approve and decline go through POST /api/respond;
 // cancel and keep go through POST /api/manage. Access details are never included.
 export default async (req) => {
   if (req.method !== "GET") return json(405, { error: "method_not_allowed" });
@@ -27,6 +28,7 @@ export default async (req) => {
       approving: !!r.approving, // waiting for the AI agent to put it on the MLS before it's approved
       mlsState: r.sync?.state || null, onMls: isMlsNumber(r.mls), byHand: byHand(r),
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, reason: r.cancelRequest.reason || "" } : null,
+      feedback: r.feedback ? withPhotoUrls(r) : null, feedbackDue: !r.feedback && feedbackOpen(r),
     };
   });
   return json(200, { requests, mode: mode(), agentReady: agentReady() });

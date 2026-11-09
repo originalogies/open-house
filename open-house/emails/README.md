@@ -9,6 +9,14 @@ All emails send from openhouse@synergyrealtors.com. Merge fields use `{{double_b
 | 3 | Request Confirmed | Agent + gn-team@ | First approval, after MLS entry is verified | Confirmed: open house at {{address}}, {{day_name}} {{date}}, {{time_range}} |
 | 4 | Open House Reminder | Agent + gn-team@ | Day before at 9:00 AM CT | Reminder: open house at {{address}} {{relative_day}}, {{time_range}} |
 
+Feedback after an open house has no HTML template; these are short emails built in `netlify/lib/email.mjs`:
+
+| Email | Sent to | Trigger | Subject |
+|-------|---------|---------|---------|
+| Feedback ask | Hosting agent | About an hour after an approved open house ends (only within 3 days of it) | How did your open house at {{address}} go? |
+| Feedback reminder | Hosting agent | Once, a day after the ask, if no feedback yet | Reminder: how did your open house at {{address}} go? |
+| Feedback received | gn-team@ | Agent sends feedback at /feedback/ | Open house feedback: {{address}}, {{day_name}} {{date}} (starts "⚠ Flagged for broker:" when flagged) |
+
 ## Merge fields
 
 Listing: `address`, `city`, `zip`, `mls_number`, `list_price`, `photo_url`, `map_url`, `listing_url`

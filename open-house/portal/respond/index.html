@@ -44,6 +44,9 @@ ul.log{list-style:none;padding:0;margin:0;font-size:.85rem}ul.log li{padding:6px
 ul.log .t{color:var(--muted)}
 .shot{max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:8px}
 .muted{color:var(--muted);font-size:.9rem}
+.fbphotos{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.fbphotos img{width:96px;height:72px;object-fit:cover;border-radius:8px;display:block}
+dd.pre{white-space:pre-wrap}
 .box.ask{border:2px solid var(--danger)}.box.ask h2{margin-top:0;color:var(--danger)}
 /* How the open house goes on the MLS: one of two options, chosen before confirming */
 fieldset.how{border:0;padding:0;margin:20px 0 0;min-width:0}
@@ -349,6 +352,22 @@ function askView(d, details) {
   bindCancelBox();
 }
 
+// The agent's feedback after hosting (the full set for the home is on the Admin Console's Feedback tab).
+// Feedback sent before the guest questions existed has "What happened" in their place.
+const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
+const PRICE = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" };
+function feedbackSection(d) {
+  const f = d.feedback;
+  if (!f) return d.feedbackDue ? '<h2>Feedback</h2><div class="box"><p class="muted" style="margin:0">Waiting on feedback. The agent was emailed a link after the open house.</p></div>' : "";
+  const item = (label, text) => `<dt>${label}</dt><dd class="pre">${text ? esc(text) : '<span class="muted">Nothing noted</span>'}</dd>`;
+  return `<h2>Feedback</h2><div class="box">${f.brokerFlag ? '<p class="err" style="margin:0 0 6px"><b>⚠ Flagged for the broker</b></p>' : ""}
+    <dl style="margin:0"><dt>Visitors · Interest${f.price ? " · Price" : ""}</dt><dd>${f.visitors} · ${esc(INTEREST[f.interest] || f.interest)}${f.price ? ` · ${esc(PRICE[f.price])}` : ""}</dd>
+      ${f.happened != null ? item("What happened", f.happened) : item("What guests liked", f.liked) + item("What guests didn't like or would change", f.disliked) + (f.forSeller ? item("Additional feedback", f.forSeller) : "")}
+      ${item("Notes for the team", f.teamNotes)}
+      ${(f.photos || []).length ? `<dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd>` : ""}</dl>
+    <p class="muted" style="margin:10px 0 0">Sent ${esc(fmtAt(f.at))}.</p></div>`;
+}
+
 function manage(d, details) {
   const s = d.sync || {}, live = d.status === "approved";
   let [cls, label] = STATE[s.state] || ["", d.byHand ? "Entered by hand" : "Not sent yet"];
@@ -376,6 +395,7 @@ function manage(d, details) {
     <div class="box"><p class="muted" style="margin-top:0">Emails the agent and the team${d.byHand ? "" : ", and the AI agent marks it Canceled on the listing"}.</p>
       <div class="row"><button class="no" id="cancel">Cancel this open house</button></div></div>` : ""}
     <p id="msg" role="status"></p>
+    ${feedbackSection(d)}
     <h2>History</h2><ul class="log">${(d.events || []).map((e) => `<li><span class="t">${esc(fmtAt(e.at))}</span> · ${esc(EVENT[e.type] || e.type)}${e.by ? " · " + esc(e.by) : ""}${e.note ? `<br><span class="t">${esc(e.note)}</span>` : ""}</li>`).join("") || '<li class="t">No history yet.</li>'}</ul>`);
 
   bindCancelBox();

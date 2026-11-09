@@ -226,3 +226,40 @@ export const sendTeamAlert = (req, headline, detail) => {
       ${esc(detail || "")}<br><br><a href="${link}">Open the request</a> to see the details and retry.`),
   });
 };
+
+// ---- feedback after the open house ----------------------------------------
+const button = (href, label) =>
+  `<a href="${href}" style="display:inline-block;background:#1E5B4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;">${label}</a>`;
+
+// Asks the agent how it went, an hour after the open house ends (reminder: once more a day later) -> agent.
+export const sendFeedbackAsk = (req, reminder) => {
+  const l = req.listing, esc = Handlebars.escapeExpression;
+  return send({
+    to: req.agent.email, replyTo: TEAM_TO()[0],
+    subject: `${reminder ? "Reminder: h" : "H"}ow did your open house at ${l.addr} go?`,
+    html: plain(`Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>Thanks for hosting the open house at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))}.
+      ${reminder ? "We haven't heard how it went yet. " : ""}Take a couple of minutes to tell the George &amp; Noonan team how it went, and let us know about anything at the home we should take care of.<br><br>
+      ${button(`${site(req)}/feedback/?id=${req.id}`, "Leave feedback")}`),
+  });
+};
+
+// Agent sent feedback -> team. Flagged for the broker: the subject says so.
+export const sendFeedbackToTeam = (req) => {
+  const l = req.listing, f = req.feedback, esc = Handlebars.escapeExpression;
+  const para = (s) => esc(s).replace(/\n/g, "<br>");
+  const interest = { lots: "Lots", some: "Some", little: "Little" }[f.interest] || f.interest;
+  const price = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" }[f.price] || "";
+  const block = (label, text) => `<b>${label}</b><br>${text ? para(text) : "Nothing noted"}<br><br>`;
+  const photos = (f.photos || []).length;
+  return send({
+    to: TEAM_TO(), replyTo: req.agent.email,
+    subject: `${f.brokerFlag ? "⚠ Flagged for broker: " : "Open house feedback: "}${l.addr}, ${dayMeta(req.iso).label} ${dayMeta(req.iso).date}`,
+    html: plain(`${f.brokerFlag ? `<b style="color:#A12B2B;">⚠ ${esc(req.agent.name)} flagged this for the broker.</b><br><br>` : ""}
+      <b>${esc(req.agent.name)}</b> hosted the open house at ${esc(l.addr)} (MLS# ${esc(req.mls)}) on ${esc(when(req.iso, req.from, req.to))}.<br><br>
+      <b>Visitors:</b> ${f.visitors}<br><b>Guest interest:</b> ${esc(interest)}<br><b>Price:</b> ${esc(price)}<br><br>
+      ${block("What guests liked", f.liked)}${block("What guests didn't like", f.disliked)}${f.forSeller ? block("Additional feedback", f.forSeller) : ""}
+      <b>Notes for the team</b><br>${f.teamNotes ? para(f.teamNotes) : "None"}<br><br>
+      ${photos ? `${photos} photo${photos === 1 ? "" : "s"} attached. See them in the Admin Console under Feedback.<br><br>` : ""}
+      Reply to this email to reach ${esc((req.agent.name || "").split(" ")[0])}.`),
+  });
+};

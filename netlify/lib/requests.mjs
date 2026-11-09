@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { adminEmails, parseList } from "./shared.mjs";
 import { dayMeta } from "./week.mjs";
 import { fmtRange } from "./time.mjs";
+import { feedbackOpen } from "./feedback.mjs";
 import { readAll } from "./readall.mjs";
 
 // Strong reads: a decision or a new request shows everywhere at once (the default can serve a copy up to a minute old).
@@ -35,7 +36,8 @@ export const historyFor = (all, email) => {
       return { id: r.id, status: r.status, mls: r.mls, iso: r.iso, from: r.from, to: r.to,
         addr: l.addr, city: l.city, zip: l.zip, img: l.img || null, day: d.label, date: d.date, time: fmtRange(r.from, r.to),
         notes: r.notes || "", createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,
-        cancelRequested: !!r.cancelRequest && !r.cancelRequest.outcome }; // same rule as openCancelRequest in changes.mjs
+        cancelRequested: !!r.cancelRequest && !r.cancelRequest.outcome, // same rule as openCancelRequest in changes.mjs
+        feedback: r.feedback ? "sent" : feedbackOpen(r) ? "due" : null, visitors: r.feedback ? r.feedback.visitors : null };
     });
 };
 

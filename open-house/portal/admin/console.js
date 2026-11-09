@@ -1,4 +1,4 @@
-// Admin Console: one page, four views (Requests, Listings, Agents, Settings) chosen by the URL hash.
+// Admin Console: one page, five views (Requests, Feedback, Listings, Agents, Settings) chosen by the URL hash.
 // The server checks roles on every API call; hiding tabs here is only for a tidy UI.
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -50,6 +50,26 @@
     if (a?.status === "pending") return '<span class="pill pending">Started</span><div class="sub">Not signed yet</div>';
     return '<span class="sub">Not signed</span>';
   };
+  // The agent's feedback after hosting (/feedback/ on the agent side). The full feedback is on the request's
+  // page and, collected by home, on the Feedback tab; lists show a short note that links to the request.
+  const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
+  const PRICE = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" };
+  const fbNote = (r) => r.feedback ? `<div class="sub">${r.feedback.brokerFlag ? '<b class="flagged">⚠ Flagged</b> · ' : ""}<a href="${esc(requestPage(r))}">Feedback sent</a></div>`
+    : r.feedbackDue ? '<div class="sub">Waiting on feedback</div>' : "";
+  // Feedback sent before the guest questions existed has "What happened" in their place.
+  const fbText = (f) => { const none = '<span class="sub">Nothing noted</span>'; return `<dl class="fb">
+      <div><dt>Visitors</dt><dd>${f.visitors}</dd></div><div><dt>Interest</dt><dd>${esc(INTEREST[f.interest] || f.interest)}</dd></div>
+      ${f.price ? `<div><dt>Price</dt><dd>${esc(PRICE[f.price])}</dd></div>` : ""}
+      ${f.happened != null ? `<div class="wide"><dt>What happened</dt><dd>${esc(f.happened)}</dd></div>` : `
+      <div class="wide"><dt>What guests liked</dt><dd>${f.liked ? esc(f.liked) : none}</dd></div>
+      <div class="wide"><dt>What guests didn't like or would change</dt><dd>${f.disliked ? esc(f.disliked) : none}</dd></div>
+      ${f.forSeller ? `<div class="wide"><dt>Additional feedback</dt><dd>${esc(f.forSeller)}</dd></div>` : ""}`}
+      <div class="wide"><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : '<span class="sub">None</span>'}</dd></div>
+      ${(f.photos || []).length ? `<div class="wide"><dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd></div>` : ""}</dl>`; };
+  // Feedback columns for the CSV exports. Older feedback's "What happened" goes in the liked column.
+  const FB_HEAD = ["Visitors", "Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
+  const fbCsv = (f) => !f ? FB_HEAD.map(() => "") : [f.visitors, INTEREST[f.interest] || "", PRICE[f.price] || "", f.liked ?? f.happened, f.disliked || "",
+    f.forSeller || "", f.teamNotes, (f.photos || []).map((u) => location.origin + u).join(" "), f.brokerFlag ? "Yes" : "No"];
 
   let me = null;
   let requests = [];
@@ -90,13 +110,14 @@
   function renderNav() {
     const sections = !me.team ? [] : [
       { key: "requests", href: "#requests", label: "Requests", count: "pendingCount" },
+      { key: "feedback", href: "#feedback", label: "Feedback" },
       { key: "listings", href: "#listings", label: "Listings" },
       ...(me.admin ? [{ key: "agents", href: "#agents", label: "Agents" }, { key: "settings", href: "#settings", label: "Settings" }] : []),
     ];
     OHNav.mount({ user: me, links: [...sections, { key: "portal", href: "/", label: "Agent portal" }] });
   }
 
-  const VIEWS = { requests: renderRequests, listings: renderListings, agents: renderAgents, settings: renderSettings };
+  const VIEWS = { requests: renderRequests, feedback: renderFeedback, listings: renderListings, agents: renderAgents, settings: renderSettings };
   // Links to one agent's history look like #agent/name@example.com.
   const agentLink = (email, label) => `<a href="#agent/${encodeURIComponent(email)}">${esc(label || email)}</a>`;
 
@@ -108,6 +129,13 @@
       OHNav.setCurrent(me.admin ? "agents" : "requests");
       view.innerHTML = '<p class="empty">Loading…</p>';
       renderAgent(decodeURIComponent(arg).toLowerCase());
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (name === "home" && arg) {
+      OHNav.setCurrent("feedback");
+      view.innerHTML = '<p class="empty">Loading…</p>';
+      renderHome(decodeURIComponent(arg));
       window.scrollTo(0, 0);
       return;
     }
@@ -285,7 +313,7 @@
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
         <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
-        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}</td>
+        <td class="status" data-l="Status">${pill(r.status)}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${fbNote(r)}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
@@ -317,9 +345,9 @@
 
   function exportCsv(list = filtered(), name = "open-house-requests") {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const head = ["Date", "Day", "Time", "Address", "City", "MLS", "Agent", "Agent email", "Phone", "Status", "Decided by", "Decided at", "Requested at", "Notes"];
+    const head = ["Date", "Day", "Time", "Address", "City", "MLS", "Agent", "Agent email", "Phone", "Status", "Decided by", "Decided at", "Requested at", "Notes", ...FB_HEAD];
     const rows = list.map((r) => [r.iso, r.day, r.time, r.addr, r.city, r.mls, r.agent.name, r.agent.email, r.phone, STATUS[r.status] || r.status,
-      r.decidedBy, r.decidedAt ? new Date(r.decidedAt).toISOString() : "", new Date(r.createdAt).toISOString(), r.notes]);
+      r.decidedBy, r.decidedAt ? new Date(r.decidedAt).toISOString() : "", new Date(r.createdAt).toISOString(), r.notes, ...fbCsv(r.feedback)]);
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
     URL.revokeObjectURL(a.href);
@@ -377,7 +405,7 @@
           <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
           <td class="pic">${thumb(r)}</td>
           <td class="home" data-l="Home">${esc(place(r))}<div class="sub">${mlsNo(r)}</div></td>
-          <td class="status" data-l="Status">${pill(r.status)}</td>
+          <td class="status" data-l="Status">${pill(r.status)}${fbNote(r)}</td>
           <td class="decided${r.decidedBy || r.imported ? "" : " none"}" data-l="Decided">${decided(r)}</td>
         </tr>`).join("") || `<tr><td colspan="5" class="empty">${mine.length ? "No open houses match that address." : "No open house requests yet."}</td></tr>`;
     };
@@ -390,6 +418,106 @@
     $("prev").onclick = () => turn(-1);
     $("next").onclick = () => turn(1);
     fill();
+  }
+
+  // ---- Feedback by home ----------------------------------------------------
+  // Every home that's hosted an open house, with what the agents said, kept after the home sells.
+  // Links to one home look like #home/<key>; the key is the home's street address and ZIP.
+  const homeLink = (h, label) => `<a href="#home/${encodeURIComponent(h.key)}">${esc(label)}</a>`;
+  // Older open houses show their year: the history goes back further than this season.
+  const withYear = (o) => `${o.day}, ${o.date}${o.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${o.iso.slice(0, 4)}` : ""}`;
+  const priceMix = (h) => Object.entries(PRICE).filter(([k]) => k !== "none" && h.price[k]).map(([k, v]) => `${v} ${h.price[k]}`).join(" · ") || "—";
+  const interestMix = (h) => Object.entries(INTEREST).filter(([k]) => h.interest[k]).map(([k, v]) => `${v} ${h.interest[k]}`).join(" · ") || "—";
+  let fbSearch = "";
+
+  async function loadHomes() {
+    const r = await api("GET", "/api/team/feedback");
+    return r.ok ? r.data.homes : null;
+  }
+
+  async function renderFeedback() {
+    const homes = await loadHomes();
+    if (!homes) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
+    const sum = (k) => homes.reduce((n, h) => n + h[k], 0);
+    view.innerHTML = `
+      <section class="intro"><div><h1>Feedback by home</h1>
+        <p class="sub">What agents said after hosting, collected for each home. Homes flagged for the broker are at the top. The history stays here after a home sells or is relisted.</p></div></section>
+      <div class="stats">
+        <div class="card stat"><b>${homes.length}</b><span>Homes hosted</span></div>
+        <div class="card stat"><b>${sum("hosted")}</b><span>Open houses hosted</span></div>
+        <div class="card stat"><b>${sum("withFeedback")}</b><span>With feedback</span></div>
+        <div class="card stat"><b>${sum("visitors")}</b><span>Visitors reported</span></div>
+      </div>
+      <div class="toolbar">
+        <input class="field" id="fbSearch" type="search" placeholder="Search address or city" value="${esc(fbSearch)}" aria-label="Search homes">
+        <span class="spacer"></span>
+        ${homes.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
+      </div>
+      <div class="card table-wrap"><table class="stack"><thead><tr><th>Home</th><th>Open houses</th><th>Visitors</th><th>Interest</th><th>Last hosted</th></tr></thead><tbody id="homeRows"></tbody></table></div>`;
+    const fill = () => {
+      const q = fbSearch.trim().toLowerCase();
+      const shown = homes.filter((h) => !q || [h.addr, h.city, h.zip, ...h.mls].join(" ").toLowerCase().includes(q));
+      $("homeRows").innerHTML = shown.length ? shown.map((h) => `<tr>
+          <td data-l="Home"><div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
+            <div><b>${homeLink(h, h.addr)}</b><div class="sub">${esc(h.city)}${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged for broker</b>` : ""}</div></div></div></td>
+          <td data-l="Open houses">${h.hosted}<div class="sub">${h.withFeedback === h.hosted ? "All with feedback" : `${h.hosted - h.withFeedback} waiting on feedback`}</div></td>
+          <td data-l="Visitors">${h.withFeedback ? h.visitors : '<span class="sub">—</span>'}</td>
+          <td data-l="Interest">${esc(interestMix(h))}</td>
+          <td data-l="Last hosted">${esc(withYear(h.openHouses[0]))}</td>
+        </tr>`).join("") : `<tr><td colspan="5" class="empty">${homes.length ? "No homes match." : "No open houses hosted yet. Homes show up here once an approved open house has ended."}</td></tr>`;
+    };
+    $("fbSearch").oninput = (e) => { fbSearch = e.target.value; fill(); };
+    if (homes.length) $("csv").onclick = () => exportFeedbackCsv(homes, "open-house-feedback");
+    fill();
+  }
+
+  async function renderHome(key) {
+    const homes = await loadHomes();
+    if (!homes) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
+    const h = homes.find((x) => x.key === key);
+    const back = '<p style="margin:22px 0 0"><a href="#feedback">← All homes</a></p>';
+    if (!h) { view.innerHTML = back + '<p class="empty">No hosted open houses for this home.</p>'; return; }
+    view.innerHTML = `${back}
+      <section class="intro" style="padding-top:12px"><div><h1>${esc(h.addr)}</h1>
+        <p class="sub">${esc(h.city)}, TX ${esc(h.zip)} · ${h.mls.map((m) => /^\d+$/.test(m) ? `MLS# ${esc(m)}` : "Added by the team").join(", ")}</p></div>
+        <button class="btn ghost small" id="csv">Export CSV</button></section>
+      <div class="stats">
+        <div class="card stat"><b>${h.hosted}</b><span>Open houses hosted</span></div>
+        <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Visitors reported${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged</b>` : ""}</span></div>
+        <div class="card stat"><b class="words">${esc(interestMix(h))}</b><span>Guest interest</span></div>
+        <div class="card stat"><b class="words">${esc(priceMix(h))}</b><span>What guests thought of the price</span></div>
+      </div>
+      ${sellerSummary(h)}
+      <h2 class="section">Every open house, newest first</h2>
+      <div class="fbq">${h.openHouses.map((o) => `<article class="card fbcard${o.feedback?.brokerFlag ? " flag" : ""}">
+        <div>
+          <h3>${esc(withYear(o))} · ${esc(o.time)} ${o.feedback?.brokerFlag ? '<span class="pill declined">⚠ Flagged for broker</span>' : ""}</h3>
+          <div class="meta">Hosted by ${agentLink(o.agent.email, o.agent.name)}${o.feedback ? ` · feedback sent ${esc(fmtDate(o.feedback.at))}` : ""}</div>
+          ${o.feedback ? fbText(o.feedback) : '<div class="notes">No feedback yet. The agent was emailed a link after the open house.</div>'}
+        </div></article>`).join("")}</div>`;
+    $("csv").onclick = () => exportFeedbackCsv([h], `feedback-${h.addr.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+  }
+
+  // What guests liked and didn't like, across every open house at the home: what the seller needs to hear.
+  function sellerSummary(h) {
+    const said = (k) => h.openHouses.filter((o) => o.feedback?.[k]).map((o) =>
+      `<li>${esc(o.feedback[k])}<div class="sub">${esc(withYear(o))} · ${esc(o.agent.name)}</div></li>`).join("");
+    const liked = said("liked"), disliked = said("disliked");
+    if (!liked && !disliked) return "";
+    return `<h2 class="section">For the seller</h2>
+      <div class="said">
+        <div class="card"><h3>What guests didn't like</h3>${disliked ? `<ul>${disliked}</ul>` : '<p class="sub">Nothing noted yet.</p>'}</div>
+        <div class="card"><h3>What guests liked</h3>${liked ? `<ul>${liked}</ul>` : '<p class="sub">Nothing noted yet.</p>'}</div>
+      </div>`;
+  }
+
+  function exportFeedbackCsv(homes, name) {
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email", ...FB_HEAD];
+    const rows = homes.flatMap((h) => h.openHouses.map((o) => [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time, o.agent.name, o.agent.email, ...fbCsv(o.feedback)]));
+    const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // ---- Listings ------------------------------------------------------------
@@ -440,7 +568,9 @@
 
   // fresh: ask Repliers again now (the Refresh button). Returns what was shown, or nothing if it couldn't load.
   async function renderListings(scrollTo, fresh) {
-    const r = await api("GET", `/api/inventory/listings${fresh ? "?fresh=1" : ""}`);
+    const [r, homes] = await Promise.all([api("GET", `/api/inventory/listings${fresh ? "?fresh=1" : ""}`), loadHomes()]);
+    // Each listing links to its home's feedback, matched by MLS number (or team-added home id).
+    const fbFor = (mls) => (homes || []).find((h) => h.mls.includes(mls));
     if (!r.ok) { view.innerHTML = `<div class="card banner err">${esc(r.data.message || "Could not load listings from Repliers.")}</div>`; return; }
     const d = r.data;
     savers.clear();
@@ -478,7 +608,7 @@
       list.innerHTML = "";
       const shown = d.listings.filter(FILTERS[listFilter][1]);
       if (!shown.length) list.innerHTML = `<div class="card empty">${{ all: "No active listings found in Repliers.", published: "No homes published yet this weekend.", unpublished: "Every home is published this weekend." }[listFilter]}</div>`;
-      shown.forEach((l) => list.append(listingCard(l, d, counts)));
+      shown.forEach((l) => list.append(listingCard(l, d, counts, fbFor(l.mls))));
     };
     $("lchips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; flushSaves(); listFilter = b.dataset.f; $("lchips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); paint(); };
     $("raw").onclick = async () => { const j = await api("GET", "/api/inventory/listings?raw=1"); const o = $("rawOut"); o.hidden = false; o.textContent = JSON.stringify(j.data, null, 2); };
@@ -514,7 +644,7 @@
     return d;
   }
 
-  function listingCard(l, d, onSaved) {
+  function listingCard(l, d, onSaved, fb) {
     const c = document.createElement("article"); c.className = "card lcard" + (l.priority ? " pri" : ""); c.dataset.mls = l.mls;
     const oh = l.openHouses.length ? `<div class="mls-oh">Already on the MLS: ${l.openHouses.map((o) => `${o.day === "sat" ? "Sat" : "Sun"} ${o.from}:00–${o.to}:00`).join(", ")}</div>` : "";
     const badges = () => `${l.offered ? '<span class="pill approved">Published</span>' : '<span class="pill">Unpublished</span>'}${l.priority ? '<span class="pill priority">★ Priority</span>' : ""}${l.teamAdded ? '<span class="pill pending">Not on the MLS yet</span>' : ""}`;
@@ -526,6 +656,7 @@
       <div class="body">
         <h3><span class="addr">${esc(place(l))}</span><span class="badges">${badges()}</span></h3>
         <div class="fine facts">${facts()}</div>
+        ${fb ? `<div class="lfb">${homeLink(fb, `Feedback from ${fb.hosted} open house${fb.hosted === 1 ? "" : "s"}`)}${fb.flags ? ` · <b class="flagged">⚠ ${fb.flags} flagged</b>` : ""}</div>` : ""}
         ${oh}
         <div class="toggles">
           <label class="check"><input type="checkbox" data-f="offered" ${l.offered ? "checked" : ""}> Publish this weekend</label>

@@ -6,6 +6,7 @@ import { fmtRange } from "../lib/time.mjs";
 import { mode, agentReady, byHand, desiredFor, logEvent, listEvents, getInflight } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
+import { feedbackOpen, withPhotoUrls } from "../lib/feedback.mjs";
 
 // GET  /api/respond?id=...   -> request details for the team confirm page
 // POST /api/respond          -> { id, action: approve|decline, method: manual|agent, mlsEntered }
@@ -29,6 +30,7 @@ export default async (req) => {
       agentReady: agentReady(), method: r.mlsMethod || null, byHand: byHand(r),
       approving: r.approving ? { at: r.approving.at, byName: r.approving.byName } : null, emailFailed: !!r.confirmEmailFailed,
       declineReason: r.declineReason || "",
+      feedback: r.feedback ? withPhotoUrls(r) : null, feedbackDue: !r.feedback && feedbackOpen(r), // the agent's feedback after hosting
       cancelRequest: openCancelRequest(r) ? { at: r.cancelRequest.at, byName: r.cancelRequest.byName, reason: r.cancelRequest.reason || "" } : null,
       sync: s && { state: s.state, message: s.message || "", current: s.current, job: s.job && { id: s.job.id, action: s.job.action, sentAt: s.job.sentAt, done: !!s.job.done, result: s.job.result || null, screenshot: !!s.job.screenshot },
         delivery: s.delivery ? { attempts: s.delivery.attempts, nextTryAt: s.delivery.nextTryAt } : null,
