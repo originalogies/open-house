@@ -38,7 +38,9 @@ const EMAILS = [
     (r) => E.sendTeamAlert(r, "booking failed", "Sample: the AI agent couldn't find the listing on the MLS.")],
 ];
 
-export async function emailPreviews(teamMember = "Kelly Cawyer") {
+// The sample open house the previews (and Settings > Texts) are built from: next Saturday, 1 to 3 PM, at the newest
+// home requested here. Returns a function that makes a fresh copy, since sending changes the request.
+export async function sampleOpenHouse(teamMember = "Kelly Cawyer") {
   const all = await listRequests().catch(() => []);
   const newest = all.filter((r) => r.listing?.img && r.listing?.addr).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
   const listing = newest ? newest.listing : SAMPLE_HOME;
@@ -53,6 +55,11 @@ export async function emailPreviews(teamMember = "Kelly Cawyer") {
     feedback: { at: now, visitors: 6, interest: "lots", price: "right", liked: "Sample: the open kitchen and the backyard.",
       disliked: "Sample: a couple asked about the age of the roof.", forSeller: "", teamNotes: "", brokerFlag: false, photos: [] },
   });
+  return { sample, listing };
+}
+
+export async function emailPreviews(teamMember = "Kelly Cawyer") {
+  const { sample, listing } = await sampleOpenHouse(teamMember);
   const out = [];
   for (const [group, key, name, to, when, build] of EMAILS) {
     const [msg] = await E.capture(() => build(sample(), teamMember), SAMPLE_INFO);

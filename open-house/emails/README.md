@@ -43,3 +43,7 @@ Instructions: `instructions` (list of general notes), `access_details` (gate, lo
 ## Logo
 
 All five templates use the George & Noonan logo (`gn-logo.png`, included here). The templates load it from https://open-house.synergyrealtors.com/gn-logo.png (the copy in `portal/`). If you host it elsewhere, update the `src` in each template and rerun `npm run build:templates`.
+
+## Texts
+
+The Reminder (4), Feedback Request and Feedback Reminder (5) emails to the agent are each followed by a short text from the team's Quo number, (817) 410-8769, when `QUO_API_KEY` is set in Netlify and the agent roster has the agent's mobile number. The wording is in `TEXTS` in `netlify/lib/texts.mjs`; the Admin Console shows it under Settings > Texts. Access details are never texted.

@@ -98,6 +98,8 @@ export async function capture(fn, info) {
   return box.sent;
 }
 const infoOf = (mls) => previewing.getStore()?.info || getInfo(mls);
+// For texts.mjs: inside capture(), texts are kept in the same box instead of being sent.
+export const previewBox = () => previewing.getStore();
 
 async function send({ to, subject, html, replyTo, attachments }) {
   const box = previewing.getStore();

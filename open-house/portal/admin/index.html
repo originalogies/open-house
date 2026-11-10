@@ -320,6 +320,13 @@ details.email[open]>summary{border-bottom:1px solid var(--line)}
 .emeta{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:12px 14px;font-size:.88rem}
 .emeta dt{color:var(--muted)}.emeta dd{margin:0;overflow-wrap:anywhere}
 .eprev{display:block;width:100%;height:360px;border:0;border-top:1px solid var(--line);background:#fff}
+/* Settings > Texts: each text as a message bubble. */
+.txt{border:1px solid var(--line);border-radius:10px;margin-top:8px;padding:11px 14px;background:var(--surface)}
+.txt .en{display:block;font-weight:600}
+.txt .ew{display:block;font-size:.85rem;color:var(--muted);margin-top:2px}
+.txt .bubble{margin:10px 0 2px;max-width:34em;padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--accent-soft);font-size:.92rem;line-height:1.4;overflow-wrap:anywhere}
+.ttest{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin-top:14px}
+@media (max-width:720px){.ttest .btn{min-height:44px}}
 .addrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .addrow .field{flex:1;min-width:200px}
 .taglist{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}

@@ -1332,8 +1332,14 @@
         <h3 id="emailsTitle">Emails</h3>
         <p class="fine" id="emailsAbout">Every email the Open House platform sends.</p>
         <div id="emailList"><p class="fine">Loading…</p></div>
+      </section>
+      <section class="card panel texts" aria-labelledby="textsTitle">
+        <h3 id="textsTitle">Texts</h3>
+        <p class="fine" id="textsAbout">Loading…</p>
+        <div id="textList"></div>
       </section>`;
     renderEmails();
+    renderTexts();
     let last = r.data, seq = 0;
     const show = (d) => {
       last = d;
@@ -1391,6 +1397,30 @@
         doc.querySelectorAll("img").forEach((img) => { if (!img.complete) img.addEventListener("load", fit); });
       };
     }));
+  }
+
+  // ---- Settings > Texts: the texts the agent gets with some emails, sent through Quo -------------------------
+  async function renderTexts() {
+    const r = await api("GET", "/api/admin/texts");
+    if (!$("textList")) return; // left Settings meanwhile
+    if (!r.ok) { $("textsAbout").textContent = "Couldn't load the texts. Reload to try again."; return; }
+    const { on, from, texts, me, roster } = r.data;
+    const loaded = roster.updatedAt ? new Date(roster.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+    $("textsAbout").innerHTML = on
+      ? `<b>On.</b> The agent hosting gets these from <b>${esc(from)}</b> (Quo) when the agent roster has their mobile number: ${roster.count} active agents${loaded ? `, loaded ${esc(loaded)}` : ""}. Replies go to the Quo inbox. An agent who replies STOP gets no more texts, only the emails.`
+      : `<b>Off.</b> Add <code>QUO_API_KEY</code> in Netlify (Site configuration &gt; Environment variables) and redeploy to send these from ${esc(from)}.`;
+    $("textList").innerHTML = texts.map((t) => `
+      <div class="txt"><span class="en">${esc(t.name)}</span><span class="ew">${esc(t.when)}</span><p class="bubble">${esc(t.body)}</p></div>`).join("")
+      + (on ? (me ? `<div class="ttest"><button class="btn ghost small" id="textMe">Text these to me</button><span class="fine">Sends the three samples to ${esc(me.phone)}, your number on the agent roster.</span></div>`
+        : `<p class="fine ttest">You're not on the agent roster, so there's no number to send test texts to.</p>`) : "");
+    const btn = $("textMe");
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      const res = await api("POST", "/api/admin/texts", { action: "test" });
+      btn.disabled = false;
+      if (!res.ok) return toast(res.data.message || "The test texts didn't send.", true);
+      toast(`Sent ${res.data.sent} texts to ${res.data.to}.`);
+    };
   }
 
   start();

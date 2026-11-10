@@ -67,6 +67,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Every home's instructions end with "Please text the George & Noonan Team once you enter the home and when you leave." on the portal and in the Confirmed and Reminder emails (`STANDARD_INSTR` in `netlify/lib/listings.mjs`); the Admin Console notes it under each home's instructions.
 - Reminder (template 4) runs from an hourly scheduled function and sends at 9:00 AM Central the day before.
 - Feedback Request (template 5) goes to the hosting agent from the same hourly job as the open house ends, with a Leave feedback button; if no feedback has come in 3 hours after the end, the same template goes once more as a reminder. Open houses that ended more than 3 days ago are never emailed about (`feedbackStep` in `netlify/lib/feedback.mjs`).
+- Texts (`netlify/lib/texts.mjs`): the Reminder, Feedback request and Feedback reminder emails to the agent are each followed by a short text from the team's Quo number, (817) 410-8769, through Quo's API (`QUO_API_KEY` in Netlify; off without it). The agent's mobile number comes from the agent roster: active agents with a phone from the AGENTS tab of the team's "SYNERGY Database" Google Sheet, loaded by hand into the `open-house-agents` store (`roster`), matched by work or personal email, else by a name only one agent has. Access details are never texted. Each text sent or failed is noted in the request's History. Quo handles STOP replies; replies go to the Quo inbox. **Settings > Texts** shows the texts and whether they're on, and "Text these to me" sends the samples to the signed-in admin's roster number (`/api/admin/texts`).
 - Access details (gate, lockbox, alarm codes) are stored server-side and appear only in the Confirmed and Reminder emails, never in the browser or request emails.
 - Overlapping hours are blocked for the same agent and listing, and against any approved request or open house already on the MLS. Agents can have up to 12 open requests.
 
@@ -121,7 +122,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 
 ## API routes
 
-`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/team/new-request`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/admin/emails`, `/api/team/feedback`, `/api/feedback`, `/api/feedback-photo`, `/api/mls/callback`, `/api/mls/screenshot`, `/api/agreement`, `/api/agreement/webhook`, `/api/admin/agreements`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
+`/api/config`, `/api/me`, `/api/auth/google`, `/api/auth/logout`, `/api/listings`, `/api/requests`, `/api/requests/cancel-request`, `/api/team/requests`, `/api/team/new-request`, `/api/respond`, `/api/manage`, `/api/ics`, `/api/inventory/listings`, `/api/admin/homes`, `/api/home-photo`, `/api/admin/access`, `/api/admin/settings`, `/api/admin/emails`, `/api/admin/texts`, `/api/team/feedback`, `/api/feedback`, `/api/feedback-photo`, `/api/mls/callback`, `/api/mls/screenshot`, `/api/agreement`, `/api/agreement/webhook`, `/api/admin/agreements`. Scheduled jobs: `reminders` (hourly) and `mls-sync` (every minute).
 
 ## Testing and deployment
 
