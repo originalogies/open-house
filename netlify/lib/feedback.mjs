@@ -41,15 +41,15 @@ export function feedbackStep(r, now = Date.now()) {
   return null;
 }
 
-// The team emails the agent a reminder to send feedback (the Admin Console, on a home's page). Returns why it
-// can't be sent, or null. A few minutes must pass between reminders, so a double press sends one email.
-// Each reminder is kept on the request as r.feedbackReminders: [{ at, by, byName }].
+// The team emails or texts the agent a reminder to send feedback (the Admin Console, on a home's page). Returns why
+// it can't be sent, or null. A few minutes must pass between reminders of a kind, so a double press sends one.
+// Each is kept on the request: emails as r.feedbackReminders, texts as r.feedbackTexts, both [{ at, by, byName }].
 export const REMIND_GAP = 5 * 60 * 1000;
-export function checkFeedbackReminder(r, now = Date.now()) {
+export function checkFeedbackReminder(r, now = Date.now(), sent = r.feedbackReminders) {
   const first = (r.agent?.name || "the agent").split(" ")[0];
   if (r.feedback) return `${first} already sent feedback for this open house.`;
   if (!feedbackOpen(r, now)) return r.status === "approved" ? "The open house hasn't ended yet." : "This open house didn't take place.";
-  const last = (r.feedbackReminders || []).at(-1);
+  const last = (sent || []).at(-1);
   if (last && now - last.at < REMIND_GAP) return `A reminder already went to ${first} a few minutes ago.`;
   return null;
 }
@@ -124,7 +124,10 @@ export function feedbackByHome(requests, now = Date.now()) {
         emailed: !!r.feedbackAskedAt && !r.imported,
         // Reminders the team sent from the Admin Console: how many, and the latest.
         reminders: (r.feedbackReminders || []).length,
-        reminded: (r.feedbackReminders || []).length ? { at: r.feedbackReminders.at(-1).at, byName: r.feedbackReminders.at(-1).byName } : null })),
+        reminded: (r.feedbackReminders || []).length ? { at: r.feedbackReminders.at(-1).at, byName: r.feedbackReminders.at(-1).byName } : null,
+        // ...and the texts they sent the same way.
+        texts: (r.feedbackTexts || []).length,
+        texted: (r.feedbackTexts || []).length ? { at: r.feedbackTexts.at(-1).at, byName: r.feedbackTexts.at(-1).byName } : null })),
     };
   }).sort((a, b) => Number(b.flags > 0) - Number(a.flags > 0) || b.lastIso.localeCompare(a.lastIso));
 }

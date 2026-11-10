@@ -711,8 +711,10 @@
   let fbStatus = "active";
   const HOME_STATUS = { active: ["Active", (h) => h.active], past: ["Past", (h) => !h.active], all: ["All", () => true] };
 
+  let textFrom = ""; // the team's Quo number that feedback reminder texts come from
   async function loadHomes(withStatus = false) {
     const r = await api("GET", `/api/team/feedback${withStatus ? "?active=1" : ""}`);
+    if (r.ok) textFrom = r.data.textFrom || "";
     return r.ok ? (withStatus ? r.data : r.data.homes) : null;
   }
 
@@ -796,14 +798,20 @@
           <div class="meta">Hosted by ${agentLink(o.agent.email, o.agent.name)}${o.feedback ? ` · ${o.feedback.enteredBy ? `feedback entered by ${esc(o.feedback.enteredBy.name || "the team")}` : "feedback sent"} ${esc(fmtDate(o.feedback.at))}` : ""}</div>
           ${o.feedback ? fbText(o.feedback) : waiting(o)}
         </div></article>`;
-    // No feedback: who was emailed about it, and a button to email the agent a reminder with the feedback link.
+    // No feedback: who was emailed or texted about it, and buttons to email the agent a reminder with the feedback
+    // link, or text it to them (when texts are on and the agent roster has their number: o.phone).
     const waiting = (o) => {
       const first = esc(o.agent.name.split(" ")[0]);
-      const said = o.reminded ? `No feedback yet. ${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} reminders so far)` : ""}.`
+      const sent = [
+        o.reminded && `${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} emails so far)` : ""}`,
+        o.texted && `${esc(o.texted.byName || "The team")} texted ${first} a reminder ${esc(fmtDate(o.texted.at))}${o.texts > 1 ? ` (${o.texts} texts so far)` : ""}`,
+      ].filter(Boolean);
+      const said = sent.length ? `No feedback yet. ${sent.join(". ")}.`
         : o.emailed ? "No feedback yet. The agent was emailed a link after the open house." : "No feedback for this open house.";
       return `<div class="notes fbwait"><span>${said}</span><span class="fbacts">
         <button class="btn ghost small" data-enter="${esc(o.id)}">Leave Feedback</button>
-        <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Send another reminder" : `Email ${first} a reminder`}</button></span></div>`;
+        <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Email another reminder" : `Email ${first} a reminder`}</button>
+        ${o.phone ? `<button class="btn ghost small" data-textrem="${esc(o.id)}">${o.texted ? "Text another reminder" : `Text ${first} a reminder`}</button>` : ""}</span></div>`;
     };
     // The team enters the feedback themselves (what the agent told them): the agent's questions, saved as their
     // feedback with nobody emailed (POST /api/team/feedback, action "feedback").
@@ -877,6 +885,19 @@
         const form = formFor(unph); unph.disabled = true;
         const r = await api("POST", "/api/team/feedback", { id: form.dataset.id, action: "unphoto", photo: unph.dataset.unph });
         if (r.ok) paintPending(form, r.data.photos); else { unph.disabled = false; toast(r.data.message || "Couldn't remove that photo. Try again.", true); }
+        return;
+      }
+      const tbtn = e.target.closest("[data-textrem]");
+      if (tbtn) {
+        const o = h.openHouses.find((x) => x.id === tbtn.dataset.textrem); if (!o) return;
+        if (!(await OHDialog.confirm({ title: `Text ${o.agent.name} a reminder?`, ok: "Send text",
+          body: `${o.agent.name.split(" ")[0]} gets a text at ${o.phone}${textFrom ? ` from ${textFrom}` : ""} asking for feedback on the ${withYear(o)} open house at ${h.addr}, with a link to leave it.` }))) return;
+        tbtn.disabled = true; tbtn.textContent = "Sending…";
+        const r = await api("POST", "/api/team/feedback", { id: o.id, action: "text" });
+        if (!r.ok) { toast(r.data.message || "The text didn't send. Try again.", true); paint(); return; }
+        Object.assign(o, { texted: r.data.texted, texts: r.data.texts });
+        toast(`Text sent to ${o.agent.name}.`);
+        paint();
         return;
       }
       const btn = e.target.closest("[data-remind]"); if (!btn) return;

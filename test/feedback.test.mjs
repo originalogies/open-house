@@ -116,6 +116,9 @@ test("the team can email a reminder once the open house has ended and while ther
   const [h] = feedbackByHome([{ ...sent, id: "a".repeat(32), mls: "1", listing: { addr: "1 A St", zip: "76092" },
     feedbackReminders: [{ at: 5, byName: "Kelly" }, { at: 9, byName: "London" }] }], end + H);
   assert.deepEqual([h.openHouses[0].reminders, h.openHouses[0].reminded], [2, { at: 9, byName: "London" }]);
+  const [t] = feedbackByHome([{ ...sent, id: "a".repeat(32), mls: "1", listing: { addr: "1 A St", zip: "76092" },
+    feedbackTexts: [{ at: 7, byName: "Kelly" }] }], end + H);
+  assert.deepEqual([t.openHouses[0].texts, t.openHouses[0].texted], [1, { at: 7, byName: "Kelly" }]);
 });
 
 test("a home is active while it's on the market: same address (even relisted) or one of its MLS numbers", () => {

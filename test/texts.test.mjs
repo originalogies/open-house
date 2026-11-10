@@ -181,3 +181,58 @@ test("the key is sent bare however it was pasted, and a key Quo rejects is expla
     assert.equal(res.status, 502);
   } finally { delete process.env.QUO_API_KEY; }
 });
+
+test("the team can text an agent a feedback reminder from a home's page", async () => {
+  const teamFeedback = (await import("../netlify/functions/team-feedback.mjs")).default;
+  const ORIGIN = "http://localhost:8888";
+  const boss = { cookie: `oh_session=${makeSession({ email: "boss@synergyrealtors.com", name: "Boss Person" })}`, origin: ORIGIN };
+  const call = (body) => teamFeedback(new Request(ORIGIN + "/api/team/feedback", body
+    ? { method: "POST", headers: { ...boss, "content-type": "application/json" }, body: JSON.stringify(body) } : { headers: boss }));
+  const ohOf = async (id) => (await (await call()).json()).homes.flatMap((h) => h.openHouses).find((o) => o.id === id);
+  const yesterday = addDays(chicagoNow().date, -1);
+  const r = req({ id: "f".repeat(32), iso: yesterday, feedbackAskedAt: 1 }); // asked already: the hourly job leaves it alone
+  const other = req({ id: "9".repeat(32), iso: yesterday, feedbackAskedAt: 1, agent: { name: "Nobody Here", email: "nobody@x.com" } });
+  await saveRequest(r); await saveRequest(other);
+
+  // texts off: no number offered, and the button's action says why
+  assert.equal((await ohOf(r.id)).phone, null);
+  assert.equal((await call({ id: r.id, action: "text" })).status, 409);
+
+  process.env.QUO_API_KEY = "quo-key";
+  try {
+    quo.posts.length = 0;
+    let o = await ohOf(r.id);
+    assert.deepEqual([o.phone, o.texts, o.texted], ["(817) 555-0111", 0, null]);
+    assert.equal((await ohOf(other.id)).phone, null); // not on the roster: no Text button
+    let res = await call({ id: other.id, action: "text" });
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).message, /^Nobody isn't on the agent roster/);
+
+    res = await call({ id: r.id, action: "text" });
+    const d = await res.json();
+    assert.equal(res.status, 200, JSON.stringify(d));
+    assert.deepEqual([d.texts, d.texted.byName], [1, "Boss Person"]);
+    assert.deepEqual(quo.posts, [{ content: T.TEXTS.feedbackRemind.body(r), from: "+18174108769", to: ["+18175550111"] }]);
+    const saved = await getRequest(r.id);
+    assert.equal(saved.feedbackTexts.length, 1);
+    assert.ok(saved.feedbackRemindedAt); // counts as the hourly job's reminder
+    assert.match((await listEvents(r.id)).map((e) => e.note).join("\n"), /Texted Dana Sample a reminder to send feedback at \(817\) 555-0111/);
+    o = await ohOf(r.id);
+    assert.deepEqual([o.texts, o.texted.byName], [1, "Boss Person"]);
+
+    res = await call({ id: r.id, action: "text" }); // a double press sends one text
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).message, /^A text already went to Dana/);
+    assert.equal(quo.posts.length, 1);
+
+    // an agent who replied STOP: Quo refuses, and the team is told to email instead
+    quo.optedOut.add("+18175550111");
+    const r2 = req({ id: "8".repeat(32), iso: yesterday, feedbackAskedAt: 1 });
+    await saveRequest(r2);
+    res = await call({ id: r2.id, action: "text" });
+    assert.equal(res.status, 502);
+    assert.match((await res.json()).message, /opted out of texts from \(817\) 410-8769/);
+    assert.equal((await getRequest(r2.id)).feedbackTexts, undefined);
+    quo.optedOut.clear();
+  } finally { delete process.env.QUO_API_KEY; }
+});

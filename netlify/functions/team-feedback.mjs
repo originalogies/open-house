@@ -7,6 +7,7 @@ import { feedbackByHome, checkFeedbackReminder, markActive, feedbackOpen, cleanF
 import { currentHomes } from "../lib/listings.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 import { sendFeedbackAsk } from "../lib/email.mjs";
+import { TEXTS, QUO_FROM, textsOn, sendText, getRoster, rosterMatch, fmtPhone } from "../lib/texts.mjs";
 import { logEvent } from "../lib/mls.mjs";
 
 // GET  /api/team/feedback -> every home that's hosted an open house, with each open house and the
@@ -16,6 +17,9 @@ import { logEvent } from "../lib/mls.mjs";
 // POST /api/team/feedback { id, action: "remind" } -> emails the agent who hosted that open house a reminder
 // to send feedback, with the link (the same email as the hourly job's reminder). It counts as the hourly job's
 // ask and reminder, so the job doesn't email them again about it.
+// POST /api/team/feedback { id, action: "text" } -> texts the agent the same reminder through Quo (texts.mjs), when texts
+// are on and the agent roster has their number. Like the email, it counts as the hourly job's ask and reminder. The GET
+// gives each open house still waiting for feedback the agent's number (phone) when it can be texted, and textFrom.
 // POST /api/team/feedback { id, action: "feedback", visitors, interest, price, liked, disliked, forSeller, teamNotes, brokerFlag }
 // -> the team enters the feedback themselves (what the agent told them), with the same questions and rules as the
 // agent's form. It's saved as the open house's feedback with enteredBy, so the agent's link then shows it and the
@@ -28,22 +32,26 @@ export default async (req) => {
 
   if (req.method === "GET") {
     const withStatus = new URL(req.url).searchParams.get("active") === "1";
-    const [all, current] = await Promise.all([listRequests(), withStatus ? currentWeek().then(currentHomes).catch(() => null) : null]);
+    const [all, current, roster] = await Promise.all([listRequests(), withStatus ? currentWeek().then(currentHomes).catch(() => null) : null,
+      textsOn() ? getRoster().catch(() => null) : null]);
+    const phone = (o) => (roster && !o.feedback ? fmtPhone(rosterMatch(roster, o.agent)?.phone) || null : null);
     let homes = feedbackByHome(all).map((h) => ({
       ...h,
-      openHouses: h.openHouses.map((o) => ({ ...o, day: dayMeta(o.iso).label, date: dayMeta(o.iso).date, time: fmtRange(o.from, o.to) })),
+      openHouses: h.openHouses.map((o) => ({ ...o, day: dayMeta(o.iso).label, date: dayMeta(o.iso).date, time: fmtRange(o.from, o.to), phone: phone(o) })),
     }));
-    if (!withStatus) return json(200, { homes });
+    const textFrom = fmtPhone(QUO_FROM);
+    if (!withStatus) return json(200, { homes, textFrom });
     const statusKnown = !!current && !current.warning;
     if (statusKnown) homes = markActive(homes, current);
-    return json(200, { homes, statusKnown });
+    return json(200, { homes, statusKnown, textFrom });
   }
 
   if (req.method !== "POST" || !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   const b = await req.json().catch(() => null);
-  if (!["remind", "feedback", "photo", "unphoto"].includes(b?.action)) return json(400, { error: "invalid_action" });
+  if (!["remind", "text", "feedback", "photo", "unphoto"].includes(b?.action)) return json(400, { error: "invalid_action" });
   const r = await getRequest(String(b.id || ""));
   if (!r) return json(404, { error: "not_found" });
+  if (b.action === "text") return textReminder(r, user);
   if (b.action !== "remind") {
     if (r.feedback) return json(409, { error: "already_sent", message: `${r.agent.name} already has feedback for this open house.` });
     if (!feedbackOpen(r)) return json(409, { error: "not_open", message: r.status === "approved" ? "Feedback can be added once the open house ends." : "This open house didn't take place." });
@@ -85,4 +93,25 @@ export default async (req) => {
   await logEvent(r.id, "feedback_reminder", { note: `Emailed ${r.agent.name} a reminder to send feedback` }, user.email);
   return json(200, { ok: true, reminded: { at, byName: user.name }, reminders: r.feedbackReminders.length });
 };
+// The team texts the agent a reminder to send feedback, with the link (Quo's feedback reminder text).
+async function textReminder(r, user) {
+  const first = r.agent.name.split(" ")[0];
+  const err = checkFeedbackReminder(r, Date.now(), r.feedbackTexts);
+  if (err) return json(409, { error: "cannot_text", message: err.replace("A reminder already went", "A text already went") });
+  if (!textsOn()) return json(409, { error: "texts_off", message: "Texts are off. Add QUO_API_KEY in Netlify to turn them on." });
+  const to = rosterMatch(await getRoster(), r.agent)?.phone;
+  if (!to) return json(409, { error: "no_number", message: `${first} isn't on the agent roster, so there's no number to text.` });
+  try { await sendText(to, TEXTS.feedbackRemind.body(r)); }
+  catch (e) {
+    console.error("feedback text failed", r.id, e.message);
+    return json(502, { error: "text_failed", message: /opted out/i.test(e.message) ? `${first} has opted out of texts from ${fmtPhone(QUO_FROM)} (they replied STOP), so Quo won't text them. Email them instead.`
+      : e.status === 401 ? "Quo didn't accept the API key. Check QUO_API_KEY in Netlify." : `The text didn't send: ${e.message.replace(/^Quo /, "")}.` });
+  }
+  const at = Date.now();
+  r.feedbackTexts = [...(r.feedbackTexts || []), { at, by: user.email, byName: user.name }];
+  r.feedbackAskedAt ||= at; r.feedbackRemindedAt ||= at;
+  await saveRequest(r);
+  await logEvent(r.id, "feedback_text", { note: `Texted ${r.agent.name} a reminder to send feedback at ${fmtPhone(to)}` }, user.email);
+  return json(200, { ok: true, texted: { at, byName: user.name }, texts: r.feedbackTexts.length });
+}
 export const config = { path: "/api/team/feedback" };
