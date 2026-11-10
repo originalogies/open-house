@@ -8,13 +8,13 @@ All emails send from openhouse@synergyrealtors.com. Merge fields use `{{double_b
 | 2 | Request Sent | Requesting agent | Agent submits a request | Request sent: open house at {{address}}, {{day_name}} {{date}} |
 | 3 | Request Confirmed | Agent + gn-team@ | First approval, after MLS entry is verified | Confirmed: open house at {{address}}, {{day_name}} {{date}}, {{time_range}} |
 | 4 | Open House Reminder | Agent + gn-team@ | Day before at 9:00 AM CT | Reminder: open house at {{address}} {{relative_day}}, {{time_range}} |
+| 5 | Feedback Request | Hosting agent | As an approved open house ends (only within 3 days of it) | How did your open house at {{address}} go? |
+| 5 | Feedback Reminder (same template, `is_reminder`) | Hosting agent | Once, 3 hours after it ends if no feedback yet, or when the team presses "Email a reminder" | Reminder: how did your open house at {{address}} go? |
 
-Feedback after an open house has no HTML template; these are short emails built in `netlify/lib/email.mjs`:
+The hourly job runs on the hour, which is when open houses end, so the feedback request goes out as the open house ends. The team's copy of an agent's feedback has no HTML template; it's a short email built in `netlify/lib/email.mjs`:
 
 | Email | Sent to | Trigger | Subject |
 |-------|---------|---------|---------|
-| Feedback ask | Hosting agent | About an hour after an approved open house ends (only within 3 days of it) | How did your open house at {{address}} go? |
-| Feedback reminder | Hosting agent | Once, a day after the ask, if no feedback yet | Reminder: how did your open house at {{address}} go? |
 | Feedback received | gn-team@ | Agent sends feedback at /feedback/ | Open house feedback: {{address}}, {{day_name}} {{date}} (starts "⚠ Flagged for broker:" when flagged) |
 
 ## Merge fields
@@ -30,6 +30,8 @@ Agent: `agent_name`, `agent_first_name`, `agent_phone` (only on older requests; 
 
 Approval: `approve_url`, `decline_url`, `approver_name`, `approved_at`, `ics_url`
 
+Feedback (template 5): `feedback_url` (the agent's feedback form for this open house), `is_reminder` (true for the reminder)
+
 Instructions: `instructions` (list of general notes), `access_details` (gate, lockbox and alarm codes)
 
 ## Rules
@@ -40,4 +42,4 @@ Instructions: `instructions` (list of general notes), `access_details` (gate, lo
 
 ## Logo
 
-All four templates use the George & Noonan logo (`gn-logo.png`, included here). The templates load it from https://open-house.synergyrealtors.com/gn-logo.png (the copy in `portal/`). If you host it elsewhere, update the `src` in each template and rerun `npm run build:templates`.
+All five templates use the George & Noonan logo (`gn-logo.png`, included here). The templates load it from https://open-house.synergyrealtors.com/gn-logo.png (the copy in `portal/`). If you host it elsewhere, update the `src` in each template and rerun `npm run build:templates`.

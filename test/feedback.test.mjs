@@ -11,23 +11,35 @@ test("open house end time is Central", () => {
   assert.equal(endMs(r()), end);
 });
 
-test("feedback opens when an approved open house ends", () => {
-  assert.ok(!feedbackOpen(r(), end - 1));
+test("feedback opens when an approved open house ends (from 5 minutes before, for an early hourly run)", () => {
+  assert.ok(!feedbackOpen(r(), end - 6 * 60 * 1000));
+  assert.ok(feedbackOpen(r(), end - 4 * 60 * 1000));
   assert.ok(feedbackOpen(r(), end));
   assert.ok(!feedbackOpen(r({ status: "cancelled" }), end + H));
   assert.ok(!feedbackOpen(r({ status: "declined" }), end + H));
 });
 
-test("ask an hour after, remind once a day later, then stop", () => {
-  assert.equal(feedbackStep(r(), end + 30 * 60 * 1000), null);
-  assert.equal(feedbackStep(r(), end + H), "ask");
+test("ask as it ends, remind once 3 hours after the end, then stop", () => {
+  const M = 60 * 1000;
+  assert.equal(feedbackStep(r(), end - H), null);        // still going
+  assert.equal(feedbackStep(r(), end + 2 * 1000), "ask"); // the run on the hour it ends
+  assert.equal(feedbackStep(r(), end - 1000), "ask");     // a run that starts a moment early
   assert.equal(feedbackStep(r(), end + 4 * 24 * H), null); // too old: never asked
-  const asked = end + H;
-  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), asked + 23 * H), null);
-  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), asked + 24 * H), "remind");
-  assert.equal(feedbackStep(r({ feedbackAskedAt: asked, feedbackRemindedAt: asked + 24 * H }), asked + 48 * H), null);
-  assert.equal(feedbackStep(r({ feedbackAskedAt: asked, feedback: { at: 1 } }), asked + 24 * H), null); // already sent
+  const asked = end + 2 * 1000;
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), end + H), null);
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), end + 2 * H), null);
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), end + 3 * H - 1000), "remind"); // the run 3 hours after
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), end + 3 * H + 2 * 1000), "remind");
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked, feedbackRemindedAt: end + 3 * H }), end + 24 * H), null); // once
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked, feedback: { at: 1 } }), end + 3 * H), null); // already sent
+  assert.equal(feedbackStep(r({ feedbackAskedAt: asked }), end + 4 * 24 * H), null); // too old to remind
   assert.equal(feedbackStep(r({ status: "cancelled" }), end + H), null);
+  // An ask that went out late (the job missed runs) isn't followed by the reminder within 2 hours.
+  const late = end + 2 * H + 30 * M;
+  assert.equal(feedbackStep(r({ feedbackAskedAt: late }), end + 3 * H), null);
+  assert.equal(feedbackStep(r({ feedbackAskedAt: late }), late + 2 * H), "remind");
+  // The team's "Email a reminder" counts as both, so the job sends nothing more.
+  assert.equal(feedbackStep(r({ feedbackAskedAt: end + 10 * M, feedbackRemindedAt: end + 10 * M }), end + 3 * H), null);
 });
 
 test("feedback form rules", () => {
@@ -93,7 +105,7 @@ test("the team can email a reminder once the open house has ended and while ther
   const agent = { name: "Darby Schabel", email: "darby@x.com" };
   assert.equal(checkFeedbackReminder(r({ agent }), end + H), null);
   assert.equal(checkFeedbackReminder(r({ agent, imported: { source: "G&N Calendar" } }), end + 400 * 24 * H), null); // old history too
-  assert.match(checkFeedbackReminder(r({ agent }), end - 1), /hasn't ended yet/);
+  assert.match(checkFeedbackReminder(r({ agent }), end - 10 * 60 * 1000), /hasn't ended yet/);
   assert.match(checkFeedbackReminder(r({ agent, status: "cancelled" }), end + H), /didn't take place/);
   assert.match(checkFeedbackReminder(r({ agent, feedback: { at: 1 } }), end + H), /^Darby already sent feedback/);
   // a few minutes between reminders, so a double press sends one email

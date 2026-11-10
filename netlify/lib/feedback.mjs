@@ -22,16 +22,22 @@ export const MAX_FEEDBACK_PHOTO_BYTES = 3 * 1024 * 1024; // the page shrinks pho
 
 export const endMs = (r) => chicagoToUtc(r.iso, r.to).getTime();
 
-// The agent can leave feedback once an approved open house has ended.
-export const feedbackOpen = (r, now = Date.now()) => r.status === "approved" && now >= endMs(r);
+// The hourly job runs on the hour, when open houses end. It counts an open house as ended from a few minutes
+// before, so a run that starts a moment early still sends the feedback email at the end rather than an hour later,
+// and the form opens as early so the link in that email works.
+const EARLY = 5 * 60 * 1000;
 
-// What the hourly job owes this request: "ask" an hour after it ends, one "remind" a day after
-// the ask, or nothing. Open houses that ended more than 3 days ago are never asked about, so
-// turning this on doesn't email agents about old open houses.
+// The agent can leave feedback once an approved open house has ended.
+export const feedbackOpen = (r, now = Date.now()) => r.status === "approved" && now >= endMs(r) - EARLY;
+
+// What the hourly job owes this request: "ask" when it ends, one "remind" 3 hours after it ends if there's still
+// no feedback (and at least 2 hours after the ask, should the ask go out late), or nothing. Nothing is sent about
+// open houses that ended more than 3 days ago, so agents aren't emailed about old open houses.
+const REMIND_AFTER = 3 * HOUR;
 export function feedbackStep(r, now = Date.now()) {
-  if (!feedbackOpen(r, now) || r.feedback) return null;
-  if (!r.feedbackAskedAt) return now >= endMs(r) + HOUR && now < endMs(r) + 3 * 24 * HOUR ? "ask" : null;
-  if (!r.feedbackRemindedAt && now >= r.feedbackAskedAt + 24 * HOUR) return "remind";
+  if (!feedbackOpen(r, now) || r.feedback || now >= endMs(r) + 3 * 24 * HOUR) return null;
+  if (!r.feedbackAskedAt) return "ask";
+  if (!r.feedbackRemindedAt && now >= endMs(r) + REMIND_AFTER - EARLY && now >= r.feedbackAskedAt + 2 * HOUR) return "remind";
   return null;
 }
 

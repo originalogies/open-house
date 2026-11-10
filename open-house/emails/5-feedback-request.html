@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>How did your open house go?</title>
+<!--
+  Subject: How did your open house at {{address}} go?  (reminder: Reminder: how did your open house at {{address}} go?)
+  Template: Feedback Request (and its reminder)
+  Sent to: The hosting agent
+  When: As the open house ends; the reminder 3 hours after it ends if there's still no feedback, or when the team
+        presses "Email a reminder" in the Admin Console
+  From: openhouse@synergyrealtors.com
+  Merge fields use {{double_braces}}. Blocks wrapped in {{#if is_reminder}}...{{else}}...{{/if}} differ between the
+  first email and the reminder. feedback_url opens the agent's feedback form for this open house.
+-->
+</head>
+<body style="margin:0;padding:0;background:#F4F5F3;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{#if is_reminder}}Your feedback for {{address}} is still open. It takes a couple of minutes.{{else}}Thanks for hosting. Tell the team how it went at {{address}}.{{/if}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F3;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #DCE0E2;border-radius:12px;">
+<tr><td align="center" style="padding:26px 32px 22px;border-bottom:1px solid #DCE0E2;"><img src="https://open-house.synergyrealtors.com/gn-logo.png" width="300" alt="George &amp; Noonan Real Estate Group" style="display:block;width:300px;max-width:100%;height:auto;border:0;"></td></tr>
+<tr><td style="padding:28px 32px 8px;"><h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:34px;color:#16202A;">{{#if is_reminder}}We'd still love to hear how it went{{else}}How did your open house go?{{/if}}</h1><p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#16202A;">{{#if is_reminder}}Hi {{agent_first_name}}, we haven't had your feedback on the open house at {{address}} yet. It only takes a couple of minutes, and what guests said helps the George &amp; Noonan team and the seller.{{else}}Thanks for hosting at {{address}}, {{agent_first_name}}. Take a couple of minutes to tell the George &amp; Noonan team how it went. What guests said helps the team and the seller.{{/if}}</p></td></tr><tr><td style="padding:18px 32px 6px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="padding:0 10px 10px 0;"><a href="{{feedback_url}}" style="display:inline-block;background:#1E5B4F;color:#FFFFFF;border:2px solid #1E5B4F;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:8px;">Leave feedback</a></td></tr></table></td></tr><tr><td style="padding:6px 32px 0;"><img src="{{photo_url}}" width="536" height="357" alt="Front of {{address}}, {{city}}" style="display:block;width:100%;max-width:536px;height:auto;border-radius:10px;border:0;"></td></tr><tr><td style="padding:16px 32px 22px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#5A6570;width:38%;vertical-align:top;">Property</td><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#16202A;vertical-align:top;"><a href="{{map_url}}" style="color:#1E5B4F;text-decoration:underline;">{{address}}<br>{{city}}, TX {{zip}}</a></td></tr><tr><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#5A6570;width:38%;vertical-align:top;">MLS#</td><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#16202A;vertical-align:top;">{{mls_number}}</td></tr><tr><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#5A6570;width:38%;vertical-align:top;">Date and time</td><td style="padding:9px 0;border-bottom:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#16202A;vertical-align:top;">{{day_name}}, {{date}}<br>{{time_range}}</td></tr></table></td></tr>
+<tr><td align="center" style="padding:20px 32px;border-top:1px solid #DCE0E2;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#5A6570;text-align:center;">
+George &amp; Noonan Real Estate Group at Synergy Realty, LLC<br>221 E Southlake Blvd, Suite 100, Southlake, TX 76092<br>
+This message was sent automatically by the Synergy open house system. Reply to reach the George &amp; Noonan team.
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

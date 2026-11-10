@@ -5,7 +5,7 @@ import { chicagoNow, addDays } from "../lib/time.mjs";
 import { getCutoff } from "../lib/settings.mjs";
 import { cutoffInfo, weekSatOf } from "../lib/week.mjs";
 
-// Runs hourly. Sends reminders at 9 AM Central for open houses happening tomorrow, expires
+// Runs hourly, on the hour. Sends reminders at 9 AM Central for open houses happening tomorrow, expires
 // requests nobody answered before the Friday cutoff, and asks agents for feedback after they host.
 export default async () => {
   const { date, hour } = chicagoNow();
@@ -17,7 +17,7 @@ export default async () => {
   const cutoff = await getCutoff();
   const stale = (x) => x.status === "pending" && (x.approving || x.addedBy ? x.iso < date : Date.now() > cutoffInfo(weekSatOf(x.iso), cutoff).ms);
   for (const r of all.filter(stale)) { r.status = "expired"; await saveRequest(r); }
-  // Feedback: asked about an hour after the open house ends, reminded once a day later.
+  // Feedback: asked when the open house ends, reminded once 3 hours after it ends if none has come in (feedbackStep).
   for (const r of all) {
     const step = feedbackStep(r);
     if (!step) continue;

@@ -242,20 +242,14 @@ export const sendTeamAlert = (req, headline, detail) => {
 };
 
 // ---- feedback after the open house ----------------------------------------
-const button = (href, label) =>
-  `<a href="${href}" style="display:inline-block;background:#1E5B4F;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;">${label}</a>`;
-
-// Asks the agent how it went, an hour after the open house ends (reminder: once more a day later) -> agent.
-export const sendFeedbackAsk = (req, reminder) => {
-  const l = req.listing, esc = Handlebars.escapeExpression;
-  return send({
+// Asks the agent how it went as the open house ends (reminder: once more 3 hours after it ends, or when the team
+// presses "Email a reminder") -> agent. Template 5, laid out like the Confirmed email.
+export const sendFeedbackAsk = (req, reminder) =>
+  send({
     to: req.agent.email, replyTo: TEAM_TO()[0],
-    subject: `${reminder ? "Reminder: h" : "H"}ow did your open house at ${l.addr} go?`,
-    html: plain(`Hi ${esc((req.agent.name || "").split(" ")[0])},<br><br>Thanks for hosting the open house at ${esc(l.addr)} on ${esc(when(req.iso, req.from, req.to))}.
-      ${reminder ? "We haven't heard how it went yet. " : ""}Take a couple of minutes to tell the George &amp; Noonan team how it went, and let us know about anything at the home we should take care of.<br><br>
-      ${button(`${site(req)}/feedback/?id=${req.id}`, "Leave feedback")}`),
+    subject: `${reminder ? "Reminder: h" : "H"}ow did your open house at ${req.listing.addr} go?`,
+    html: compile.feedbackRequest(fields(req, { is_reminder: !!reminder, feedback_url: `${site(req)}/feedback/?id=${req.id}` })),
   });
-};
 
 // Agent sent feedback -> team. Flagged for the broker: the subject says so.
 export const sendFeedbackToTeam = (req) => {

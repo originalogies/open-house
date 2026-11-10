@@ -66,6 +66,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - The calendar event names the George & Noonan Team (team@georgeandnoonan.com) as organizer and lists it as a guest beside the agent. team@georgeandnoonan.com also gets every email that carries the event (Confirmed, Updated, Cancelled), whatever `TEAM_EMAIL` is set to (`TEAM_CALENDAR` in `netlify/lib/email.mjs`).
 - Every home's instructions end with "Please text the George & Noonan Team once you enter the home and when you leave." on the portal and in the Confirmed and Reminder emails (`STANDARD_INSTR` in `netlify/lib/listings.mjs`); the Admin Console notes it under each home's instructions.
 - Reminder (template 4) runs from an hourly scheduled function and sends at 9:00 AM Central the day before.
+- Feedback Request (template 5) goes to the hosting agent from the same hourly job as the open house ends, with a Leave feedback button; if no feedback has come in 3 hours after the end, the same template goes once more as a reminder. Open houses that ended more than 3 days ago are never emailed about (`feedbackStep` in `netlify/lib/feedback.mjs`).
 - Access details (gate, lockbox, alarm codes) are stored server-side and appear only in the Confirmed and Reminder emails, never in the browser or request emails.
 - Overlapping hours are blocked for the same agent and listing, and against any approved request or open house already on the MLS. Agents can have up to 12 open requests.
 

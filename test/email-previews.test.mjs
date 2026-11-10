@@ -19,6 +19,18 @@ test("every email previews, and nothing is sent", async () => {
     assert.deepEqual(by.confirmed.attachments, ["open-house.ics"]);
     assert.match(by.declined.html, /Sample: the sellers will be home that day/);
     assert.match(by["feedback-remind"].subject, /^Reminder: how did your open house/);
+    // The feedback request and its reminder use template 5, laid out like the Confirmed email: logo, photo, details, button.
+    for (const k of ["feedback-ask", "feedback-remind"]) {
+      const h = by[k].html;
+      assert.match(h, /gn-logo\.png/, k);
+      assert.match(h, /\/\.netlify\/images\?url(=|&#x3D;)/, k); // Handlebars writes = as &#x3D; in links
+      assert.match(h, /href="https:\/\/open-house\.synergyrealtors\.com\/feedback\/\?id(=|&#x3D;)sample0+"[^>]*>Leave feedback</, k);
+      assert.match(h, /Date and time/, k);
+      assert.doesNotMatch(h, /Sample: lockbox|\{\{/, k); // no access details, no unfilled fields
+    }
+    assert.match(by["feedback-ask"].html, /How did your open house go\?/);
+    assert.match(by["feedback-remind"].html, /We&#x27;d still love to hear how it went|We'd still love to hear how it went/);
+    assert.doesNotMatch(by["feedback-ask"].html, /still love to hear/);
     assert.match(by["feedback-team"].html, /Sample: the open kitchen/);
     assert.ok(!calls.some((u) => u.includes("resend")), "no email was sent");
   } finally { globalThis.fetch = realFetch; }
