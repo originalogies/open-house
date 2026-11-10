@@ -39,11 +39,15 @@ export default async (req) => {
   const last = await store.get("test", { type: "json" }).catch(() => null);
   if (last && Date.now() - last.at < TEST_GAP) return json(429, { error: "too_soon", message: "Test texts just went out. Give them a minute." });
   await store.setJSON("test", { at: Date.now(), by: user.email });
+  let sent = 0;
   try {
-    for (const t of texts) await sendText(me.phone, t.body);
+    for (const t of texts) { await sendText(me.phone, t.body); sent++; }
   } catch (e) {
     console.error("test text failed", e.message);
-    return json(502, { error: "text_failed", message: `Quo didn't send it: ${e.message.replace(/^Quo /, "")}.` });
+    if (!sent) await store.delete("test").catch(() => {}); // nothing went out, so it can be tried again right away
+    return json(502, { error: "text_failed", message: e.status === 401
+      ? "Quo didn't accept the API key (401 Unauthorized). In Quo, open Settings > API and copy the key again (or generate a new one), replace QUO_API_KEY in Netlify with it, then redeploy the site."
+      : `Quo didn't send it: ${e.message.replace(/^Quo /, "")}.` });
   }
   return json(200, { ok: true, sent: texts.length, to: fmtPhone(me.phone) });
 };

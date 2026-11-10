@@ -10,7 +10,10 @@ import { logEvent } from "./mls.mjs";
 // Replies land in the team's Quo inbox.
 export const QUO_FROM = process.env.QUO_FROM_NUMBER || "+18174108769";
 const QUO_URL = "https://api.quo.com/v1/messages";
-export const textsOn = () => !!process.env.QUO_API_KEY;
+// The key as pasted into Netlify can bring a space, quotes or "Bearer " along from wherever it was copied; Quo
+// wants the key alone.
+const quoKey = () => String(process.env.QUO_API_KEY || "").trim().replace(/^["']+|["']+$/g, "").replace(/^Bearer\s+/i, "").trim();
+export const textsOn = () => !!quoKey();
 
 // "(817) 555-0100", "817.555.0100", "+1 817 555 0100" -> "+18175550100". Anything else isn't a US mobile: null.
 export function toE164(s) {
@@ -64,7 +67,7 @@ export const TEXTS = {
 export async function sendText(to, content) {
   const box = previewBox();
   if (box) { box.sent.push({ text: true, to, content }); return null; }
-  const key = process.env.QUO_API_KEY;
+  const key = quoKey();
   if (!key) throw new Error("QUO_API_KEY is not set");
   const res = await fetch(QUO_URL, {
     method: "POST",
@@ -72,8 +75,10 @@ export async function sendText(to, content) {
     body: JSON.stringify({ content, from: QUO_FROM, to: [to] }),
   });
   if (!res.ok) {
+    // Quo answers {"error": {"message": ...}} (a wrong key) or {"title", "message", "code"} (an opted-out number).
     const j = await res.json().catch(() => ({}));
-    throw new Error(`Quo ${res.status}${j.title || j.message ? `: ${j.title || j.message}` : ""}`);
+    const why = j.error?.message || j.title || j.message || "";
+    throw Object.assign(new Error(`Quo ${res.status}${why ? `: ${why}` : ""}`), { status: res.status });
   }
   return (await res.json().catch(() => ({}))).data || null;
 }

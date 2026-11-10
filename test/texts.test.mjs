@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { BlobsServer } from "@netlify/blobs/server";
+import { getStore } from "@netlify/blobs";
 
 // Texts to the hosting agent through Quo (netlify/lib/texts.mjs), against a local Blobs server and a stand-in Quo
 // and Resend.
@@ -30,7 +31,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u === "https://api.resend.com/emails") { emails.push(JSON.parse(init.body)); return Response.json({ id: "em" }); }
   if (!u.startsWith("https://api.quo.com")) return realFetch(url, init);
   assert.equal(u, "https://api.quo.com/v1/messages");
-  assert.equal(new Headers(init.headers).get("authorization"), "quo-key"); // the raw key, no "Bearer"
+  if (new Headers(init.headers).get("authorization") !== "quo-key") return Response.json({ error: { message: "Unauthorized", key: "Unauthorized" } }, { status: 401 });
   const b = JSON.parse(init.body);
   if (quo.optedOut.has(b.to[0])) return Response.json({ message: "User opted out", code: "0201400", status: 400, title: "User Opted Out" }, { status: 400 });
   quo.posts.push(b);
@@ -156,5 +157,27 @@ test("Settings > Texts: admins see the texts and can text the samples to themsel
     assert.deepEqual([d.sent, d.to], [3, "(817) 555-0199"]);
     assert.deepEqual(quo.posts.map((p) => p.to[0]), ["+18175550199", "+18175550199", "+18175550199"]);
     assert.equal((await call(boss, { action: "test" })).status, 429); // a double press sends one set
+  } finally { delete process.env.QUO_API_KEY; }
+});
+
+test("the key is sent bare however it was pasted, and a key Quo rejects is explained and can be retried at once", async () => {
+  const ORIGIN = "http://localhost:8888";
+  const boss = { cookie: `oh_session=${makeSession({ email: "boss@synergyrealtors.com", name: "Boss Person" })}`, origin: ORIGIN };
+  const test = () => adminTexts(new Request(ORIGIN + "/api/admin/texts", { method: "POST", headers: { ...boss, "content-type": "application/json" }, body: JSON.stringify({ action: "test" }) }));
+  for (const pasted of [" quo-key\n", '"quo-key"', "Bearer quo-key"]) {
+    process.env.QUO_API_KEY = pasted;
+    quo.posts.length = 0;
+    await T.sendText("+18175550111", "hi");
+    assert.equal(quo.posts.length, 1, JSON.stringify(pasted)); // the stand-in Quo only accepts "quo-key"
+  }
+  process.env.QUO_API_KEY = "wrong-key";
+  try {
+    await assert.rejects(T.sendText("+18175550111", "hi"), { message: "Quo 401: Unauthorized" });
+    await getStore({ name: "open-house-agents", consistency: "strong" }).delete("test"); // the earlier test's set
+    let res = await test();
+    assert.equal(res.status, 502);
+    assert.match((await res.json()).message, /didn't accept the API key \(401 Unauthorized\)/);
+    res = await test(); // not "just went out": nothing did
+    assert.equal(res.status, 502);
   } finally { delete process.env.QUO_API_KEY; }
 });
