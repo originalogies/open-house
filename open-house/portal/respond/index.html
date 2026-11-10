@@ -361,7 +361,7 @@ function feedbackSection(d) {
   if (!f) return d.feedbackDue ? '<h2>Feedback</h2><div class="box"><p class="muted" style="margin:0">Waiting on feedback. The agent was emailed a link after the open house.</p></div>' : "";
   const item = (label, text) => `<dt>${label}</dt><dd class="pre">${text ? esc(text) : '<span class="muted">Nothing noted</span>'}</dd>`;
   return `<h2>Feedback</h2><div class="box">${f.enteredBy ? `<p class="muted" style="margin:0 0 6px">Entered by ${esc(f.enteredBy.name || "the team")} for ${esc(d.agentName)}.</p>` : ""}${f.brokerFlag ? '<p class="err" style="margin:0 0 6px"><b>⚠ Flagged for the broker</b></p>' : ""}
-    <dl style="margin:0"><dt>Visitors · Interest${f.price ? " · Price" : ""}</dt><dd>${f.visitors} · ${esc(INTEREST[f.interest] || f.interest)}${f.price ? ` · ${esc(PRICE[f.price])}` : ""}</dd>
+    <dl style="margin:0"><dt>Groups · Level of Interest${f.price ? " · Price" : ""}</dt><dd>${f.visitors} · ${esc(INTEREST[f.interest] || f.interest)}${f.price ? ` · ${esc(PRICE[f.price])}` : ""}</dd>
       ${f.happened != null ? item("What happened", f.happened) : item("What guests liked", f.liked) + item("What guests didn't like or would change", f.disliked) + (f.forSeller ? item("Additional feedback", f.forSeller) : "")}
       ${item("Notes for the team", f.teamNotes)}
       ${(f.photos || []).length ? `<dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd>` : ""}</dl>

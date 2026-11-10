@@ -37,9 +37,10 @@ test("feedback form rules", () => {
   assert.match(cleanFeedback({ ...ok, visitors: "" }).error, /how many/);
   assert.match(cleanFeedback({ ...ok, visitors: -1 }).error, /how many/);
   assert.match(cleanFeedback({ ...ok, visitors: 2.5 }).error, /how many/);
-  assert.match(cleanFeedback({ ...ok, interest: "huge" }).error, /interest/);
+  assert.match(cleanFeedback({ ...ok, visitors: "" }).error, /how many groups came/);
+  assert.match(cleanFeedback({ ...ok, interest: "huge" }).error, /level of interest/);
   assert.match(cleanFeedback({ ...ok, price: "" }).error, /price/);
-  // Visitors came: the seller needs to hear what they said, good or bad.
+  // Groups came: the seller needs to hear what they said, good or bad.
   assert.match(cleanFeedback({ ...ok, liked: " ", disliked: "" }).error, /liked or didn't like/);
   assert.ok(cleanFeedback({ ...ok, liked: "" }).feedback);
   assert.ok(cleanFeedback({ ...ok, disliked: "" }).feedback);

@@ -36,10 +36,11 @@
 .seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
 textarea.field.big{min-height:170px}
 .fb-part h2 + .fine{margin:0}
-.said{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.said{display:grid;grid-template-columns:1fr;gap:0}
 .said textarea{min-height:120px}
 .fb-part hr{border:0;border-top:1px solid var(--line);margin:22px 0 4px}
 .opt{font-weight:400;color:var(--muted)}
+.req{color:var(--danger);font-weight:700}
 /* Photos the agent adds to the notes */
 .ph-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
 .ph-btns input{display:none}
@@ -136,7 +137,7 @@ function showSent(o, f, justSent){
     <h2>${justSent ? "Thanks, your feedback was sent" : "Your feedback"}</h2>
     <p class="muted" style="margin:0">${justSent === "email_failed" ? "It's saved, and the George &amp; Noonan team will see it in the Admin Console. The email to the team didn't send."
       : justSent ? "The George &amp; Noonan team got it by email." : f.enteredBy ? `${esc(f.enteredBy.name || "The George &amp; Noonan team")} entered it for you ${esc(fmtSent(f.at))}.` : `Sent ${esc(fmtSent(f.at))}.`}${f.brokerFlag ? " You flagged it for the broker." : ""}</p>
-    <dl><dt>Visitors</dt><dd>${f.visitors}</dd><dt>Guest interest</dt><dd>${esc(INTEREST[f.interest])}</dd>
+    <dl><dt>Groups</dt><dd>${f.visitors}</dd><dt>Level of Interest</dt><dd>${esc(INTEREST[f.interest])}</dd>
       ${f.price ? `<dt>What guests thought of the price</dt><dd>${esc(PRICE[f.price])}</dd>` : ""}
       ${f.happened != null ? `<dt>What happened</dt><dd>${esc(f.happened)}</dd>` : `<dt>What guests liked</dt><dd>${f.liked ? esc(f.liked) : "Nothing noted"}</dd>
       <dt>What guests didn't like or would change</dt><dd>${f.disliked ? esc(f.disliked) : "Nothing noted"}</dd>
@@ -163,27 +164,32 @@ function shrink(file, max = 1600){
 
 function showForm(o){
   heading("How did it go?", "Honest comments from guests help the seller most. Only the George & Noonan team sees this.");
-  const seg = (name, opts) => `<div class="seg${Object.keys(opts).length > 3 ? " four" : ""}" role="radiogroup" aria-labelledby="${name}Label">${Object.entries(opts).map(([k,v]) => `<label><input type="radio" name="${name}" value="${k}">${v}</label>`).join("")}</div>`;
+  const seg = (name, opts) => `<div class="seg${Object.keys(opts).length > 3 ? " four" : ""}" role="radiogroup" aria-required="true" aria-labelledby="${name}Label">${Object.entries(opts).map(([k,v]) => `<label><input type="radio" name="${name}" value="${k}">${v}</label>`).join("")}</div>`;
   // Phones get a camera button; everyone can pick photos they already took.
   const touch = matchMedia("(pointer: coarse)").matches;
+  // A red * marks what's required (the same as the team's form in the Admin Console). What guests liked or didn't
+  // like gets one once any groups came, since one of the two is needed then.
+  const star = '<span class="req" aria-hidden="true">*</span>', starSaid = '<span class="req" aria-hidden="true" data-said hidden>*</span>';
   box.innerHTML = homeCard(o) + `<form id="form" novalidate>
     <section class="card fb-part">
+      <p class="fine" style="margin:0 0 12px">${star} Required.</p>
       <div class="fb-row">
-        <div><label class="label" for="visitors">Guests</label>
+        <div><label class="label" for="visitors">Groups ${star}</label>
           <input class="field visitors" id="visitors" type="number" inputmode="numeric" min="0" max="999" required></div>
-        <div><span class="label" id="interestLabel">Interest</span>${seg("interest", INTEREST)}</div>
-        <div><span class="label" id="priceLabel">Price</span>${seg("price", PRICE)}</div>
+        <div><span class="label" id="interestLabel">Level of Interest ${star}</span>${seg("interest", INTEREST)}</div>
+        <div><span class="label" id="priceLabel">Price ${star}</span>${seg("price", PRICE)}</div>
       </div>
       <div class="said">
-        <div><label class="label" for="liked">What they liked</label>
+        <div><label class="label" for="liked">What guests liked ${starSaid}</label>
           <textarea class="field" id="liked" maxlength="5000" placeholder="Open kitchen, natural light, big backyard…"></textarea></div>
-        <div><label class="label" for="disliked">What didn't guests like?</label>
+        <div><label class="label" for="disliked">What guests didn't like ${starSaid}</label>
           <textarea class="field" id="disliked" maxlength="5000" placeholder="Dated primary bath, noisy street, worn carpet upstairs…"></textarea></div>
+        <p class="fine" data-said hidden style="margin:6px 0 0">When any groups came, fill in at least one of these two.</p>
       </div>
-      <label class="label" for="forSeller">Additional feedback <span class="opt">(optional)</span></label>
+      <label class="label" for="forSeller">Additional feedback</label>
       <textarea class="field slim" id="forSeller" maxlength="5000" rows="2" placeholder="Staging ideas, questions guests kept asking, how it compared to other homes…"></textarea>
       <hr>
-      <label class="label" for="teamNotes">Notes for the team <span class="opt">(optional)</span></label>
+      <label class="label" for="teamNotes">Notes for the team</label>
       <textarea class="field" id="teamNotes" maxlength="5000" placeholder="Lights out, house not clean, lockbox code didn't work…"></textarea>
       <div class="ph-btns">
         ${touch ? `<label class="btn ghost small">Take a photo<input type="file" accept="image/*" capture="environment" data-ph></label>` : ""}
@@ -196,6 +202,7 @@ function showForm(o){
     <div class="fb-actions"><button class="btn" id="send" type="submit">Send feedback</button><p class="fine" id="fbErr" role="alert" hidden></p></div>
   </form>`;
 
+  $("visitors").oninput = () => { const any = Number($("visitors").value) > 0; document.querySelectorAll("[data-said]").forEach(x => { x.hidden = !any; }); };
   let photos = o.photos || [], uploading = false;
   const phMsg = (t, bad) => { $("phMsg").textContent = t; $("phMsg").hidden = !t; $("phMsg").style.color = bad ? "var(--danger)" : ""; };
   const paintPhotos = () => {

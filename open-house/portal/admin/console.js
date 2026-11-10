@@ -62,7 +62,7 @@
     : r.feedbackDue ? '<div class="sub">Waiting on feedback</div>' : "";
   // Feedback sent before the guest questions existed has "What happened" in their place.
   const fbText = (f) => { const none = '<span class="sub">Nothing noted</span>'; return `<dl class="fb">
-      <div><dt>Visitors</dt><dd>${f.visitors}</dd></div><div><dt>Interest</dt><dd>${esc(INTEREST[f.interest] || f.interest)}</dd></div>
+      <div><dt>Groups</dt><dd>${f.visitors}</dd></div><div><dt>Level of Interest</dt><dd>${esc(INTEREST[f.interest] || f.interest)}</dd></div>
       ${f.price ? `<div><dt>Price</dt><dd>${esc(PRICE[f.price])}</dd></div>` : ""}
       ${f.happened != null ? `<div class="wide"><dt>What happened</dt><dd>${esc(f.happened)}</dd></div>` : `
       <div class="wide"><dt>What guests liked</dt><dd>${f.liked ? esc(f.liked) : none}</dd></div>
@@ -71,7 +71,7 @@
       <div class="wide"><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : '<span class="sub">None</span>'}</dd></div>
       ${(f.photos || []).length ? `<div class="wide"><dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd></div>` : ""}</dl>`; };
   // Feedback columns for the CSV exports. Older feedback's "What happened" goes in the liked column.
-  const FB_HEAD = ["Visitors", "Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
+  const FB_HEAD = ["Groups", "Level of Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
   const fbCsv = (f) => !f ? FB_HEAD.map(() => "") : [f.visitors, INTEREST[f.interest] || "", PRICE[f.price] || "", f.liked ?? f.happened, f.disliked || "",
     f.forSeller || "", f.teamNotes, (f.photos || []).map((u) => location.origin + u).join(" "), f.brokerFlag ? "Yes" : "No"];
 
@@ -732,7 +732,7 @@
         <span class="spacer"></span>
         ${homes.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
       </div>
-      <div class="card table-wrap"><table class="stack"><thead><tr><th>Home</th><th>Open houses</th><th>Visitors</th><th>Interest</th><th>Last hosted</th></tr></thead><tbody id="homeRows"></tbody></table></div>`;
+      <div class="card table-wrap"><table class="stack"><thead><tr><th>Home</th><th>Open houses</th><th>Groups</th><th>Level of Interest</th><th>Last hosted</th></tr></thead><tbody id="homeRows"></tbody></table></div>`;
     const status = () => (statusKnown ? fbStatus : "all");
     const matches = (h) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls].join(" ").toLowerCase().includes(q); };
     const inStatus = () => homes.filter(HOME_STATUS[status()][1]);
@@ -744,7 +744,7 @@
         <div class="card stat"><b>${pool.length}</b><span>Homes hosted</span></div>
         <div class="card stat"><b>${sum("hosted")}</b><span>Open houses hosted</span></div>
         <div class="card stat"><b>${sum("withFeedback")}</b><span>With feedback</span></div>
-        <div class="card stat"><b>${sum("visitors")}</b><span>Visitors reported</span></div>`;
+        <div class="card stat"><b>${sum("visitors")}</b><span>Groups reported</span></div>`;
       view.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === status())));
       // Nothing here, but the search finds homes under another filter: offer those.
       const elsewhere = !shown.length && fbSearch.trim() && status() !== "all" && homes.some(matches);
@@ -756,8 +756,8 @@
           <td data-l="Home"><div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
             <div><b>${homeLink(h, h.addr)}</b><div class="sub">${esc(h.city)}${status() === "all" && statusKnown ? ` · ${h.active ? "Active" : "Past"}` : ""}${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged for broker</b>` : ""}</div></div></div></td>
           <td data-l="Open houses">${h.hosted}<div class="sub">${h.withFeedback ? `<a href="${homeHref(h, "feedback")}">${h.withFeedback} with feedback</a>` : "No feedback yet"}</div></td>
-          <td data-l="Visitors">${h.withFeedback ? h.visitors : '<span class="sub">—</span>'}</td>
-          <td data-l="Interest">${esc(interestMix(h))}</td>
+          <td data-l="Groups">${h.withFeedback ? h.visitors : '<span class="sub">—</span>'}</td>
+          <td data-l="Level of Interest">${esc(interestMix(h))}</td>
           <td data-l="Last hosted">${esc(withYear(h.openHouses[0]))}</td>
         </tr>`).join("") : `<tr><td colspan="5" class="empty">${empty}</td></tr>`;
     };
@@ -781,8 +781,8 @@
         <button class="btn ghost small" id="csv">Export CSV</button></section>
       <div class="stats">
         <div class="card stat"><b>${h.hosted}</b><span>Open houses hosted</span></div>
-        <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Visitors reported${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged</b>` : ""}</span></div>
-        <div class="card stat"><b class="words">${esc(interestMix(h))}</b><span>Guest interest</span></div>
+        <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Groups reported${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged</b>` : ""}</span></div>
+        <div class="card stat"><b class="words">${esc(interestMix(h))}</b><span>Level of Interest</span></div>
         <div class="card stat"><b class="words">${esc(priceMix(h))}</b><span>What guests thought of the price</span></div>
       </div>
       ${sellerSummary(h)}
@@ -809,22 +809,26 @@
     // feedback with nobody emailed (POST /api/team/feedback, action "feedback").
     const enterForm = (o) => {
       const id = esc(o.id), first = esc(o.agent.name.split(" ")[0]);
-      const seg = (name, opts) => `<div class="seg" role="radiogroup" aria-labelledby="${name}L-${id}">${Object.entries(opts).map(([k, v]) =>
+      const seg = (name, opts) => `<div class="seg" role="radiogroup" aria-required="true" aria-labelledby="${name}L-${id}">${Object.entries(opts).map(([k, v]) =>
         `<label><input type="radio" name="${name}-${id}" value="${k}"><span>${esc(v)}</span></label>`).join("")}</div>`;
+      // A red * marks what's required. Two only apply sometimes, so theirs shows when needed (syncRequired): what
+      // guests liked or didn't like (one of them, once any groups came), and notes for the team (when flagged).
+      const star = '<span class="req" aria-hidden="true">*</span>', starWhen = (rule) => `<span class="req" aria-hidden="true" data-req="${rule}" hidden>*</span>`;
       return `<form class="fbenter" data-id="${id}" novalidate>
-        <p class="fine">Enter what ${first} told you about this open house. It's saved as their feedback, and nobody is emailed.</p>
+        <p class="fine">Enter what ${first} told you about this open house. It's saved as their feedback, and nobody is emailed. ${star} Required.</p>
         <div class="fbrow">
-          <div><label class="label" for="fv-${id}">Guests</label><input class="field" id="fv-${id}" data-k="visitors" type="number" inputmode="numeric" min="0" max="999"></div>
-          <div><span class="label" id="interestL-${id}">Interest</span>${seg("interest", INTEREST)}</div>
-          <div><span class="label" id="priceL-${id}">Price</span>${seg("price", PRICE)}</div>
+          <div><label class="label" for="fv-${id}">Groups ${star}</label><input class="field" id="fv-${id}" data-k="visitors" type="number" inputmode="numeric" min="0" max="999" aria-required="true"></div>
+          <div><span class="label" id="interestL-${id}">Level of Interest ${star}</span>${seg("interest", INTEREST)}</div>
+          <div><span class="label" id="priceL-${id}">Price ${star}</span>${seg("price", PRICE)}</div>
         </div>
-        <div class="two">
-          <div><label class="label" for="fl-${id}">What guests liked</label><textarea class="field" id="fl-${id}" data-k="liked" maxlength="5000"></textarea></div>
-          <div><label class="label" for="fd-${id}">What guests didn't like</label><textarea class="field" id="fd-${id}" data-k="disliked" maxlength="5000"></textarea></div>
-        </div>
-        <label class="label" for="fs-${id}">Additional feedback <span class="opt">(optional)</span></label>
+        <label class="label" for="fl-${id}">What guests liked ${starWhen("said")}</label>
+        <textarea class="field" id="fl-${id}" data-k="liked" maxlength="5000"></textarea>
+        <label class="label" for="fd-${id}">What guests didn't like ${starWhen("said")}</label>
+        <textarea class="field" id="fd-${id}" data-k="disliked" maxlength="5000"></textarea>
+        <p class="fine" data-req="said" hidden>When any groups came, fill in at least one of these two.</p>
+        <label class="label" for="fs-${id}">Additional feedback</label>
         <textarea class="field" id="fs-${id}" data-k="forSeller" maxlength="5000" rows="2"></textarea>
-        <label class="label" for="ft-${id}">Notes for the team <span class="opt">(optional)</span></label>
+        <label class="label" for="ft-${id}">Notes for the team ${starWhen("flag")}</label>
         <textarea class="field" id="ft-${id}" data-k="teamNotes" maxlength="5000" rows="2"></textarea>
         <label class="fbflag"><input type="checkbox" data-k="brokerFlag"> Flag for the broker <span class="opt">(describe it in the notes for the team)</span></label>
         <div class="fbph"><label class="btn ghost small">Add photos<input type="file" accept="image/*" multiple data-ph></label><span class="fine" data-phmsg role="status"></span></div>
@@ -834,6 +838,11 @@
       </form>`;
     };
     const formFor = (el) => el.closest("form.fbenter");
+    const syncRequired = (form) => {
+      const said = Number(form.querySelector('[data-k="visitors"]').value) > 0, flag = form.querySelector('[data-k="brokerFlag"]').checked;
+      form.querySelectorAll('[data-req="said"]').forEach((x) => { x.hidden = !said; });
+      form.querySelectorAll('[data-req="flag"]').forEach((x) => { x.hidden = !flag; });
+    };
     const ohOf = (form) => h.openHouses.find((x) => x.id === form.dataset.id);
     const paintPending = (form, photos) => {
       form.photos = photos;
@@ -881,6 +890,7 @@
       toast(`Reminder sent to ${o.agent.name}.`);
       paint();
     };
+    $("ohList").oninput = (e) => { const form = formFor(e.target); if (form) syncRequired(form); };
     // Photos for the feedback: shrunk, then uploaded one at a time.
     $("ohList").onchange = async (e) => {
       const input = e.target.closest("[data-ph]"); if (!input) return;

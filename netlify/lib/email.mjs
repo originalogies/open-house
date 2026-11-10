@@ -270,7 +270,7 @@ export const sendFeedbackToTeam = (req) => {
     subject: `${f.brokerFlag ? "⚠ Flagged for broker: " : "Open house feedback: "}${l.addr}, ${dayMeta(req.iso).label} ${dayMeta(req.iso).date}`,
     html: plain(`${f.brokerFlag ? `<b style="color:#A12B2B;">⚠ ${esc(req.agent.name)} flagged this for the broker.</b><br><br>` : ""}
       <b>${esc(req.agent.name)}</b> hosted the open house at ${esc(l.addr)} (MLS# ${esc(req.mls)}) on ${esc(when(req.iso, req.from, req.to))}.<br><br>
-      <b>Visitors:</b> ${f.visitors}<br><b>Guest interest:</b> ${esc(interest)}<br><b>Price:</b> ${esc(price)}<br><br>
+      <b>Groups:</b> ${f.visitors}<br><b>Level of Interest:</b> ${esc(interest)}<br><b>Price:</b> ${esc(price)}<br><br>
       ${block("What guests liked", f.liked)}${block("What guests didn't like", f.disliked)}${f.forSeller ? block("Additional feedback", f.forSeller) : ""}
       <b>Notes for the team</b><br>${f.teamNotes ? para(f.teamNotes) : "None"}<br><br>
       ${photos ? `${photos} photo${photos === 1 ? "" : "s"} attached. See them in the Admin Console under Feedback.<br><br>` : ""}

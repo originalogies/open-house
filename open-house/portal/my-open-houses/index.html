@@ -121,7 +121,7 @@ function renderMine(){
   const past = myReqs.filter(r => !isUpcoming(r));
   const hosted = past.filter(r => r.status === "approved");
   $("myohStats").innerHTML = `<div><b>${hosted.length}</b><span>Hosted</span></div><div><b>${new Set(hosted.map(r => `${r.addr}|${r.zip}`)).size}</b><span>Homes</span></div>`
-    + `<div><b>${hosted.reduce((n, r) => n + (r.visitors || 0), 0)}</b><span>Visitors</span></div><div><b>${up.filter(r => r.status === "approved").length}</b><span>Upcoming</span></div>`;
+    + `<div><b>${hosted.reduce((n, r) => n + (r.visitors || 0), 0)}</b><span>Groups</span></div><div><b>${up.filter(r => r.status === "approved").length}</b><span>Upcoming</span></div>`;
   $("tabUp").textContent = `Upcoming (${up.length})`; $("tabPast").textContent = `History (${past.length})`;
   $("tabUp").setAttribute("aria-selected", myTab === "up"); $("tabPast").setAttribute("aria-selected", myTab === "past");
   const list = myTab === "up" ? up : past;

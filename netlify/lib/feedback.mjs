@@ -4,7 +4,9 @@ import { chicagoToUtc } from "./time.mjs";
 import { addressKey, photoType } from "./homes.mjs";
 
 // Feedback from the agent after hosting an open house. Stored on the request as r.feedback:
-// { at, visitors, interest, price, liked, disliked, forSeller, teamNotes, brokerFlag, photos }.
+// { at, visitors, interest, price, liked, disliked, forSeller, teamNotes, brokerFlag, photos }. `visitors` is the
+// number of groups that came (the forms and pages call it Groups; feedback sent before Nov 10, 2026 asked for
+// guests), and `interest` their Level of Interest.
 // The guest feedback (liked, disliked, price, forSeller) is written to help the seller and the team
 // sell the home. Feedback sent before those questions existed has `happened` in their place.
 // Only the George & Noonan team and the agent who hosted see it.
@@ -51,8 +53,8 @@ export function checkFeedbackReminder(r, now = Date.now()) {
 export function cleanFeedback(b, now = Date.now(), photos = []) {
   const text = (v) => String(v ?? "").replace(/\r\n/g, "\n").trim();
   const visitors = Number(b?.visitors);
-  if (b?.visitors === "" || b?.visitors == null || !Number.isInteger(visitors) || visitors < 0 || visitors > 999) return { error: "Enter how many people came (0 if nobody did)." };
-  if (!INTEREST[b.interest]) return { error: "Pick the guest interest level." };
+  if (b?.visitors === "" || b?.visitors == null || !Number.isInteger(visitors) || visitors < 0 || visitors > 999) return { error: "Enter how many groups came (0 if none did)." };
+  if (!INTEREST[b.interest]) return { error: "Pick the level of interest." };
   if (!PRICE[b.price]) return { error: "Pick what guests thought of the price (\"Didn't come up\" if nobody said)." };
   const liked = text(b.liked), disliked = text(b.disliked), forSeller = text(b.forSeller), teamNotes = text(b.teamNotes);
   // With visitors, the seller needs to hear what they said. An empty open house has nothing to report.
