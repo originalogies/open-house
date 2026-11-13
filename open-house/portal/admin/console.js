@@ -87,10 +87,10 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".tip.open").forEach((t) => t.classList.remove("open")); });
 
   let toastTimer;
-  function toast(text, err) {
+  function toast(text, err, ms) {
     const el = $("toast"); clearTimeout(toastTimer);
     el.textContent = text; el.className = "show" + (err ? " err" : "");
-    toastTimer = setTimeout(() => el.classList.remove("show"), err ? 5000 : 2600);
+    toastTimer = setTimeout(() => el.classList.remove("show"), ms || (err ? 5000 : 2600));
   }
 
   async function api(method, url, body) {
@@ -977,6 +977,19 @@
 
   // ---- Listings ------------------------------------------------------------
   let listFilter = "all";
+  // When the newest listings this page has shown came from Repliers. Each server instance keeps its own copy for
+  // 5 minutes, so it's sent back and the server fetches again rather than show an older copy (inventory-listings.mjs).
+  let listingsChecked = "";
+  // A time in Central: "10:13 AM" today, otherwise "Nov 11 at 4:19 PM".
+  const clock = (iso) => {
+    const t = new Date(iso), tz = { timeZone: "America/Chicago" };
+    const time = t.toLocaleTimeString("en-US", { ...tz, hour: "numeric", minute: "2-digit" });
+    return new Intl.DateTimeFormat("en-CA", tz).format(t) === todayIso() ? time : `${t.toLocaleDateString("en-US", { ...tz, month: "short", day: "numeric" })} at ${time}`;
+  };
+  // What the MLS changed on a listing between two checks, named for the Refresh message.
+  const MLS_FIELDS = [["price", (l) => l.price], ["photos", (l) => (l.gallery || [l.img]).join()], ["beds and baths", (l) => `${l.bd}/${l.ba}`],
+    ["square feet", (l) => l.sf], ["open houses", (l) => JSON.stringify(l.openHouses)]];
+  const mlsChanges = (was, now) => MLS_FIELDS.filter(([, f]) => f(was) !== f(now)).map(([name]) => name);
   const FILTERS = { all: ["All homes", () => true], published: ["Published", (l) => l.offered], unpublished: ["Unpublished", (l) => !l.offered] };
   // Fields of a home the team adds before it's on the MLS: [key, label, input attributes].
   const HOME_FIELDS = [
@@ -1023,17 +1036,25 @@
 
   // fresh: ask Repliers again now (the Refresh button). Returns what was shown, or nothing if it couldn't load.
   async function renderListings(scrollTo, fresh) {
-    const [r, homes] = await Promise.all([api("GET", `/api/inventory/listings${fresh ? "?fresh=1" : ""}`), loadHomes()]);
+    const q = fresh ? "?fresh=1" : listingsChecked ? `?since=${encodeURIComponent(listingsChecked)}` : "";
+    const [r, homes] = await Promise.all([api("GET", `/api/inventory/listings${q}`), loadHomes()]);
     // Each listing links to its home's feedback, matched by MLS number (or team-added home id).
     const fbFor = (mls) => (homes || []).find((h) => h.mls.includes(mls));
     if (!r.ok) { view.innerHTML = `<div class="card banner err">${esc(r.data.message || "Could not load listings from Repliers.")}</div>`; return; }
     const d = r.data;
     savers.clear();
+    if (d.checkedAt && d.checkedAt > listingsChecked) listingsChecked = d.checkedAt;
     const stale = d.feedUpdatedOn && Math.floor((Date.now() - new Date(d.feedUpdatedOn + "T12:00:00Z")) / 86400000);
-    // When Repliers last changed any listing, in Central time: "Oct 23, 2026 at 5:22 PM" (just the date if the time is missing).
-    const updated = d.feedUpdatedAt?.length > 10 && !Number.isNaN(Date.parse(d.feedUpdatedAt))
+    // The newest MLS change Repliers has taken in, in Central time: "Oct 23, 2026 at 5:22 PM" for the out-of-date
+    // warning, and "5:22 PM" (or "Oct 23 at 5:22 PM") beside Refresh; just the date if Repliers sent no time.
+    const timed = d.feedUpdatedAt?.length > 10 && !Number.isNaN(Date.parse(d.feedUpdatedAt));
+    const updated = timed
       ? new Date(d.feedUpdatedAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d+:)/, " at $1")
       : d.feedUpdatedOn ? fmtIso(d.feedUpdatedOn) : "";
+    // Beside Refresh: when the site last asked Repliers (Refresh makes it now), then how far Repliers has caught up
+    // with the MLS. Repliers takes in MLS changes in batches about 30–40 minutes after they're made, so that second
+    // time only moves when a new batch arrives.
+    const feedLine = [d.checkedAt && `Checked at ${clock(d.checkedAt)}`, updated && `Repliers has MLS changes up to ${timed ? clock(d.feedUpdatedAt) : updated}`].filter(Boolean).join(" · ");
     view.innerHTML = `
       <section class="intro"><div><h1>Publish this week's homes</h1>
         <p class="sub">Week of ${esc(d.week.label)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
@@ -1049,7 +1070,7 @@
         <div class="chips" id="lchips">${Object.entries(FILTERS).map(([f, [label]]) =>
           `<button class="chip" data-f="${f}" aria-pressed="${listFilter === f}">${label} (<span data-n="${f}">0</span>)</button>`).join("")}</div>
         <span class="spacer"></span>
-        <span class="feed"><span class="fine">${updated ? `Repliers data updated ${esc(updated)}` : ""}</span>
+        <span class="feed"><span class="fine" id="feedLine" title="Repliers, where these listings come from, takes in MLS changes about 30–40 minutes after they're made. Refresh asks Repliers again now.">${esc(feedLine)}</span>
           <button class="btn small refresh" id="refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66L20 8.5"/><path d="M20 3.5v5h-5"/></svg><span>Refresh</span></button></span>
       </div>
       <div class="listings" id="list"></div>
@@ -1067,17 +1088,30 @@
     };
     $("lchips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; flushSaves(); listFilter = b.dataset.f; $("lchips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); paint(); };
     $("raw").onclick = async () => { const j = await api("GET", "/api/inventory/listings?raw=1"); const o = $("rawOut"); o.hidden = false; o.textContent = JSON.stringify(j.data, null, 2); };
-    // Refresh: edits still waiting to save go first, then Repliers is asked again and any new homes are named.
+    // Refresh: edits still waiting to save go first, then Repliers is asked again, and the message names what the MLS
+    // changed since the page loaded: new homes, changes to a home, and homes no longer active. Team-added homes
+    // aren't from the MLS, so they're left out.
     $("refresh").onclick = async () => {
       const btn = $("refresh");
       btn.disabled = true; btn.classList.add("busy"); btn.querySelector("span").textContent = "Checking…";
       await Promise.all([...savers].map((s) => s.flush()));
-      const seen = new Set(d.listings.map((l) => l.mls));
+      const fromMls = (ls) => ls.filter((l) => !l.teamAdded);
+      const before = new Map(fromMls(d.listings).map((l) => [l.mls, l]));
       const next = await renderListings(null, true);
       if (!next) return;
-      const added = next.listings.filter((l) => !seen.has(l.mls));
-      toast(added.length ? `New from the MLS: ${added.map(place).join("; ")}.` : "No new homes from the MLS yet.");
-      if (added.length) $("list").querySelector(`[data-mls="${added[0].mls}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (next.warning) return toast("Couldn't check Repliers just now. Try Refresh again in a minute.", true);
+      const after = fromMls(next.listings), now = new Set(after.map((l) => l.mls));
+      const added = after.filter((l) => !before.has(l.mls));
+      const changed = after.map((l) => [l, before.has(l.mls) ? mlsChanges(before.get(l.mls), l) : []]).filter(([, what]) => what.length);
+      const gone = [...before.values()].filter((l) => !now.has(l.mls));
+      const news = [
+        added.length && `New on the MLS: ${added.map(place).join("; ")}.`,
+        changed.length && `Changed: ${changed.map(([l, what]) => `${place(l)} (${what.join(", ")})`).join("; ")}.`,
+        gone.length && `No longer active: ${gone.map(place).join("; ")}.`,
+      ].filter(Boolean);
+      toast(news.length ? news.join(" ") : "Nothing new from the MLS since the last check. Repliers takes in MLS changes about 30–40 minutes after they're made.", false, 8000);
+      const first = added[0] || changed[0]?.[0];
+      if (first) $("list").querySelector(`[data-mls="${first.mls}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     if (me.admin) {
       $("addHomeBtn").onclick = () => { $("addHome").hidden = !$("addHome").hidden; if (!$("addHome").hidden) $("addHome").querySelector("input").focus(); };

@@ -62,6 +62,10 @@ export async function feedUpdatedAt() {
 
 // The Listings page's Refresh: the next read asks Repliers again instead of reusing the copy from the last 5 minutes.
 export const forgetRepliers = () => { cache = { at: 0, data: null }; freshness = { at: 0, stamp: null }; };
+// When this server's copy of the listings came from Repliers (ms; 0 if it has none). Each function instance keeps
+// its own copy, so the page passes back the newest time it has shown, and an older copy is replaced (see
+// inventory-listings.mjs).
+export const repliersCheckedAt = () => cache.at;
 
 // Amounts like "$1,295,000" or "6,331": digits only. Never use it for coordinates; it drops the minus sign.
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
@@ -197,9 +201,12 @@ export async function teamListings(week) {
   const mls = list.filter((x) => !x.n.teamAdded).map((x) => x.n);
   return {
     warning,
-    // The date (Central) for the out-of-date warning, and the time for "Repliers data updated ...".
+    // The newest MLS change Repliers has taken in: the date (Central) for the out-of-date warning, and the time for
+    // "Repliers has MLS changes up to ...".
     feedUpdatedOn: updatedAt ? (updatedAt.length > 10 ? chicagoNow(new Date(updatedAt)).date : updatedAt) : null,
     feedUpdatedAt: updatedAt,
+    // When these listings were fetched from Repliers, for "Checked at ..." (none if Repliers couldn't be reached).
+    checkedAt: !warning && cache.at ? new Date(cache.at).toISOString() : null,
     listings: list.map((x) => ({
       ...x.n, ...teamView(info[x.n.mls], week), openHouses: x.openHouses,
       // Team-added homes: their photos, and MLS listings at the same address to link to.
