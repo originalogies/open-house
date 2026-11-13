@@ -162,10 +162,13 @@ async function catalog(week) {
 
 // The homes on the market now, the same ones the Listings page shows (MLS listings and team-added homes), by
 // address and by MLS number: the Feedback tab's Active filter (markActive in feedback.mjs). With a warning,
-// Repliers couldn't be reached, so the MLS listings among them are unknown.
+// Repliers couldn't be reached, so the MLS listings among them are unknown. img has each one's photo under both its
+// address and its MLS number, for homes whose open houses saved none (history imported from the calendar).
 export async function currentHomes(week) {
   const { list, warning } = await catalog(week);
-  return { keys: new Set(list.map((x) => addressKey(x.n.addr, x.n.zip))), mls: new Set(list.map((x) => x.n.mls)), warning };
+  const key = (n) => addressKey(n.addr, n.zip);
+  const img = new Map(list.filter((x) => x.n.img).flatMap((x) => [[key(x.n), x.n.img], [x.n.mls, x.n.img]]));
+  return { keys: new Set(list.map((x) => key(x.n))), mls: new Set(list.map((x) => x.n.mls)), img, warning };
 }
 
 // MLS listings only (Repliers plus the built-in ones), for linking a team-added home.

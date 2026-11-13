@@ -134,7 +134,9 @@ export function feedbackByHome(requests, now = Date.now()) {
 
 // Which homes from feedbackByHome are on the market now (currentHomes in listings.mjs): the same address, even
 // relisted under a new MLS number, or one of its MLS numbers. The rest are past homes: sold, expired or withdrawn.
-export const markActive = (homes, current) => homes.map((h) => ({ ...h, active: current.keys.has(h.key) || h.mls.some((m) => current.mls.has(m)) }));
+// A home whose open houses saved no photo (imported history has none) gets the one on its current listing.
+export const markActive = (homes, current) => homes.map((h) => ({ ...h, active: current.keys.has(h.key) || h.mls.some((m) => current.mls.has(m)),
+  img: h.img || current.img?.get(h.key) || h.mls.map((m) => current.img?.get(m)).find(Boolean) || null }));
 
 // The feedback as the pages show it: photo ids become links (team and the hosting agent only).
 export const withPhotoUrls = (r) => ({ ...r.feedback, photos: (r.feedback.photos || []).map((p) => feedbackPhotoUrl(r.id, p)) });

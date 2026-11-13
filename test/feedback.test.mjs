@@ -131,3 +131,15 @@ test("a home is active while it's on the market: same address (even relisted) or
     h("12 oak ln|76092", ["H0123456789"]),       // a team-added home on the Listings page
   ], current).map((x) => x.active), [true, false, true, true]);
 });
+
+test("a home whose open houses saved no photo gets its current listing's, by address or MLS number", () => {
+  const current = { keys: new Set(["69 cortes dr|76262"]), mls: new Set(["21332907", "222"]),
+    img: new Map([["69 cortes dr|76262", "ntreismls/cortes.jpg"], ["21332907", "ntreismls/cortes.jpg"], ["222", "ntreismls/elm.jpg"]]) };
+  const h = (key, mls, img = null) => ({ key, mls, img });
+  assert.deepEqual(markActive([
+    h("69 cortes dr|76262", [""]),                  // imported from the calendar: no MLS number, no photo
+    h("9 elm st|76092", ["111", "222"]),           // relisted: the newer MLS number has the photo
+    h("1 a st|76092", ["21332907"], "own.jpg"),    // keeps the photo its open houses saved
+    h("200 murano pl|76092", ["21136267"]),        // sold, no photo anywhere
+  ], current).map((x) => x.img), ["ntreismls/cortes.jpg", "ntreismls/elm.jpg", "own.jpg", null]);
+});
