@@ -5,7 +5,7 @@ import { fmtRange } from "../lib/time.mjs";
 import { mode, agentReady, byHand } from "../lib/mls.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 import { isMlsNumber } from "../lib/homes.mjs";
-import { feedbackOpen, withPhotoUrls } from "../lib/feedback.mjs";
+import { feedbackOpen, withPhotoUrls, homeKey } from "../lib/feedback.mjs";
 
 // GET /api/team/requests -> every request, newest first, for the Admin Console, with its MLS status
 // any open cancellation request from the agent, and the agent's feedback after hosting. Approve and decline go through POST /api/respond;
@@ -16,11 +16,16 @@ export default async (req) => {
   if (!user) return json(401, { error: "signed_out" });
   if (!user.team) return json(403, { error: "team_only" });
 
-  const requests = all.sort((a, b) => b.createdAt - a.createdAt).map((r) => {
+  all.sort((a, b) => b.createdAt - a.createdAt);
+  // Each home's newest photo, for requests that saved none (history imported from the G&N calendar), matched by
+  // address like the Feedback tab.
+  const photos = new Map();
+  for (const r of all) if (r.listing?.img && !photos.has(homeKey(r.listing))) photos.set(homeKey(r.listing), r.listing.img);
+  const requests = all.map((r) => {
     const d = dayMeta(r.iso), l = r.listing || {};
     return {
       id: r.id, status: r.status, mls: r.mls, iso: r.iso, from: r.from, to: r.to,
-      addr: l.addr, city: l.city, img: l.img || null,
+      addr: l.addr, city: l.city, img: l.img || photos.get(homeKey(l)) || null,
       day: d.label, date: d.date, time: fmtRange(r.from, r.to),
       agent: { name: r.agent.name, email: r.agent.email }, phone: r.phone, notes: r.notes,
       createdAt: r.createdAt, decidedAt: r.decidedAt || null, decidedBy: r.decidedByName || null,

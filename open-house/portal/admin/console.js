@@ -22,6 +22,9 @@
   // Listing photos are Repliers CDN paths; built-in listings may carry a full URL, and homes the team
   // added before they're on the MLS have photos on this site ("/api/home-photo?...").
   const photo = (img, size = "small") => !img ? "" : /^(https?:|\/)/.test(img) ? img : `https://cdn.repliers.io/${img}?class=${size}`;
+  // A request's home photo for the Requests list and an agent's history. It sits on a dark tile, which stays as a
+  // placeholder when a home has no photo or it fails to load.
+  const thumb = (r) => `<span class="thumb">${r.img ? `<img src="${esc(photo(r.img))}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
   // A home's street and city, the way every address on the site reads: "200 Murano Place, Southlake".
   const place = (x) => [x.addr, x.city].filter(Boolean).join(", ");
@@ -322,11 +325,11 @@
     ({ page: reqPage, pages, first, last } = paintPager(total, reqPage, reqPer));
     const pageWaiting = waiting.slice(first, last), pageRest = showRest ? rest.slice(Math.max(0, first - waiting.length), last - waiting.length) : [];
     const group = (label, n) => `<tr class="group"><th colspan="5">${esc(label)} <span>${n}</span></th></tr>`;
-    // On phones each row is three short lines: when and status, the home, the agent and the action.
+    // On phones each row is three short lines: when and status, the home (photo beside it), the agent and the action.
     // The address (and the whole row) opens the request's page.
     const row = (r, wait) => `<tr class="req${wait ? " wait" : ""}" data-open="${esc(requestPage(r))}">
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
-        <td class="home" data-l="Home"><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></td>
+        <td class="home" data-l="Home"><div class="homecell">${thumb(r)}<div><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></div></div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
         <td class="status" data-l="Status">${pill(r.status)}${r.addedBy ? `<div class="sub">Added by ${esc(r.addedBy)}${r.status === "pending" && r.holds ? " · hours held" : ""}</div>` : ""}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${fbNote(r)}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
@@ -661,8 +664,6 @@
       const s = search.trim().toLowerCase();
       return s ? mine.filter((r) => [r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s)) : mine;
     };
-    // The photo sits on a dark tile, which stays as a placeholder when a home has no photo or it fails to load.
-    const thumb = (r) => `<span class="thumb">${r.img ? `<img src="${esc(photo(r.img))}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
     const fill = () => {
       const list = shown();
       let first, last;
