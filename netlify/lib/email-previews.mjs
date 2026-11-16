@@ -2,6 +2,7 @@ import * as E from "./email.mjs";
 import { listRequests } from "./requests.mjs";
 import { weekSatOf, dayKeyOf } from "./week.mjs";
 import { chicagoNow, addDays } from "./time.mjs";
+import { PRACTICE_ID } from "./feedback.mjs";
 
 // Every email the Open House platform sends, built by the real code in email.mjs from a sample open house, for the
 // Admin Console's Settings > Emails. Nothing is sent: capture() keeps each message (email.mjs). The sample home is
@@ -48,7 +49,7 @@ export async function sampleOpenHouse(teamMember = "Kelly Cawyer") {
   const today = chicagoNow().date, sat = weekSatOf(today) > today ? weekSatOf(today) : addDays(weekSatOf(today), 7);
   const now = Date.now();
   const sample = () => ({
-    id: "sample0000000000000000000000000", mls: listing.mls, day: dayKeyOf(sat), iso: sat, from: 13, to: 15, listing,
+    id: PRACTICE_ID, mls: listing.mls, day: dayKeyOf(sat), iso: sat, from: 13, to: 15, listing,
     notes: "Sample: I'll bring a co-host.", phone: "(817) 555-0100", agent: AGENT, site: E.SITE, status: "approved",
     createdAt: now, decidedAt: now, decidedByName: teamMember, declineReason: "Sample: the sellers will be home that day.",
     cancelRequest: { at: now, byName: AGENT.name, reason: "Sample: a family conflict came up." },

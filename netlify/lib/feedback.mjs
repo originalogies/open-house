@@ -16,6 +16,11 @@ export const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
 export const PRICE = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" };
 // Who to call when something serious happens at an open house.
 export const BROKER = { name: "London George", phone: "(817) 995-8080" };
+// The practice form: the sample open house's link (in the sample texts and emails in Settings) opens the real form
+// for anyone signed in, on a sample home hosted today. What they send is checked like real feedback, then thrown
+// away: nothing is saved and no one is emailed (netlify/functions/feedback.mjs).
+export const PRACTICE_ID = "sample0000000000000000000000000";
+export const isPractice = (id) => id === PRACTICE_ID;
 const MAX_TEXT = 5000;
 export const MAX_FEEDBACK_PHOTOS = 10;
 export const MAX_FEEDBACK_PHOTO_BYTES = 3 * 1024 * 1024; // the page shrinks photos to about 1600px before upload

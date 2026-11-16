@@ -1,9 +1,10 @@
 import { json, currentUser, sameOrigin } from "../lib/shared.mjs";
 import { getRequest, saveRequest } from "../lib/requests.mjs";
 import { sendFeedbackToTeam } from "../lib/email.mjs";
-import { feedbackOpen, cleanFeedback, endMs, withPhotoUrls, feedbackPhotoUrl, saveFeedbackPhoto, deleteFeedbackPhoto, MAX_FEEDBACK_PHOTOS } from "../lib/feedback.mjs";
+import { feedbackOpen, cleanFeedback, endMs, withPhotoUrls, feedbackPhotoUrl, saveFeedbackPhoto, deleteFeedbackPhoto, MAX_FEEDBACK_PHOTOS, PRACTICE_ID, isPractice } from "../lib/feedback.mjs";
+import { sampleOpenHouse } from "../lib/email-previews.mjs";
 import { dayMeta } from "../lib/week.mjs";
-import { fmtRange } from "../lib/time.mjs";
+import { fmtRange, chicagoNow } from "../lib/time.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
 
 // GET  /api/feedback?id=...                     the open house (status, who approved it, the agent's request notes),
@@ -19,7 +20,8 @@ export default async (req) => {
   if (isPost && !sameOrigin(req)) return json(405, { error: "method_not_allowed" });
   if (!isPost && req.method !== "GET") return json(405, { error: "method_not_allowed" });
   const b = isPost ? await req.json().catch(() => null) : { id: new URL(req.url).searchParams.get("id") };
-  const r = b && (await getRequest(String(b.id || "")));
+  if (b && isPractice(b.id)) return practice(isPost, b);
+  const r =b && (await getRequest(String(b.id || "")));
   // Agents only see their own open houses; anyone else's id looks like it doesn't exist.
   if (!r || r.agent.email !== user.email) return json(404, { error: "not_found" });
   const pending = () => (r.feedbackPhotos || []).map((p) => ({ id: p, url: feedbackPhotoUrl(r.id, p) }));
@@ -64,4 +66,20 @@ export default async (req) => {
   }
   return json(200, { ok: true });
 };
+// The practice form (PRACTICE_ID in lib/feedback.mjs): the sample home, hosted 1 to 3 PM today, for anyone signed in.
+// What they send is checked like real feedback, then thrown away: nothing is saved and no one is emailed.
+async function practice(isPost, b) {
+  if (!isPost) {
+    const { listing: l } = await sampleOpenHouse();
+    const d = dayMeta(chicagoNow().date);
+    return json(200, {
+      id: PRACTICE_ID, practice: true, addr: l.addr, city: l.city, img: l.img || null, day: d.label, date: d.date, time: fmtRange(13, 15),
+      open: true, status: "approved", endsAt: 0, feedback: null, iso: d.iso, decidedBy: null, notes: "", cancelRequested: false, photos: [],
+    });
+  }
+  if (b.action === "photo" || b.action === "unphoto") return json(400, { error: "practice", message: "Photos can't be added on the practice form. On a real one, they upload as you add them." });
+  const { error } = cleanFeedback(b, Date.now(), []);
+  if (error) return json(400, { error: "invalid", message: error });
+  return json(200, { ok: true, practice: true });
+}
 export const config = { path: "/api/feedback" };
