@@ -6,13 +6,15 @@ import { sampleOpenHouse } from "../lib/email-previews.mjs";
 import { dayMeta } from "../lib/week.mjs";
 import { fmtRange, chicagoNow } from "../lib/time.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
+import { textTeamFeedback } from "../lib/texts.mjs";
 
 // GET  /api/feedback?id=...                     the open house (status, who approved it, the agent's request notes),
 //                                               any feedback already sent, and photos added to the form so far
 // POST /api/feedback { id, visitors, interest, price, liked, disliked, forSeller, teamNotes, brokerFlag }
 // POST /api/feedback { id, action: "photo", data }      add a JPEG or PNG to the form -> { photos }
 // POST /api/feedback { id, action: "unphoto", photo }   take one off again           -> { photos }
-// Only the agent who hosted can see or send it, once, after the open house ends. The team is emailed.
+// Only the agent who hosted can see or send it, once, after the open house ends. The team is emailed, and London
+// and Lucy get it by text (texts.mjs).
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
@@ -59,6 +61,7 @@ export default async (req) => {
   r.feedback = feedback;
   delete r.feedbackPhotos;
   await saveRequest(r);
+  await textTeamFeedback(r); // London and Lucy, by text; never throws
   try { await sendFeedbackToTeam(r); }
   catch (e) {
     console.error("feedback email failed", r.id, e.message);

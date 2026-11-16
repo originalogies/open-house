@@ -2,6 +2,8 @@ import { getStore } from "@netlify/blobs";
 import { previewBox, SITE } from "./email.mjs";
 import { fmtRange } from "./time.mjs";
 import { logEvent } from "./mls.mjs";
+import { INTEREST, PRICE } from "./feedback.mjs";
+import { dayMeta } from "./week.mjs";
 
 // Text messages to the hosting agent, sent through Quo (formerly OpenPhone) from the team's Quo number alongside
 // the Reminder email and the feedback emails. Off until QUO_API_KEY is set in Netlify (Quo: Settings > API).
@@ -100,4 +102,39 @@ export async function textAgent(r, kind) {
     await logEvent(r.id, "text_failed", { note: `The ${t.label} text to ${r.agent.name} at ${fmtPhone(to)} didn't send (${e.message})` });
     return "failed";
   }
+}
+
+// ---- feedback to the team -----------------------------------------------------------------------------------
+// When an agent sends feedback, London and Lucy get it by text too (the full version, with photos, is in the team
+// email). TEAM_TEXT_TO in Netlify (numbers, comma-separated) replaces them.
+export const TEAM_TEXT_DEFAULT = [{ name: "London George", phone: "+18179958080" }, { name: "Lucy Noonan", phone: "+18179133611" }];
+export const teamTextTo = () => {
+  const env = String(process.env.TEAM_TEXT_TO || "").split(",").map(toE164).filter(Boolean);
+  return env.length ? env.map((phone) => ({ name: fmtPhone(phone), phone })) : TEAM_TEXT_DEFAULT;
+};
+const clip = (s, n) => { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? `${s.slice(0, n - 3).trimEnd()}...` : s; };
+export function feedbackText(r) {
+  const f = r.feedback, d = dayMeta(r.iso), photos = (f.photos || []).length;
+  const line = (label, text) => (text ? `\n${label}: ${clip(text, 280)}` : "");
+  return `George & Noonan: ${f.brokerFlag ? "FLAGGED FOR BROKER. " : ""}${r.agent.name} sent feedback on the open house at ${r.listing.addr} (${d.label} ${d.date}).`
+    + `\nGroups: ${f.visitors}. Interest: ${INTEREST[f.interest] || f.interest}. Price: ${PRICE[f.price] || f.price}.`
+    + line("Liked", f.liked) + line("Didn't like", f.disliked) + line("Additional", f.forSeller) + line("Team notes", f.teamNotes)
+    + `${photos ? `\n${photos} photo${photos === 1 ? "" : "s"} in the email.` : ""}`;
+}
+// Texts the feedback to the team. Never throws: each text that fails is written to the request's history.
+export async function textTeamFeedback(r) {
+  if (!textsOn()) return [];
+  const body = feedbackText(r), out = [];
+  for (const who of teamTextTo()) {
+    try {
+      await sendText(who.phone, body);
+      await logEvent(r.id, "text_sent", { note: `Texted the feedback to ${who.name} at ${fmtPhone(who.phone)}` });
+      out.push("sent");
+    } catch (e) {
+      console.error("feedback text failed", r.id, who.phone, e.message);
+      await logEvent(r.id, "text_failed", { note: `The feedback text to ${who.name} at ${fmtPhone(who.phone)} didn't send (${e.message})` });
+      out.push("failed");
+    }
+  }
+  return out;
 }

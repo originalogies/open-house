@@ -236,3 +236,48 @@ test("the team can text an agent a feedback reminder from a home's page", async 
     quo.optedOut.clear();
   } finally { delete process.env.QUO_API_KEY; }
 });
+
+test("sent feedback is texted to London and Lucy, after it's saved, and a failed text doesn't stop it", async () => {
+  const feedback = (await import("../netlify/functions/feedback.mjs")).default;
+  const ORIGIN = "http://localhost:8888";
+  const send = (r, body) => feedback(new Request(`${ORIGIN}/api/feedback`, { method: "POST",
+    headers: { cookie: `oh_session=${makeSession({ email: "dana@synergyrealtors.com", name: "Dana Sample" })}`, origin: ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify({ id: r.id, ...body }) }));
+  const yesterday = addDays(chicagoNow().date, -1);
+  const answers = { visitors: 4, interest: "lots", price: "high", liked: "The open\nkitchen", disliked: "", forSeller: "", teamNotes: "Seller was home", brokerFlag: true };
+
+  // texts off: the feedback still saves and emails
+  quo.posts.length = 0;
+  const off = req({ id: "6".repeat(32), iso: yesterday });
+  await saveRequest(off);
+  assert.equal((await send(off, answers)).status, 200);
+  assert.equal(quo.posts.length, 0);
+
+  process.env.QUO_API_KEY = "quo-key";
+  try {
+    const r = req({ id: "5".repeat(32), iso: yesterday });
+    await saveRequest(r);
+    assert.equal((await send(r, answers)).status, 200);
+    assert.deepEqual(quo.posts.map((p) => p.to[0]), ["+18179958080", "+18179133611"]);
+    const body = quo.posts[0].content;
+    assert.equal(quo.posts[1].content, body);
+    assert.match(body, /^George & Noonan: FLAGGED FOR BROKER\. Dana Sample sent feedback on the open house at 6900 Rockingham Court/);
+    assert.match(body, /Groups: 4\. Interest: Lots\. Price: Too high\./);
+    assert.match(body, /\nLiked: The open kitchen\nTeam notes: Seller was home$/);
+    assert.doesNotMatch(body, /Didn't like/);
+    assert.match((await listEvents(r.id)).map((e) => e.note).join("\n"), /Texted the feedback to Lucy Noonan at \(817\) 913-3611/);
+
+    // TEAM_TEXT_TO replaces them; a number that refuses is logged and the rest still go
+    quo.posts.length = 0;
+    process.env.TEAM_TEXT_TO = "817-555-0111, (817) 555-0122";
+    quo.optedOut.add("+18175550111");
+    const r2 = req({ id: "4".repeat(32), iso: yesterday });
+    await saveRequest(r2);
+    assert.equal((await send(r2, { ...answers, brokerFlag: false, liked: "x".repeat(400) })).status, 200);
+    assert.deepEqual(quo.posts.map((p) => p.to[0]), ["+18175550122"]);
+    assert.ok((await getRequest(r2.id)).feedback);
+    assert.match(quo.posts[0].content, /^George & Noonan: Dana Sample sent/);
+    assert.match(quo.posts[0].content, /Liked: x{277}\.\.\.\n/);
+    assert.match((await listEvents(r2.id)).map((e) => e.note).join("\n"), /The feedback text to \(817\) 555-0111 at \(817\) 555-0111 didn't send/);
+  } finally { delete process.env.QUO_API_KEY; delete process.env.TEAM_TEXT_TO; quo.optedOut.clear(); }
+});
