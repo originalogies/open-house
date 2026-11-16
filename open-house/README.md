@@ -64,6 +64,7 @@ The first time an agent signs in, they must read and sign the George & Noonan Su
 | `RESEND_API_KEY` | Resend API key (sends from openhouse@synergyrealtors.com) |
 | `REPLIERS_API_KEY` | Repliers API key (read-only). Listings come from agents 492946 (Troy George) and 560617 (Lucy Noonan): active, residential, for sale, land excluded |
 | `TEAM_EMAIL` | Optional. Team inbox(es), comma-separated. Defaults to team@georgeandnoonan.com |
+| `FEEDBACK_EMAIL` | Optional. Inbox(es) that receive agents' open house feedback, comma-separated, whatever `TEAM_EMAIL` is. Defaults to team@georgeandnoonan.com |
 | `TEAM_EMAILS` | Optional. Extra people who may approve. Admins (`ADMIN_EMAILS`) can always approve |
 
 The weekend is calculated automatically (next Saturday and Sunday, rolling over at Friday 5:00 PM Central). The team turns listings on for the weekend, and adds instructions and access details, at `/inventory/`. Those details are stored in Netlify Blobs, not in MLS data, and access details are never sent to the browser. Open houses already on the MLS (Repliers `openHouse`) block those hours.
@@ -80,6 +81,6 @@ npm run dev              # http://localhost:8888
 
 - Use `http://localhost:8888`, not a plain file server: the `/api` functions and sign-in only run under Netlify's dev tool.
 - Add `http://localhost:8888` as an Authorized JavaScript origin on the Google OAuth client.
-- Set `TEAM_EMAIL` to your own address. With a real `RESEND_API_KEY`, local requests send real emails.
+- Set `TEAM_EMAIL` and `FEEDBACK_EMAIL` to your own address. With a real `RESEND_API_KEY`, local requests send real emails.
 - Local data (requests, offered listings, settings) is stored in a local Netlify Blobs sandbox and never touches production.
 - `.env` is git-ignored. Secret variables in Netlify are not available locally, which is why the local values live in `.env`.

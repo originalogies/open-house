@@ -14,6 +14,9 @@ export const TEAM_TO = () => (process.env.TEAM_EMAIL || "team@georgeandnoonan.co
 // The George & Noonan team's calendar: the organizer of every open house's calendar event, listed as a
 // guest, and sent every email that carries the event (Confirmed, Updated, Cancelled) whatever TEAM_EMAIL is.
 export const TEAM_CALENDAR = { name: "George & Noonan Team", email: "team@georgeandnoonan.com" };
+// Where an agent's feedback goes: the George & Noonan team's inbox, whatever TEAM_EMAIL is (FEEDBACK_EMAIL overrides
+// it, e.g. with your own address while testing).
+export const FEEDBACK_TO = () => (process.env.FEEDBACK_EMAIL || "team@georgeandnoonan.com").split(",").map((s) => s.trim());
 const withCalendar = (to) => [...new Set([...to, TEAM_CALENDAR.email])];
 
 const money = (n) => "$" + n.toLocaleString("en-US");
@@ -253,7 +256,7 @@ export const sendFeedbackAsk = (req, reminder) =>
     html: compile.feedbackRequest(fields(req, { is_reminder: !!reminder, feedback_url: `${site(req)}/feedback/?id=${req.id}` })),
   });
 
-// Agent sent feedback -> team. Flagged for the broker: the subject says so.
+// Agent sent feedback -> team@georgeandnoonan.com (FEEDBACK_TO). Flagged for the broker: the subject says so.
 export const sendFeedbackToTeam = (req) => {
   const l = req.listing, f = req.feedback, esc = Handlebars.escapeExpression;
   const para = (s) => esc(s).replace(/\n/g, "<br>");
@@ -262,7 +265,7 @@ export const sendFeedbackToTeam = (req) => {
   const block = (label, text) => `<b>${label}</b><br>${text ? para(text) : "Nothing noted"}<br><br>`;
   const photos = (f.photos || []).length;
   return send({
-    to: TEAM_TO(), replyTo: req.agent.email,
+    to: FEEDBACK_TO(), replyTo: req.agent.email,
     subject: `${f.brokerFlag ? "⚠ Flagged for broker: " : "Open house feedback: "}${l.addr}, ${dayMeta(req.iso).label} ${dayMeta(req.iso).date}`,
     html: plain(`${f.brokerFlag ? `<b style="color:#A12B2B;">⚠ ${esc(req.agent.name)} flagged this for the broker.</b><br><br>` : ""}
       <b>${esc(req.agent.name)}</b> hosted the open house at ${esc(l.addr)} (MLS# ${esc(req.mls)}) on ${esc(when(req.iso, req.from, req.to))}.<br><br>
