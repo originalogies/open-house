@@ -50,10 +50,6 @@ textarea.field.big{min-height:170px}
 .ph-grid img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--photo);display:block}
 .ph-grid button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:1rem;line-height:1;cursor:pointer}
 #phMsg{margin:8px 0 0}
-/* Something serious: one line to call the broker */
-.broker{margin-top:18px;border:1.5px solid var(--danger);border-radius:12px;background:var(--danger-soft);padding:12px 14px}
-.broker .call{color:var(--danger);font-weight:600;font-size:.95rem}
-.broker .call a{color:inherit;font-weight:700;white-space:nowrap}
 textarea.field.slim{min-height:0;height:64px}
 .fb-done .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:4px}
 .fb-done .photos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block}
@@ -108,11 +104,17 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const photoSrc = (img, size) => /^(https?:|\/)/.test(img) ? img : CDN + img + "?class=" + size;
 const INTEREST = { lots: "Lots", some: "Some", little: "Little" };
 const PRICE = { high: "Too high", right: "About right", value: "Good value", none: "Didn't come up" };
-// Who to call when something serious happens at an open house (same as BROKER in netlify/lib/feedback.mjs).
-const BROKER = { name: "London George", phone: "(817) 995-8080", tel: "+18179958080" };
-const callLink = () => `<a href="tel:${BROKER.tel}">${BROKER.phone}</a>`;
 const id = new URLSearchParams(location.search).get("id") || "";
 const box = $("fb");
+// Answers typed but not sent yet are kept on this device, so leaving the page (a phone closing the tab in the
+// background, a reload, signing in again) doesn't lose them. Cleared once the feedback is sent. Photos are
+// already saved on the server as they're added.
+const DRAFT_KEY = "oh-feedback-draft:" + id, DRAFT_DAYS = 60;
+const draft = {
+  read(){ try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); return d && Date.now() - d.at < DRAFT_DAYS * 864e5 ? d : null; } catch { return null; } },
+  write(v){ try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...v, at: Date.now() })); } catch {} },
+  clear(){ try { localStorage.removeItem(DRAFT_KEY); } catch {} },
+};
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
 const fmtSent = ms => new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -197,12 +199,25 @@ function showForm(o){
       </div>
       <p class="fine" id="phMsg" role="status" hidden></p>
       <div class="ph-grid" id="phGrid"></div>
-      <div class="broker"><span class="call">Something serious? Call ${BROKER.name} · ${callLink()}</span></div>
     </section>
     <div class="fb-actions"><button class="btn" id="send" type="submit">Send feedback</button><p class="fine" id="fbErr" role="alert" hidden></p></div>
+    <p class="fine" id="draftMsg" style="margin:10px 0 0">Your answers are kept on this device until you send them, so you can come back and finish later.</p>
   </form>`;
 
   $("visitors").oninput = () => { const any = Number($("visitors").value) > 0; document.querySelectorAll("[data-said]").forEach(x => { x.hidden = !any; }); };
+  const TEXT = ["visitors", "liked", "disliked", "forSeller", "teamNotes"];
+  const pick = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value || "";
+  const answers = () => ({ ...Object.fromEntries(TEXT.map(k => [k, $(k).value])), interest: pick("interest"), price: pick("price") });
+  const saved = draft.read();
+  if (saved) {
+    TEXT.forEach(k => { if (typeof saved[k] === "string") $(k).value = saved[k]; });
+    ["interest", "price"].forEach(n => { const r = saved[n] && document.querySelector(`input[name="${n}"][value="${CSS.escape(saved[n])}"]`); if (r) r.checked = true; });
+    $("visitors").oninput();
+    $("draftMsg").textContent = `We kept the answers you started ${fmtSent(saved.at)}. Finish up and send when you're ready.`;
+  }
+  const keep = () => draft.write(answers());
+  $("form").addEventListener("input", keep);
+  $("form").addEventListener("change", keep);
   let photos = o.photos || [], uploading = false;
   const phMsg = (t, bad) => { $("phMsg").textContent = t; $("phMsg").hidden = !t; $("phMsg").style.color = bad ? "var(--danger)" : ""; };
   const paintPhotos = () => {
@@ -238,12 +253,12 @@ function showForm(o){
   $("form").onsubmit = async e => {
     e.preventDefault();
     const err = msg => { $("fbErr").textContent = msg; $("fbErr").hidden = !msg; };
-    const pick = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value || "";
     const body = { id, visitors: $("visitors").value === "" ? "" : Number($("visitors").value), interest: pick("interest"), price: pick("price"),
       liked: $("liked").value, disliked: $("disliked").value, forSeller: $("forSeller").value, teamNotes: $("teamNotes").value, brokerFlag: false };
     err(""); $("send").disabled = true;
     const d = await post(body);
     if (d.ok || d.status === 502) {
+      draft.clear();
       const t = k => body[k].trim();
       showSent(o, { ...body, liked: t("liked"), disliked: t("disliked"), forSeller: t("forSeller"), teamNotes: t("teamNotes"), at: Date.now(), photos: photos.map(p => p.url) }, d.status === 502 ? "email_failed" : "sent");
       scrollTo(0, 0);
@@ -258,7 +273,7 @@ async function load(){
   const r = await fetch("/api/feedback?id=" + encodeURIComponent(id)).catch(() => null);
   if (!r || !r.ok) { box.innerHTML = `<p class="muted">${r && r.status === 404 ? 'We couldn\'t find that open house on your account. <a href="/my-open-houses/">See your open houses</a>.' : "Could not load this open house. Refresh to try again."}</p>`; return; }
   const o = await r.json();
-  if (o.feedback) return showSent(o, o.feedback);  // coming back later: it was sent
+  if (o.feedback) { draft.clear(); return showSent(o, o.feedback); }  // coming back later: it was sent (by them or the team)
   if (!o.open) {
     heading("Your open house", "");
     const msg = o.status === "approved" ? "You can leave feedback once this open house ends. We'll email you a link."
