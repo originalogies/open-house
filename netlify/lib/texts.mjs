@@ -117,7 +117,7 @@ export function feedbackText(r) {
   const f = r.feedback, d = dayMeta(r.iso), photos = (f.photos || []).length;
   const line = (label, text) => (text ? `\n${label}: ${clip(text, 280)}` : "");
   return `George & Noonan: ${f.brokerFlag ? "FLAGGED FOR BROKER. " : ""}${r.agent.name} sent feedback on the open house at ${r.listing.addr} (${d.label} ${d.date}).`
-    + `\nGroups: ${f.visitors}. Interest: ${INTEREST[f.interest] || f.interest}. Price: ${PRICE[f.price] || f.price}.`
+    + `\n\nGroups: ${f.visitors}\nInterest: ${INTEREST[f.interest] || f.interest}\nPrice: ${PRICE[f.price] || f.price}`
     + line("Liked", f.liked) + line("Didn't like", f.disliked) + line("Additional", f.forSeller) + line("Team notes", f.teamNotes)
     + `${photos ? `\n${photos} photo${photos === 1 ? "" : "s"} in the email.` : ""}`;
 }

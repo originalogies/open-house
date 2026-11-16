@@ -262,7 +262,7 @@ test("sent feedback is texted to London and Lucy, after it's saved, and a failed
     const body = quo.posts[0].content;
     assert.equal(quo.posts[1].content, body);
     assert.match(body, /^George & Noonan: FLAGGED FOR BROKER\. Dana Sample sent feedback on the open house at 6900 Rockingham Court/);
-    assert.match(body, /Groups: 4\. Interest: Lots\. Price: Too high\./);
+    assert.match(body, /\(\w+ \w+ \d+\)\.\n\nGroups: 4\nInterest: Lots\nPrice: Too high\nLiked: /);
     assert.match(body, /\nLiked: The open kitchen\nTeam notes: Seller was home$/);
     assert.doesNotMatch(body, /Didn't like/);
     assert.match((await listEvents(r.id)).map((e) => e.note).join("\n"), /Texted the feedback to Lucy Noonan at \(817\) 913-3611/);
