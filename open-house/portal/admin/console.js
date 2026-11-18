@@ -125,7 +125,7 @@
   function renderNav() {
     const sections = !me.team ? [] : [
       { key: "requests", href: "#requests", label: "Requests", count: "pendingCount" },
-      { key: "feedback", href: "#feedback", label: "Feedback" },
+      { key: "feedback", href: "#feedback", label: "Feedback", count: "fbWaitCount" },
       { key: "listings", href: "#listings", label: "Listings" },
       ...(me.admin ? [{ key: "agents", href: "#agents", label: "Agents" }, { key: "settings", href: "#settings", label: "Settings" }] : []),
     ];
@@ -190,6 +190,7 @@
     window.addEventListener("pageshow", (e) => { if (e.persisted) route(); });
     route();
     if (primed) loadRequests(); // views that don't list requests still show the waiting count
+    if (!/^#(feedback|home\/)/.test(location.hash)) loadHomes(); // and the count of open houses waiting on feedback
   }
 
   // ---- Requests ------------------------------------------------------------
@@ -716,9 +717,41 @@
   let textFrom = ""; // the team's Quo number that feedback reminder texts come from
   async function loadHomes(withStatus = false) {
     const r = await api("GET", `/api/team/feedback${withStatus ? "?active=1" : ""}`);
-    if (r.ok) textFrom = r.data.textFrom || "";
+    if (r.ok) { textFrom = r.data.textFrom || ""; paintWaitCount(r.data.homes); }
     return r.ok ? (withStatus ? r.data : r.data.homes) : null;
   }
+  // Open houses that ended without feedback, newest first: the notice on the Feedback tab and the count on its nav
+  // link. Only those from Nov 18, 2026 on, when this started: older history (much of it imported) never had feedback.
+  const FB_WAIT_FROM = "2026-11-18";
+  const waitingOn = (homes) => homes.flatMap((h) => h.openHouses.filter((o) => !o.feedback && o.iso >= FB_WAIT_FROM).map((o) => ({ h, o })))
+    .sort((a, b) => b.o.iso.localeCompare(a.o.iso) || (b.o.from || 0) - (a.o.from || 0));
+  const paintWaitCount = (homes) => { const n = waitingOn(homes).length, el = $("fbWaitCount"); if (el) { el.textContent = n; el.hidden = !n; } };
+  // Who's been emailed or texted about an open house's feedback so far.
+  const askedSoFar = (o) => {
+    const first = esc(o.agent.name.split(" ")[0]);
+    const sent = [
+      o.reminded && `${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} emails so far)` : ""}`,
+      o.texted && `${esc(o.texted.byName || "The team")} texted ${first} a reminder ${esc(fmtDate(o.texted.at))}${o.texts > 1 ? ` (${o.texts} texts so far)` : ""}`,
+    ].filter(Boolean);
+    return sent.length ? `${sent.join(". ")}.` : o.emailed ? `${first} was emailed a link after the open house.` : "";
+  };
+  // Email or text the agent a reminder to send feedback, after a confirm. Null if cancelled, else whether it sent.
+  async function askForFeedback(kind, h, o, btn) {
+    const text = kind === "text", first = o.agent.name.split(" ")[0];
+    if (!(await OHDialog.confirm(text
+      ? { title: `Text ${o.agent.name} a reminder?`, ok: "Send text",
+        body: `${first} gets a text at ${o.phone}${textFrom ? ` from ${textFrom}` : ""} asking for feedback on the ${withYear(o)} open house at ${h.addr}, with a link to leave it.` }
+      : { title: `Email ${o.agent.name} a reminder?`, ok: "Send reminder",
+        body: `${first} gets an email asking how the ${withYear(o)} open house at ${h.addr} went, with a link to leave feedback.` }))) return null;
+    btn.disabled = true; btn.textContent = "Sending…";
+    const r = await api("POST", "/api/team/feedback", { id: o.id, action: text ? "text" : "remind" });
+    if (!r.ok) { toast(r.data.message || (text ? "The text didn't send. Try again." : "The reminder didn't send. Try again."), true); return false; }
+    Object.assign(o, text ? { texted: r.data.texted, texts: r.data.texts } : { reminded: r.data.reminded, reminders: r.data.reminders });
+    toast(text ? `Text sent to ${o.agent.name}.` : `Reminder sent to ${o.agent.name}.`);
+    return true;
+  }
+  // A link to a home: "200 Murano Place, Southlake".
+  const homeName = (h) => homeLink(h, place(h));
 
   async function renderFeedback() {
     const d = await loadHomes(true);
@@ -730,7 +763,8 @@
       .sort((a, b) => b.o.feedback.at - a.o.feedback.at);
     view.innerHTML = `
       <section class="intro"><div><h1>Feedback</h1>
-        <p class="sub">What agents said after hosting, newest first. Each home's name opens its full history, including open houses still waiting on feedback. The history stays here after a home sells or is relisted.</p></div></section>
+        <p class="sub">What agents said after hosting, newest first. Each home's name opens its full history. The history stays here after a home sells or is relisted.</p></div></section>
+      <section class="card fbwaitbox" id="fbWait" aria-live="polite" hidden></section>
       <div class="timeframe">
         <label class="tf-pick"><span>Received</span><select class="field" id="fbRange">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === fbRange ? "selected" : ""}>${k === "all" ? "Any time" : v}</option>`).join("")}</select></label>
         <span class="tf-dates" id="fbCustom" ${fbRange === "custom" ? "" : "hidden"}>
@@ -753,12 +787,31 @@
     const matches = ({ h, o }) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls, o.agent.name, o.agent.email].join(" ").toLowerCase().includes(q); };
     const card = ({ h, o }) => `<article class="card fbcard${o.feedback.brokerFlag ? " flag" : ""}">
         <div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
-          <div><h3>${homeLink(h, h.addr)} <span class="sub">${esc(h.city)}${status() === "all" && statusKnown ? ` · ${h.active ? "Active" : "Past"}` : ""}</span>
+          <div><h3>${homeName(h)}${status() === "all" && statusKnown ? ` <span class="sub">· ${h.active ? "Active" : "Past"}</span>` : ""}
             ${o.feedback.brokerFlag ? '<span class="pill declined">⚠ Flagged for broker</span>' : ""}</h3>
-          <div class="meta">Open house ${esc(withYear(o))} · ${esc(o.time)} · Hosted by ${agentLink(o.agent.email, o.agent.name)}</div>
+          <div class="meta">${esc(withYear(o))} · ${esc(o.time)} · Hosted by ${agentLink(o.agent.email, o.agent.name)}</div>
           <div class="meta">${o.feedback.enteredBy ? `Entered by ${esc(o.feedback.enteredBy.name || "the team")}` : "Received"} ${esc(fmtDate(o.feedback.at))}</div></div></div>
         ${fbText(o.feedback)}
       </article>`;
+    // The notice: open houses still waiting on feedback, with buttons to email or text the agent for it.
+    const paintWait = () => {
+      const list = waitingOn(homes), box = $("fbWait");
+      box.hidden = !list.length;
+      if (!list.length) return;
+      box.innerHTML = `<h2>Waiting on feedback (${list.length})</h2>
+        <p class="sub">${list.length === 1 ? "This open house" : "These open houses"} ended without feedback. Ask the agent for it, or open the home to enter it yourself.</p>
+        <ul>${list.map(({ h, o }) => { const first = esc(o.agent.name.split(" ")[0]); return `<li>
+          <div><b>${homeName(h)}</b><div class="sub">${esc(withYear(o))} · ${esc(o.time)} · Hosted by ${agentLink(o.agent.email, o.agent.name)}</div>
+            ${askedSoFar(o) ? `<div class="sub">${askedSoFar(o)}</div>` : ""}</div>
+          <span class="fbacts"><button class="btn ghost small" data-wask="email" data-id="${esc(o.id)}">${o.reminded ? "Email another reminder" : `Email ${first}`}</button>
+            ${o.phone ? `<button class="btn ghost small" data-wask="text" data-id="${esc(o.id)}">${o.texted ? "Text another reminder" : `Text ${first}`}</button>` : ""}</span></li>`; }).join("")}</ul>`;
+    };
+    $("fbWait").onclick = async (e) => {
+      const b = e.target.closest("[data-wask]"); if (!b) return;
+      const w = waitingOn(homes).find((x) => x.o.id === b.dataset.id); if (!w) return;
+      if ((await askForFeedback(b.dataset.wask, w.h, w.o, b)) !== null) paintWait();
+    };
+    paintWait();
     let shown = [];
     const fill = () => {
       const bounds = rangeBounds(fbRange, fbFrom, fbTo);
@@ -829,13 +882,8 @@
     // No feedback: who was emailed or texted about it, and buttons to email the agent a reminder with the feedback
     // link, or text it to them (when texts are on and the agent roster has their number: o.phone).
     const waiting = (o) => {
-      const first = esc(o.agent.name.split(" ")[0]);
-      const sent = [
-        o.reminded && `${esc(o.reminded.byName || "The team")} emailed ${first} a reminder ${esc(fmtDate(o.reminded.at))}${o.reminders > 1 ? ` (${o.reminders} emails so far)` : ""}`,
-        o.texted && `${esc(o.texted.byName || "The team")} texted ${first} a reminder ${esc(fmtDate(o.texted.at))}${o.texts > 1 ? ` (${o.texts} texts so far)` : ""}`,
-      ].filter(Boolean);
-      const said = sent.length ? `No feedback yet. ${sent.join(". ")}.`
-        : o.emailed ? "No feedback yet. The agent was emailed a link after the open house." : "No feedback for this open house.";
+      const first = esc(o.agent.name.split(" ")[0]), asked = askedSoFar(o);
+      const said = asked ? `No feedback yet. ${asked}` : "No feedback for this open house.";
       return `<div class="notes fbwait"><span>${said}</span><span class="fbacts">
         <button class="btn ghost small" data-enter="${esc(o.id)}">Leave Feedback</button>
         <button class="btn ghost small" data-remind="${esc(o.id)}">${o.reminded ? "Email another reminder" : `Email ${first} a reminder`}</button>
@@ -915,29 +963,9 @@
         if (r.ok) paintPending(form, r.data.photos); else { unph.disabled = false; toast(r.data.message || "Couldn't remove that photo. Try again.", true); }
         return;
       }
-      const tbtn = e.target.closest("[data-textrem]");
-      if (tbtn) {
-        const o = h.openHouses.find((x) => x.id === tbtn.dataset.textrem); if (!o) return;
-        if (!(await OHDialog.confirm({ title: `Text ${o.agent.name} a reminder?`, ok: "Send text",
-          body: `${o.agent.name.split(" ")[0]} gets a text at ${o.phone}${textFrom ? ` from ${textFrom}` : ""} asking for feedback on the ${withYear(o)} open house at ${h.addr}, with a link to leave it.` }))) return;
-        tbtn.disabled = true; tbtn.textContent = "Sending…";
-        const r = await api("POST", "/api/team/feedback", { id: o.id, action: "text" });
-        if (!r.ok) { toast(r.data.message || "The text didn't send. Try again.", true); paint(); return; }
-        Object.assign(o, { texted: r.data.texted, texts: r.data.texts });
-        toast(`Text sent to ${o.agent.name}.`);
-        paint();
-        return;
-      }
-      const btn = e.target.closest("[data-remind]"); if (!btn) return;
-      const o = h.openHouses.find((x) => x.id === btn.dataset.remind); if (!o) return;
-      if (!(await OHDialog.confirm({ title: `Email ${o.agent.name} a reminder?`, ok: "Send reminder",
-        body: `${o.agent.name.split(" ")[0]} gets an email asking how the ${withYear(o)} open house at ${h.addr} went, with a link to leave feedback.` }))) return;
-      btn.disabled = true; btn.textContent = "Sending…";
-      const r = await api("POST", "/api/team/feedback", { id: o.id, action: "remind" });
-      if (!r.ok) { toast(r.data.message || "The reminder didn't send. Try again.", true); paint(); return; }
-      Object.assign(o, { reminded: r.data.reminded, reminders: r.data.reminders });
-      toast(`Reminder sent to ${o.agent.name}.`);
-      paint();
+      const btn = e.target.closest("[data-textrem], [data-remind]"); if (!btn) return;
+      const o = h.openHouses.find((x) => x.id === (btn.dataset.textrem || btn.dataset.remind)); if (!o) return;
+      if ((await askForFeedback(btn.dataset.textrem ? "text" : "email", h, o, btn)) !== null) paint();
     };
     $("ohList").oninput = (e) => { const form = formFor(e.target); if (form) syncRequired(form); };
     // Photos for the feedback: shrunk, then uploaded one at a time.

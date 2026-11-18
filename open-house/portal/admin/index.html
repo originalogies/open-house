@@ -177,11 +177,17 @@ td .sub{font-size:.84rem;color:var(--muted)}
 /* Feedback: agents' feedback after hosting, by home (Feedback tab) and per open house */
 .flagged{color:var(--danger)}
 dl.fb{display:grid;grid-template-columns:auto auto auto 1fr;gap:10px 28px;margin:10px 0 0;font-size:.92rem}
-dl.fb dt{font-size:.78rem;color:var(--muted)}dl.fb dd{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
+dl.fb dt{font-size:.78rem;font-weight:700;color:var(--muted)}dl.fb dd{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
 dl.fb .wide{grid-column:1/-1}
 .fbphotos{display:flex;gap:8px;flex-wrap:wrap}
 .fbphotos img{width:96px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--photo)}
 .fbq{display:grid;gap:12px}
+/* Feedback tab: open houses still waiting on feedback */
+.fbwaitbox{padding:14px 16px;margin:0 0 18px;border-color:var(--brass)}
+.fbwaitbox h2{font-family:var(--serif);font-weight:500;font-size:1.2rem;margin:0}
+.fbwaitbox>.sub{margin:2px 0 6px}
+.fbwaitbox ul{list-style:none;margin:0;padding:0}
+.fbwaitbox li{display:flex;gap:8px 16px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
 .fbcard{padding:14px 16px}
 .fbcard.flag{border-color:var(--danger)}
 .fbcard h3{font-family:var(--serif);font-weight:500;font-size:1.15rem;margin:0}
@@ -222,7 +228,7 @@ dl.fb .wide{grid-column:1/-1}
 .fbp{position:relative;display:inline-block}
 .fbp img{width:96px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--photo)}
 .fbp button{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:1rem;line-height:1;cursor:pointer}
-@media (max-width:720px){.lfb a{display:inline-block;padding:12px 0}.ohshow .chip,#fbStatus .chip{min-height:44px}.fbwait .btn{flex:1 1 100%;min-height:44px}.fbacts{width:100%}.fbrow,.fbenter .two{grid-template-columns:1fr}.seg label{min-height:44px}.fbph .btn{min-height:44px}}
+@media (max-width:720px){.lfb a{display:inline-block;padding:12px 0}.ohshow .chip,#fbStatus .chip{min-height:44px}.fbwait .btn,.fbwaitbox .btn{flex:1 1 100%;min-height:44px}.fbacts{width:100%}.fbrow,.fbenter .two{grid-template-columns:1fr}.seg label{min-height:44px}.fbph .btn{min-height:44px}}
 .said{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .said .card{padding:16px 18px}
 .said h3{font-family:var(--serif);font-weight:500;font-size:1.1rem;margin:0 0 6px}
