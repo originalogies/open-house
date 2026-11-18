@@ -228,20 +228,21 @@
   // The time frame as [first, last] open house dates ("" = open-ended). Weeks run Monday to Sunday,
   // so "This week" holds this weekend's open houses.
   const shiftIso = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-  function rangeBounds() {
+  // The Feedback tab uses the same time frames, by the day the feedback came in.
+  function rangeBounds(range = reqRange, from = reqFrom, to = reqTo) {
     const t = todayIso(), [y, m] = t.split("-").map(Number);
-    if (reqRange === "week") { const mon = shiftIso(t, -((new Date(`${t}T12:00:00Z`).getUTCDay() + 6) % 7)); return [mon, shiftIso(mon, 6)]; }
-    if (reqRange === "month") return [t.slice(0, 8) + "01", new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)];
-    if (reqRange === "year") return [`${y}-01-01`, `${y}-12-31`];
-    if (reqRange === "custom") return reqFrom && reqTo && reqFrom > reqTo ? [reqTo, reqFrom] : [reqFrom, reqTo];
+    if (range === "week") { const mon = shiftIso(t, -((new Date(`${t}T12:00:00Z`).getUTCDay() + 6) % 7)); return [mon, shiftIso(mon, 6)]; }
+    if (range === "month") return [t.slice(0, 8) + "01", new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)];
+    if (range === "year") return [`${y}-01-01`, `${y}-12-31`];
+    if (range === "custom") return from && to && from > to ? [to, from] : [from, to];
     return ["", ""];
   }
   const inRange = (r, [a, b]) => (!a || r.iso >= a) && (!b || r.iso <= b);
   const fmtIso = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
-  function rangeLabel() {
-    const [a, b] = rangeBounds();
+  function rangeLabel(bounds = rangeBounds(), all = "Every open house") {
+    const [a, b] = bounds;
     if (a && b) return `${fmtIso(a)} – ${fmtIso(b)}`;
-    return a ? `From ${fmtIso(a)}` : b ? `Through ${fmtIso(b)}` : "Every open house";
+    return a ? `From ${fmtIso(a)}` : b ? `Through ${fmtIso(b)}` : all;
   }
 
   async function renderRequests() {
@@ -706,10 +707,10 @@
   const withYear = (o) => `${o.day}, ${o.date}${o.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${o.iso.slice(0, 4)}` : ""}`;
   const priceMix = (h) => Object.entries(PRICE).filter(([k]) => k !== "none" && h.price[k]).map(([k, v]) => `${v} ${h.price[k]}`).join(" · ") || "—";
   const interestMix = (h) => Object.entries(INTEREST).filter(([k]) => h.interest[k]).map(([k, v]) => `${v} ${h.interest[k]}`).join(" · ") || "—";
-  let fbSearch = "";
-  // Feedback tab: Active (on the market now, the Listings page's homes) by default, or Past (sold, expired or
-  // withdrawn), or All. Kept while the console is open, so "All homes" on a home's page comes back to it.
-  let fbStatus = "active";
+  // Feedback tab: every piece of feedback, newest received first, in full. Filters: Active homes (on the market
+  // now, the Listings page's homes) by default, or Past (sold, expired or withdrawn), or All; a search; and a time
+  // frame by the day it came in. Kept while the console is open, so "All feedback" on a home's page comes back to it.
+  let fbSearch = "", fbStatus = "active", fbRange = "all", fbFrom = "", fbTo = "";
   const HOME_STATUS = { active: ["Active", (h) => h.active], past: ["Past", (h) => !h.active], all: ["All", () => true] };
 
   let textFrom = ""; // the team's Quo number that feedback reminder texts come from
@@ -723,52 +724,73 @@
     const d = await loadHomes(true);
     if (!d) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
     const { homes, statusKnown } = d;
+    // Each piece of feedback with its home, newest received first; its day in Central for the time frame.
+    const dayOf = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date(ms));
+    const all = homes.flatMap((h) => h.openHouses.filter((o) => o.feedback).map((o) => ({ h, o, iso: dayOf(o.feedback.at) })))
+      .sort((a, b) => b.o.feedback.at - a.o.feedback.at);
     view.innerHTML = `
-      <section class="intro"><div><h1>Feedback by home</h1>
-        <p class="sub">What agents said after hosting, collected for each home. Homes flagged for the broker are at the top. The history stays here after a home sells or is relisted.</p></div></section>
-      <div class="stats" id="fbStats"></div>
-      <div class="toolbar">
-        ${statusKnown ? `<div class="chips" id="fbStatus" role="group" aria-label="Homes">${Object.entries(HOME_STATUS).map(([k, [label, f]]) =>
-          `<button class="chip" data-status="${k}">${label} (${homes.filter(f).length})</button>`).join("")}</div>`
-          : '<p class="fine" style="margin:0">Repliers couldn\'t be reached, so active and past homes can\'t be told apart right now. Showing all homes.</p>'}
-        <input class="field" id="fbSearch" type="search" placeholder="Search address or city" value="${esc(fbSearch)}" aria-label="Search homes">
-        <span class="spacer"></span>
-        ${homes.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
+      <section class="intro"><div><h1>Feedback</h1>
+        <p class="sub">What agents said after hosting, newest first. Each home's name opens its full history, including open houses still waiting on feedback. The history stays here after a home sells or is relisted.</p></div></section>
+      <div class="timeframe">
+        <label class="tf-pick"><span>Received</span><select class="field" id="fbRange">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === fbRange ? "selected" : ""}>${k === "all" ? "Any time" : v}</option>`).join("")}</select></label>
+        <span class="tf-dates" id="fbCustom" ${fbRange === "custom" ? "" : "hidden"}>
+          <label><span>From</span><input class="field" type="date" id="fbFrom" value="${esc(fbFrom)}"></label>
+          <label><span>To</span><input class="field" type="date" id="fbTo" value="${esc(fbTo)}"></label>
+        </span>
+        <span class="tf-label" id="fbRangeLabel"></span>
       </div>
-      <div class="card table-wrap"><table class="stack"><thead><tr><th>Home</th><th>Open houses</th><th>Groups</th><th>Level of Interest</th><th>Last hosted</th></tr></thead><tbody id="homeRows"></tbody></table></div>`;
+      <div class="toolbar">
+        ${statusKnown ? `<div class="chips" id="fbStatus" role="group" aria-label="Homes">${Object.entries(HOME_STATUS).map(([k, [label]]) =>
+          `<button class="chip" data-status="${k}">${label}</button>`).join("")}</div>`
+          : '<p class="fine" style="margin:0">Repliers couldn\'t be reached, so active and past homes can\'t be told apart right now. Showing all homes.</p>'}
+        <input class="field" id="fbSearch" type="search" placeholder="Search address, city or agent" value="${esc(fbSearch)}" aria-label="Search feedback">
+        <span class="spacer"></span>
+        <span class="sub" id="fbCount" role="status"></span>
+        ${all.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
+      </div>
+      <div class="fbq" id="fbList"></div>`;
     const status = () => (statusKnown ? fbStatus : "all");
-    const matches = (h) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls].join(" ").toLowerCase().includes(q); };
-    const inStatus = () => homes.filter(HOME_STATUS[status()][1]);
+    const matches = ({ h, o }) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls, o.agent.name, o.agent.email].join(" ").toLowerCase().includes(q); };
+    const card = ({ h, o }) => `<article class="card fbcard${o.feedback.brokerFlag ? " flag" : ""}">
+        <div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
+          <div><h3>${homeLink(h, h.addr)} <span class="sub">${esc(h.city)}${status() === "all" && statusKnown ? ` · ${h.active ? "Active" : "Past"}` : ""}</span>
+            ${o.feedback.brokerFlag ? '<span class="pill declined">⚠ Flagged for broker</span>' : ""}</h3>
+          <div class="meta">Open house ${esc(withYear(o))} · ${esc(o.time)} · Hosted by ${agentLink(o.agent.email, o.agent.name)}</div>
+          <div class="meta">${o.feedback.enteredBy ? `Entered by ${esc(o.feedback.enteredBy.name || "the team")}` : "Received"} ${esc(fmtDate(o.feedback.at))}</div></div></div>
+        ${fbText(o.feedback)}
+      </article>`;
     let shown = [];
     const fill = () => {
-      const pool = inStatus(), sum = (k) => pool.reduce((n, h) => n + h[k], 0);
-      shown = pool.filter(matches);
-      $("fbStats").innerHTML = `
-        <div class="card stat"><b>${pool.length}</b><span>Homes hosted</span></div>
-        <div class="card stat"><b>${sum("hosted")}</b><span>Open houses hosted</span></div>
-        <div class="card stat"><b>${sum("withFeedback")}</b><span>With feedback</span></div>
-        <div class="card stat"><b>${sum("visitors")}</b><span>Groups reported</span></div>`;
-      view.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === status())));
-      // Nothing here, but the search finds homes under another filter: offer those.
-      const elsewhere = !shown.length && fbSearch.trim() && status() !== "all" && homes.some(matches);
-      const empty = !homes.length ? "No open houses hosted yet. Homes show up here once an approved open house has ended."
-        : elsewhere ? `No ${HOME_STATUS[status()][0].toLowerCase()} homes match. <button class="link" data-status="all">Search all homes</button>`
-        : fbSearch.trim() ? "No homes match."
-        : status() === "active" ? "No homes on the market now have hosted an open house." : "No past homes yet.";
-      $("homeRows").innerHTML = shown.length ? shown.map((h) => `<tr>
-          <td data-l="Home"><div class="homecell">${h.img ? `<img class="thumb" src="${esc(photo(h.img))}" alt="" loading="lazy">` : '<div class="thumb"></div>'}
-            <div><b>${homeLink(h, h.addr)}</b><div class="sub">${esc(h.city)}${status() === "all" && statusKnown ? ` · ${h.active ? "Active" : "Past"}` : ""}${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged for broker</b>` : ""}</div></div></div></td>
-          <td data-l="Open houses">${h.hosted}<div class="sub">${h.withFeedback ? `<a href="${homeHref(h, "feedback")}">${h.withFeedback} with feedback</a>` : "No feedback yet"}</div></td>
-          <td data-l="Groups">${h.withFeedback ? h.visitors : '<span class="sub">—</span>'}</td>
-          <td data-l="Level of Interest">${esc(interestMix(h))}</td>
-          <td data-l="Last hosted">${esc(withYear(h.openHouses[0]))}</td>
-        </tr>`).join("") : `<tr><td colspan="5" class="empty">${empty}</td></tr>`;
+      const bounds = rangeBounds(fbRange, fbFrom, fbTo);
+      const inFrame = all.filter((e) => inRange(e, bounds) && matches(e));
+      shown = inFrame.filter((e) => HOME_STATUS[status()][1](e.h));
+      $("fbRangeLabel").textContent = rangeLabel(bounds, "");
+      view.querySelectorAll("[data-status]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b.dataset.status === status()));
+        if (b.classList.contains("chip")) b.textContent = `${HOME_STATUS[b.dataset.status][0]} (${inFrame.filter((e) => HOME_STATUS[b.dataset.status][1](e.h)).length})`;
+      });
+      $("fbCount").textContent = shown.length ? `${shown.length} piece${shown.length === 1 ? "" : "s"} of feedback` : "";
+      // Nothing here, but the search finds feedback under another filter: offer that.
+      const elsewhere = !shown.length && status() !== "all" && inFrame.length;
+      const empty = !all.length ? "No feedback yet. It shows up here as soon as an agent sends it."
+        : elsewhere ? `No feedback for ${HOME_STATUS[status()][0].toLowerCase()} homes matches. <button class="link" data-status="all">Show all homes</button>`
+        : "No feedback matches.";
+      $("fbList").innerHTML = shown.length ? shown.map(card).join("") : `<p class="empty">${empty}</p>`;
     };
     $("fbSearch").oninput = (e) => { fbSearch = e.target.value; fill(); };
+    $("fbRange").onchange = (e) => {
+      if (e.target.value === "custom" && !fbFrom && !fbTo) [fbFrom, fbTo] = rangeBounds(fbRange); // start from the range picked before
+      fbRange = e.target.value;
+      $("fbCustom").hidden = fbRange !== "custom";
+      $("fbFrom").value = fbFrom; $("fbTo").value = fbTo;
+      fill();
+    };
+    $("fbFrom").onchange = (e) => { fbFrom = e.target.value; fill(); };
+    $("fbTo").onchange = (e) => { fbTo = e.target.value; fill(); };
     const pick = (e) => { const b = e.target.closest("[data-status]"); if (b && statusKnown) { fbStatus = b.dataset.status; fill(); } };
     if (statusKnown) $("fbStatus").onclick = pick;
-    $("homeRows").onclick = pick; // "Search all homes" when the search finds nothing under this filter
-    if (homes.length) $("csv").onclick = () => exportFeedbackCsv(shown, `open-house-feedback${status() === "all" ? "" : `-${status()}`}`);
+    $("fbList").onclick = pick; // "Show all homes" when nothing matches under this filter
+    if (all.length) $("csv").onclick = () => exportFeedbackCsv(shown, `open-house-feedback${status() === "all" ? "" : `-${status()}`}`);
     fill();
   }
 
@@ -776,7 +798,7 @@
     const homes = await loadHomes();
     if (!homes) { view.innerHTML = '<p class="empty">Could not load feedback.</p>'; return; }
     const h = homes.find((x) => x.key === key);
-    const back = '<p style="margin:22px 0 0"><a href="#feedback">← All homes</a></p>';
+    const back = '<p style="margin:22px 0 0"><a href="#feedback">← All feedback</a></p>';
     if (!h) { view.innerHTML = back + '<p class="empty">No hosted open houses for this home.</p>'; return; }
     view.innerHTML = `${back}
       <section class="intro" style="padding-top:12px"><div><h1>${esc(h.addr)}</h1>
@@ -951,7 +973,7 @@
       show = b.dataset.show; history.replaceState(null, "", homeHref(h, show)); paint();
     };
     paint();
-    $("csv").onclick = () => exportFeedbackCsv([h], `feedback-${h.addr.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+    $("csv").onclick = () => exportFeedbackCsv(h.openHouses.map((o) => ({ h, o })), `feedback-${h.addr.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
   }
 
   // What guests liked and didn't like, across every open house at the home: what the seller needs to hear.
@@ -967,10 +989,12 @@
       </div>`;
   }
 
-  function exportFeedbackCsv(homes, name) {
+  // One row per open house ({ h: home, o: open house }), with when its feedback came in.
+  function exportFeedbackCsv(list, name) {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email", ...FB_HEAD];
-    const rows = homes.flatMap((h) => h.openHouses.map((o) => [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time, o.agent.name, o.agent.email, ...fbCsv(o.feedback)]));
+    const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email", "Feedback received", ...FB_HEAD];
+    const rows = list.map(({ h, o }) => [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time, o.agent.name, o.agent.email,
+      o.feedback?.at ? new Date(o.feedback.at).toISOString() : "", ...fbCsv(o.feedback)]);
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
     URL.revokeObjectURL(a.href);
