@@ -97,6 +97,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 40px;font-size:.8rem;colo
 
 <script src="/nav.js"></script>
 <script src="/auth.js"></script>
+<script src="/photo-viewer.js"></script>
 <script>
 const CDN = "https://cdn.repliers.io/";
 const $ = id => document.getElementById(id);
@@ -146,7 +147,7 @@ function showSent(o, f, justSent){
       <dt>What guests didn't like or would change</dt><dd>${f.disliked ? esc(f.disliked) : "Nothing noted"}</dd>
       ${f.forSeller ? `<dt>Additional feedback</dt><dd>${esc(f.forSeller)}</dd>` : ""}`}
       <dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : "None"}</dd>
-      ${(f.photos || []).length ? `<dt>Photos</dt><dd class="photos">${f.photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house"></a>`).join("")}</dd>` : ""}</dl>
+      ${(f.photos || []).length ? `<dt>Photos</dt><dd class="photos">${f.photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" data-photo><img src="${esc(u)}" alt="Photo from the open house"></a>`).join("")}</dd>` : ""}</dl>
     <p style="margin:18px 0 0"><a href="/my-open-houses/">Back to My Requests</a></p></div>`;
 }
 

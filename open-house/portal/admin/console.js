@@ -72,7 +72,7 @@
       <div class="wide"><dt>What guests didn't like or would change</dt><dd>${f.disliked ? esc(f.disliked) : none}</dd></div>
       ${f.forSeller ? `<div class="wide"><dt>Additional feedback</dt><dd>${esc(f.forSeller)}</dd></div>` : ""}`}
       <div class="wide"><dt>Notes for the team</dt><dd>${f.teamNotes ? esc(f.teamNotes) : '<span class="sub">None</span>'}</dd></div>
-      ${(f.photos || []).length ? `<div class="wide"><dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd></div>` : ""}</dl>`; };
+      ${(f.photos || []).length ? `<div class="wide"><dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener" data-photo><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd></div>` : ""}</dl>`; };
   // Feedback columns for the CSV exports. Older feedback's "What happened" goes in the liked column.
   const FB_HEAD = ["Groups", "Level of Interest", "Price", "What guests liked", "What guests didn't like", "Additional feedback", "Notes for the team", "Photos", "Flagged for broker"];
   const fbCsv = (f) => !f ? FB_HEAD.map(() => "") : [f.visitors, INTEREST[f.interest] || "", PRICE[f.price] || "", f.liked ?? f.happened, f.disliked || "",

@@ -93,6 +93,7 @@ ol.steps li.bad span,ol.steps li.warn span{color:var(--danger)}
 <body>
 <main><a class="back" id="back" href="/admin/#requests">← Back to Requests</a><div class="card" id="card"><p>Loading…</p></div></main>
 <script src="/dialog.js"></script>
+<script src="/photo-viewer.js"></script>
 <script>
 const $ = (id) => document.getElementById(id), card = $("card");
 // Back returns to the page that opened this one (the Admin Console keeps its filters), or to the
@@ -365,7 +366,7 @@ function feedbackSection(d) {
     <dl style="margin:0"><dt>Groups · Level of Interest${f.price ? " · Price" : ""}</dt><dd>${f.visitors} · ${esc(INTEREST[f.interest] || f.interest)}${f.price ? ` · ${esc(PRICE[f.price])}` : ""}</dd>
       ${f.happened != null ? item("What happened", f.happened) : item("What guests liked", f.liked) + item("What guests didn't like or would change", f.disliked) + (f.forSeller ? item("Additional feedback", f.forSeller) : "")}
       ${item("Notes for the team", f.teamNotes)}
-      ${(f.photos || []).length ? `<dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd>` : ""}</dl>
+      ${(f.photos || []).length ? `<dt>Photos</dt><dd class="fbphotos">${f.photos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener" data-photo><img src="${esc(u)}" alt="Photo from the open house" loading="lazy"></a>`).join("")}</dd>` : ""}</dl>
     <p class="muted" style="margin:10px 0 0">Sent ${esc(fmtAt(f.at))}.</p></div>`;
 }
 
