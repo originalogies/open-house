@@ -710,7 +710,7 @@
   // Feedback tab: every piece of feedback, newest received first, in full. Filters: Active homes (on the market
   // now, the Listings page's homes) by default, or Past (sold, expired or withdrawn), or All; a search; and a time
   // frame by the day it came in. Kept while the console is open, so "All feedback" on a home's page comes back to it.
-  let fbSearch = "", fbStatus = "active", fbRange = "all", fbFrom = "", fbTo = "";
+  let fbSearch = "", fbStatus = "active", fbRange = "all", fbFrom = "", fbTo = "", fbPer = 25, fbPage = 1;
   const HOME_STATUS = { active: ["Active", (h) => h.active], past: ["Past", (h) => !h.active], all: ["All", () => true] };
 
   let textFrom = ""; // the team's Quo number that feedback reminder texts come from
@@ -745,10 +745,10 @@
           : '<p class="fine" style="margin:0">Repliers couldn\'t be reached, so active and past homes can\'t be told apart right now. Showing all homes.</p>'}
         <input class="field" id="fbSearch" type="search" placeholder="Search address, city or agent" value="${esc(fbSearch)}" aria-label="Search feedback">
         <span class="spacer"></span>
-        <span class="sub" id="fbCount" role="status"></span>
         ${all.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
       </div>
-      <div class="fbq" id="fbList"></div>`;
+      <div class="fbq" id="fbList"></div>
+      ${pagerHtml("Pages of feedback", fbPer)}`;
     const status = () => (statusKnown ? fbStatus : "all");
     const matches = ({ h, o }) => { const q = fbSearch.trim().toLowerCase(); return !q || [h.addr, h.city, h.zip, ...h.mls, o.agent.name, o.agent.email].join(" ").toLowerCase().includes(q); };
     const card = ({ h, o }) => `<article class="card fbcard${o.feedback.brokerFlag ? " flag" : ""}">
@@ -769,25 +769,30 @@
         b.setAttribute("aria-pressed", String(b.dataset.status === status()));
         if (b.classList.contains("chip")) b.textContent = `${HOME_STATUS[b.dataset.status][0]} (${inFrame.filter((e) => HOME_STATUS[b.dataset.status][1](e.h)).length})`;
       });
-      $("fbCount").textContent = shown.length ? `${shown.length} piece${shown.length === 1 ? "" : "s"} of feedback` : "";
+      const pg = paintPager(shown.length, fbPage, fbPer); fbPage = pg.page;
       // Nothing here, but the search finds feedback under another filter: offer that.
       const elsewhere = !shown.length && status() !== "all" && inFrame.length;
       const empty = !all.length ? "No feedback yet. It shows up here as soon as an agent sends it."
         : elsewhere ? `No feedback for ${HOME_STATUS[status()][0].toLowerCase()} homes matches. <button class="link" data-status="all">Show all homes</button>`
         : "No feedback matches.";
-      $("fbList").innerHTML = shown.length ? shown.map(card).join("") : `<p class="empty">${empty}</p>`;
+      $("fbList").innerHTML = shown.length ? shown.slice(pg.first, pg.last).map(card).join("") : `<p class="empty">${empty}</p>`;
     };
-    $("fbSearch").oninput = (e) => { fbSearch = e.target.value; fill(); };
+    const refill = () => { fbPage = 1; fill(); };
+    $("fbSearch").oninput = (e) => { fbSearch = e.target.value; refill(); };
     $("fbRange").onchange = (e) => {
       if (e.target.value === "custom" && !fbFrom && !fbTo) [fbFrom, fbTo] = rangeBounds(fbRange); // start from the range picked before
       fbRange = e.target.value;
       $("fbCustom").hidden = fbRange !== "custom";
       $("fbFrom").value = fbFrom; $("fbTo").value = fbTo;
-      fill();
+      refill();
     };
-    $("fbFrom").onchange = (e) => { fbFrom = e.target.value; fill(); };
-    $("fbTo").onchange = (e) => { fbTo = e.target.value; fill(); };
-    const pick = (e) => { const b = e.target.closest("[data-status]"); if (b && statusKnown) { fbStatus = b.dataset.status; fill(); } };
+    $("fbFrom").onchange = (e) => { fbFrom = e.target.value; refill(); };
+    $("fbTo").onchange = (e) => { fbTo = e.target.value; refill(); };
+    const pick = (e) => { const b = e.target.closest("[data-status]"); if (b && statusKnown) { fbStatus = b.dataset.status; refill(); } };
+    $("per").onchange = (e) => { const n = Number(e.target.value); fbPage = resizedPage(fbPage, fbPer, n); fbPer = n; fill(); };
+    const turn = (n) => { fbPage += n; fill(); $("fbList").scrollIntoView({ block: "start" }); };
+    $("prev").onclick = () => turn(-1);
+    $("next").onclick = () => turn(1);
     if (statusKnown) $("fbStatus").onclick = pick;
     $("fbList").onclick = pick; // "Show all homes" when nothing matches under this filter
     if (all.length) $("csv").onclick = () => exportFeedbackCsv(shown, `open-house-feedback${status() === "all" ? "" : `-${status()}`}`);
