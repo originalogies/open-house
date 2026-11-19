@@ -1,6 +1,7 @@
 import {
   json, currentUser, getAccess, saveAccess, adminEmails, parseList, normalizeEmail, normalizeDomain, sameOrigin,
 } from "../lib/shared.mjs";
+import { getLimits } from "../lib/limits.mjs";
 
 export default async (req) => {
   const user = await currentUser(req);
@@ -8,8 +9,8 @@ export default async (req) => {
   if (!user.admin) return json(403, { error: "admin_only" });
 
   if (req.method === "GET") {
-    const a = await getAccess();
-    return json(200, { emails: a.stored.emails, domains: a.stored.domains, env: a.env, admins: adminEmails(), team: parseList(process.env.TEAM_EMAILS) });
+    const [a, limits] = await Promise.all([getAccess(), getLimits()]);
+    return json(200, { emails: a.stored.emails, domains: a.stored.domains, env: a.env, admins: adminEmails(), team: parseList(process.env.TEAM_EMAILS), limits });
   }
 
   if (req.method === "PUT") {

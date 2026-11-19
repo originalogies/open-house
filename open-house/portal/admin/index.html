@@ -334,6 +334,11 @@ details.email[open]>summary{border-bottom:1px solid var(--line)}
 .txt .bubble{margin:10px 0 2px;max-width:34em;padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--accent-soft);font-size:.92rem;line-height:1.4;overflow-wrap:anywhere}
 .ttest{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin-top:14px}
 @media (max-width:720px){.ttest .btn{min-height:44px}}
+/* Agents page: each agent's listing limit, typed in place and saved when the field is left. */
+label.limit{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+label.limit .field{width:130px;padding:7px 10px;font-size:16px;color:var(--ink)} /* 16px: iPhones don't zoom into the field */
+label.limit .field:disabled{opacity:.6}
+@media (max-width:720px){table.stack td[data-l="Listing limit"]{align-items:center}}
 .addrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .addrow .field{flex:1;min-width:200px}
 .taglist{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}

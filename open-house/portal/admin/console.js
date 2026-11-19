@@ -1358,6 +1358,11 @@
     if (!a.ok) { view.innerHTML = '<p class="empty">Only administrators can manage agents.</p>'; return; }
     let access = a.data;
     const ag = g.ok && g.data.on ? g.data : null; // the Agreement column shows once the agreement is required
+    // Listing limits: the highest list price each agent can book on the portal. Homes over it show there grayed out.
+    let limits = access.limits || {};
+    const limitText = (n) => (n ? Number(n).toLocaleString("en-US") : "");
+    const limitCell = (p) => `<label class="limit"><span aria-hidden="true">$</span><input class="field" inputmode="numeric" autocomplete="off"
+      data-limit="${esc(p.email)}" value="${esc(limitText(limits[p.email]))}" placeholder="No limit" aria-label="Listing limit for ${esc(p.name || p.email)}"></label>`;
 
     const draw = () => {
       const domainOf = (e) => e.slice(e.lastIndexOf("@") + 1);
@@ -1383,22 +1388,24 @@
 
       view.innerHTML = `
         <section class="intro"><div><h1>Agents and access</h1>
-          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}</p></div></section>
+          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}
+            A listing limit is the highest list price an agent can book: homes over it show grayed out on the portal, with a note to ask the team for access. Leave it blank for no limit.</p></div></section>
         <div class="card panel">
           <h3>Add an agent</h3>
           <p class="fine">For agents who sign in with an address outside an allowed domain, like a personal Gmail.</p>
           <form class="addrow" id="addEmail"><input class="field" id="newEmail" type="email" placeholder="agent@example.com" autocomplete="off" aria-label="Agent email"><button class="btn">Add agent</button></form>
         </div>
-        <div class="card table-wrap"><table class="stack"><thead><tr><th>Person</th><th>Access</th>${ag ? "<th>Agreement</th>" : ""}<th>Requests</th><th>Approved</th><th>Last request</th><th></th></tr></thead>
+        <div class="card table-wrap"><table class="stack"><thead><tr><th>Person</th><th>Access</th>${ag ? "<th>Agreement</th>" : ""}<th>Listing limit</th><th>Requests</th><th>Approved</th><th>Last request</th><th></th></tr></thead>
           <tbody>${people.map((p) => `<tr>
             <td data-l="Person">${p.name ? `${agentLink(p.email, p.name)}<div class="sub">${esc(p.email)}</div>` : agentLink(p.email)}</td>
             <td data-l="Access">${how(p)}</td>
             ${ag ? `<td data-l="Agreement">${agreementCell(ag, p.email)}</td>` : ""}
+            <td data-l="Listing limit">${limitCell(p)}</td>
             <td data-l="Requests">${p.requests}</td>
             <td data-l="Approved">${p.approved}</td>
             <td data-l="Last request">${p.last ? esc(fmtDate(p.last)) : '<span class="sub">—</span>'}</td>
             <td data-l="">${access.emails.includes(p.email) ? `<button class="link" data-rm="${esc(p.email)}">Remove</button>` : ""}</td>
-          </tr>`).join("") || `<tr><td colspan="${ag ? 7 : 6}" class="empty">No one yet.</td></tr>`}</tbody></table></div>
+          </tr>`).join("") || `<tr><td colspan="${ag ? 8 : 7}" class="empty">No one yet.</td></tr>`}</tbody></table></div>
         <h2 class="section">Domain access</h2>
         <div class="card panel">
           <p class="fine" style="margin-top:0">Everyone with an address at these domains can sign in. Subdomains are not included.</p>
@@ -1413,6 +1420,19 @@
       view.querySelectorAll("[data-rm]").forEach((b) => b.onclick = async () =>
         (await OHDialog.confirm({ title: `Remove ${b.dataset.rm}?`, body: "They lose access right away.", ok: "Remove", danger: true }))
         && save({ emails: access.emails.filter((x) => x !== b.dataset.rm), domains: access.domains }, `Removed ${b.dataset.rm}.`));
+      // A limit saves when the field is left or Enter is pressed; it's shown back with commas.
+      view.querySelectorAll("[data-limit]").forEach((f) => {
+        f.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); f.blur(); } };
+        f.onchange = async () => {
+          const email = f.dataset.limit, was = limits[email] || null;
+          f.disabled = true;
+          const r = await api("PUT", "/api/admin/limits", { email, limit: f.value });
+          f.disabled = false;
+          if (!r.ok) { f.value = limitText(was); return toast(r.data.message || "Could not save the limit. Try again.", true); }
+          limits = r.data.limits; f.value = limitText(r.data.limit);
+          toast(r.data.limit ? `${email} can book homes up to ${money(r.data.limit)}.` : `${email} has no listing limit.`);
+        };
+      });
       view.querySelectorAll("[data-rmd]").forEach((b) => b.onclick = async () =>
         (await OHDialog.confirm({ title: `Remove @${b.dataset.rmd}?`, body: "Everyone at that domain who isn't listed loses access right away.", ok: "Remove domain", danger: true }))
         && save({ emails: access.emails, domains: access.domains.filter((x) => x !== b.dataset.rmd) }, `Removed @${b.dataset.rmd}.`));

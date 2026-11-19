@@ -89,6 +89,17 @@ button{font:inherit;color:inherit}
 .card .facts{white-space:nowrap}
 .card .facts b{font-weight:700}
 .card .sep{margin:0 7px;color:var(--muted);opacity:.6}
+/* A home over the agent's listing limit: shown, grayed out, and not bookable. Hovering it (or tapping it on a phone)
+   shows a note over the photo saying to ask the George & Noonan team for access. */
+.card.locked{cursor:not-allowed}
+.card.locked .photo img,.card.locked .fallback,.card.locked .tl,.card.locked .pri-badge{filter:grayscale(.85);opacity:.55}
+.card.locked.priority{box-shadow:none;border-color:var(--line)}
+.card.locked:hover img{transform:none}
+.card.locked .meta{opacity:.55}
+.card .lock-note{position:absolute;left:12px;right:12px;bottom:12px;z-index:3;display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:rgba(22,32,42,.92);color:#fff;font-size:.85rem;font-weight:500;line-height:1.35;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none}
+.card .lock-note svg{flex:0 0 auto;margin-top:1px}
+.card.locked.open .lock-note,.card.locked:focus-visible .lock-note{opacity:1;visibility:visible}
+@media (hover:hover){.card.locked:hover .lock-note{opacity:1;visibility:visible}}
 /* Vacant tag: on the photo card (hover shows what it means) and in the details panel (hover, keyboard focus or tap) */
 .vac{display:inline-flex;align-items:center;gap:5px;background:#E3EEEA;color:#1E5B4F;font-size:.8rem;font-weight:700;padding:5px 10px;border-radius:999px;line-height:1.2}
 /* The badges on a card ("New Listing", "Vacant", "★ Priority") are all one size. */
@@ -466,22 +477,33 @@ gal.addEventListener("keydown", e => { if(e.key === "ArrowLeft" || e.key === "Ar
 
 // Cards
 const grid = $("grid");
+// Homes over the agent's listing limit (set by the team on the Admin Console's Agents page) come marked locked.
+// One the agent already has a request for still opens, so they can see it or ask to cancel; a new request for
+// it is turned away by the server.
+let LOCKED_MSG = "This home is above your listing limit. Reach out to a George & Noonan team member to request access.";
+const isLocked = h => !!h.locked && !h.mine.length;
+const LOCK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const closeLockNotes = () => grid.querySelectorAll(".card.locked.open").forEach(c => c.classList.remove("open"));
+document.addEventListener("click", e => { if(!e.target.closest(".card.locked")) closeLockNotes(); });
 function renderGrid(){
   grid.innerHTML = "";
   homes.forEach((h,i) => {
     const b = document.createElement("button");
-    b.className = "card" + (h.priority ? " priority" : "");
+    const locked = isLocked(h);
+    b.className = "card" + (h.priority ? " priority" : "") + (locked ? " locked" : "");
     const flag = flagOf(h);
-    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${flag ? flag+". " : ""}${h.addr}, ${h.city}, ${money(h.price)}.${h.vacant?" Vacant: "+VACANT_TIP:""} Request an open house.`);
+    b.setAttribute("aria-label", `${h.priority?"Priority listing. ":""}${flag ? flag+". " : ""}${h.addr}, ${h.city}, ${money(h.price)}.${h.vacant?" Vacant: "+VACANT_TIP:""} ${locked ? LOCKED_MSG : "Request an open house."}`);
+    if(locked) b.setAttribute("aria-disabled", "true");
     b.innerHTML = `<div class="photo"><img loading="lazy"><div class="fallback"></div>
-        <div class="tl">${flag ? `<span class="flag">${flag}</span>` : ""}${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}</div>
+        <div class="tl">${flag ? `<span class="flag">${flag}</span>` : ""}${h.vacant?`<span class="vac tip">Vacant <i class="tip-i">i</i><span class="tip-text">${VACANT_TIP}</span></span>`:""}</div>${h.priority?'<span class="pri-badge">★ Priority</span>':""}${locked ? `<span class="lock-note" aria-hidden="true">${LOCK_ICON}<span>${esc(LOCKED_MSG)}</span></span>` : ""}</div>
       <div class="meta">
         <div class="addr">${h.addr}</div>
         <div class="city">${h.city}, TX ${h.zip}</div>
         <div class="numbers"><span class="price">${money(h.price)}</span><span class="facts">${specsOf(h)}</span></div>
       </div>`;
     imgEl(h, b.querySelector("img"), b);
-    b.onclick = () => openSheet(i, b);
+    // A locked home doesn't open: a tap shows (or hides) its note instead, and a tap anywhere else hides it.
+    b.onclick = locked ? () => { const was = b.classList.contains("open"); closeLockNotes(); b.classList.toggle("open", !was); } : () => openSheet(i, b);
     grid.appendChild(b);
   });
 }
@@ -492,7 +514,7 @@ async function loadListings(){
   const r = await (firstLoad || fetch("/api/listings").catch(() => null)); firstLoad = null;
   if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
   const d = await r.json();
-  window.CLOSES = d.closesLabel; homes = d.listings; DAYS = d.week; OPEN = d.open || Object.keys(d.week); FIRST = d.firstHour; LAST = d.lastHour;
+  window.CLOSES = d.closesLabel; if(d.lockedMessage) LOCKED_MSG = d.lockedMessage; homes = d.listings; DAYS = d.week; OPEN = d.open || Object.keys(d.week); FIRST = d.firstHour; LAST = d.lastHour;
   return d;
 }
 document.addEventListener("signedin", async () => {
@@ -553,6 +575,7 @@ async function askToCancel(id, what, showError){
 // Sheet
 let cur=null, day=null, sel=null, lastFocus=null; // sel = {from,to}: the request's start and end, on the hour
 function openSheet(i, trigger){
+  if(isLocked(homes[i])) return;
   cur = homes[i]; day=null; sel=null; lastFocus=trigger;
   showGallery(cur);
   $("sTitle").textContent = cur.addr;

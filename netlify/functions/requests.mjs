@@ -5,6 +5,7 @@ import { sendRequestReceived, sendRequestSent, siteFor } from "../lib/email.mjs"
 import { fmtRange, chicagoNow, chicagoToUtc } from "../lib/time.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 import { openDays } from "../lib/week.mjs";
+import { getLimits, limitFor, overLimit, LIMIT_MESSAGE } from "../lib/limits.mjs";
 
 // GET  /api/requests -> the signed-in agent's own requests (history and status)
 // POST /api/requests -> submit a new request
@@ -20,12 +21,14 @@ export default async (req) => {
   if (!user) return json(401, { error: "signed_out" });
   if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
 
-  const week = await currentWeek();
+  const [week, limits] = await Promise.all([currentWeek(), getLimits()]);
   const b = await req.json().catch(() => null);
   let offered;
   try { offered = await offeredListings(week); } catch { return json(502, { error: "listings_unavailable", message: "Listings are unavailable right now. Try again shortly." }); }
   const listing = b && offered.find((l) => l.mls === String(b.mls));
   const from = Number(b?.from), to = Number(b?.to);
+  // Over the agent's listing limit: only the team can book it for them (team-new-request.mjs).
+  if (listing && overLimit(listing.price, limitFor(limits, user.email))) return json(403, { error: "over_limit", message: LIMIT_MESSAGE });
   // A day the seller allows that's still ahead this week (any day, Monday to Sunday).
   if (!listing || !listing.days.includes(b.day) || !openDays(week).includes(b.day) || !Number.isInteger(from) || !Number.isInteger(to)
       || from < week.firstHour || to > week.lastHour || from >= to) {

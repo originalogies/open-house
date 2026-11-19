@@ -4,10 +4,11 @@ import { listRequests, holdsSlot } from "../lib/requests.mjs";
 import { currentWeek } from "../lib/settings.mjs";
 import { openDays } from "../lib/week.mjs";
 import { openCancelRequest } from "../lib/changes.mjs";
+import { getLimits, limitFor, overLimit, LIMIT_MESSAGE } from "../lib/limits.mjs";
 
 export default async (req) => {
   // Independent reads run together; the requests are read while the listings load.
-  const [user, week] = await Promise.all([currentUser(req), currentWeek()]);
+  const [user, week, limits] = await Promise.all([currentUser(req), currentWeek(), getLimits()]);
   if (!user) return json(401, { error: "signed_out" });
   if (user.mustSign) return json(403, { error: "agreement_required" }); // not until they sign the agreement
   const requests = listRequests();
@@ -22,8 +23,11 @@ export default async (req) => {
   const all = (await requests).filter((r) => Object.values(week.days).some((d) => d.iso === r.iso));
   const live = (r) => r.status === "pending" || r.status === "approved";
   const dayKey = (iso) => Object.keys(week.days).find((k) => week.days[k].iso === iso);
+  // Homes over the agent's listing limit still show, marked locked: the portal grays them out and won't book them.
+  const limit = limitFor(limits, user.email);
   const listings = offered.map((l) => ({
     ...publicListing(l),
+    ...(overLimit(l.price, limit) && { locked: true }),
     // Hours locked by someone else's approved request, or already on the MLS.
     taken: [
       ...all.filter((r) => r.mls === l.mls && holdsSlot(r) && r.agent.email !== user.email).map((r) => ({ day: dayKey(r.iso), from: r.from, to: r.to })),
@@ -31,6 +35,6 @@ export default async (req) => {
     ],
     mine: all.filter((r) => r.mls === l.mls && r.agent.email === user.email && live(r)).map((r) => ({ id: r.id, day: dayKey(r.iso), from: r.from, to: r.to, status: r.status, cancelRequested: openCancelRequest(r) })),
   }));
-  return json(200, { week: week.days, open, weekLabel: week.label, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, listings });
+  return json(200, { week: week.days, open, weekLabel: week.label, firstHour: week.firstHour, lastHour: week.lastHour, closesLabel: week.closesLabel, cutoffEnabled: week.cutoffEnabled, closed: false, limit, lockedMessage: LIMIT_MESSAGE, listings });
 };
 export const config = { path: "/api/listings" };
