@@ -4,7 +4,7 @@
 // Stored as one blob, { "<email>": <dollars> }, beside the access list. The team can still add a request for an
 // agent on any home (Requests > Add a request), which is how an agent gets access to one over their limit.
 
-export const LIMIT_MESSAGE = "This home is above your listing limit. Reach out to a George & Noonan team member to request access.";
+export const LIMIT_MESSAGE = "Reach out to a George & Noonan Team member to request an open home at this address.";
 
 // A limit from the Agents page: whole dollars, with or without "$" and commas. Blank means no limit (null).
 // Anything else that isn't a positive amount is undefined (invalid).

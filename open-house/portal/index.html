@@ -480,7 +480,7 @@ const grid = $("grid");
 // Homes over the agent's listing limit (set by the team on the Admin Console's Agents page) come marked locked.
 // One the agent already has a request for still opens, so they can see it or ask to cancel; a new request for
 // it is turned away by the server.
-let LOCKED_MSG = "This home is above your listing limit. Reach out to a George & Noonan team member to request access.";
+let LOCKED_MSG = "Reach out to a George & Noonan Team member to request an open home at this address.";
 const isLocked = h => !!h.locked && !h.mine.length;
 const LOCK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 const closeLockNotes = () => grid.querySelectorAll(".card.locked.open").forEach(c => c.classList.remove("open"));
@@ -514,7 +514,9 @@ async function loadListings(){
   const r = await (firstLoad || fetch("/api/listings").catch(() => null)); firstLoad = null;
   if(!r || !r.ok){ grid.innerHTML = '<p class="empty">Could not load homes. Refresh to try again.</p>'; return null; }
   const d = await r.json();
-  window.CLOSES = d.closesLabel; if(d.lockedMessage) LOCKED_MSG = d.lockedMessage; homes = d.listings; DAYS = d.week; OPEN = d.open || Object.keys(d.week); FIRST = d.firstHour; LAST = d.lastHour;
+  window.CLOSES = d.closesLabel; if(d.lockedMessage) LOCKED_MSG = d.lockedMessage;
+  // Homes the agent can book first, then the grayed-out ones over their limit; each keeps the server's order.
+  homes = [...d.listings.filter(h => !isLocked(h)), ...d.listings.filter(isLocked)]; DAYS = d.week; OPEN = d.open || Object.keys(d.week); FIRST = d.firstHour; LAST = d.lastHour;
   return d;
 }
 document.addEventListener("signedin", async () => {

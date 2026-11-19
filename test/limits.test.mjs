@@ -110,7 +110,7 @@ test("homes over the limit come locked on the portal, and the server won't book 
   assert.equal(over.status, 403);
   const d = await over.json();
   assert.equal(d.error, "over_limit");
-  assert.match(d.message, /George & Noonan team member to request access/);
+  assert.match(d.message, /^Reach out to a George & Noonan Team member to request an open home at this address\.$/);
   assert.notEqual((await book("21000002")).error, "over_limit", "under the limit books as usual");
 
   await setLimit("1,500,000"); // at the price exactly
