@@ -1,4 +1,5 @@
-// Admin Console: one page, five views (Requests, Feedback, Listings, Agents, Settings) chosen by the URL hash.
+// Admin Console: one page, five views (Requests, Feedback, Listings, Agents, Settings) chosen by the URL hash, plus
+// the sign-in log (#signins), opened from Settings > View Logs.
 // The server checks roles on every API call; hiding tabs here is only for a tidy UI.
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -132,7 +133,9 @@
     OHNav.mount({ user: me, links: [...sections, { key: "portal", href: "/", label: "Agent portal" }] });
   }
 
-  const VIEWS = { requests: renderRequests, feedback: renderFeedback, listings: renderListings, agents: renderAgents, settings: renderSettings };
+  const VIEWS = { requests: renderRequests, feedback: renderFeedback, listings: renderListings, agents: renderAgents, signins: renderSignins, settings: renderSettings };
+  const ADMIN_VIEWS = ["agents", "signins", "settings"];
+  const NAV_OF = { signins: "settings" }; // views without a link of their own mark the section they're opened from
   // Links to one agent's history look like #agent/name@example.com.
   const agentLink = (email, label) => `<a href="#agent/${encodeURIComponent(email)}">${esc(label || email)}</a>`;
 
@@ -154,8 +157,8 @@
       window.scrollTo(0, 0);
       return;
     }
-    if (!VIEWS[name] || ((name === "agents" || name === "settings") && !me.admin)) name = "requests";
-    OHNav.setCurrent(name);
+    if (!VIEWS[name] || (ADMIN_VIEWS.includes(name) && !me.admin)) name = "requests";
+    OHNav.setCurrent(NAV_OF[name] || name);
     view.innerHTML = '<p class="empty">Loading…</p>';
     VIEWS[name]();
     window.scrollTo(0, 0);
@@ -1388,7 +1391,7 @@
 
       view.innerHTML = `
         <section class="intro"><div><h1>Agents and access</h1>
-          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}
+          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away. <a href="#signins">Sign-ins</a> shows who has signed in and who was turned away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}
             A listing limit is the highest list price an agent can book: homes over it show grayed out on the portal, with a note to ask the team for access. Leave it blank for no limit.</p></div></section>
         <div class="card panel">
           <h3>Add an agent</h3>
@@ -1446,6 +1449,78 @@
     draw();
   }
 
+  // ---- Sign-ins (Settings > View Logs) -----------------------------------------
+  // Each time someone signed in, was turned away or signed out, newest first (GET /api/admin/signins). Admins only.
+  // Filters: what happened, and a search by name or email; pages of 25, 50 or 100. Kept while the console is open.
+  const SIGNIN = {
+    signed_in: ["Signed in", "approved", ""],
+    not_allowed: ["Turned away", "declined", "Not on the access list"],
+    email_not_verified: ["Turned away", "declined", "Google hasn't verified this email address"],
+    invalid_token: ["Sign-in failed", "declined", "Google's sign-in didn't go through. Trying again usually works."],
+    signed_out: ["Signed out", "", ""],
+  };
+  const SIGNIN_SHOW = {
+    all: ["All", () => true],
+    in: ["Signed in", (e) => e.result === "signed_in"],
+    away: ["Turned away", (e) => !["signed_in", "signed_out"].includes(e.result)],
+    out: ["Signed out", (e) => e.result === "signed_out"],
+  };
+  // Where they signed in (the page's address, from signins.mjs).
+  const SIGNIN_PAGE = { "/": "the agent portal", "/my-open-houses/": "the My Requests page", "/feedback/": "the feedback form",
+    "/how-it-works/": "the How it works page", "/how-compensation-works/": "the How compensation works page", "/admin/": "the Admin Console" };
+  // "Nov 18, 7:58 PM", with the year when it isn't this year (the log keeps a year).
+  const fmtWhen = (ms) => new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric",
+    ...(new Date(ms).getFullYear() !== new Date().getFullYear() && { year: "numeric" }), hour: "numeric", minute: "2-digit" });
+  let siShow = "all", siSearch = "", siPer = 25, siPage = 1;
+
+  async function renderSignins() {
+    const r = await api("GET", "/api/admin/signins");
+    if (!r.ok) { view.innerHTML = `<p class="empty">${r.status === 403 ? "Only administrators can see sign-ins." : "Could not load sign-ins."}</p>`; return; }
+    const all = r.data.signins;
+    view.innerHTML = `
+      <p style="margin:22px 0 0"><a href="#settings">← Settings</a></p>
+      <section class="intro"><div><h1>Sign-ins</h1>
+        <p class="sub">Each time someone signs in to the portal or the Admin Console, is turned away, or signs out, newest first. Kept for a year.
+          A sign-in lasts 90 days on that phone or computer and starts over each time they come back. Private browsing tabs forget it when they close.
+          If Google's own page shows an error, the sign-in never reaches the site, so it isn't listed here.</p></div></section>
+      <div class="toolbar">
+        <div class="chips" id="siShow" role="group" aria-label="Show">${Object.entries(SIGNIN_SHOW).map(([k, [label]]) => `<button class="chip" data-show="${k}">${label}</button>`).join("")}</div>
+        <input class="field" id="siSearch" type="search" placeholder="Search name or email" value="${esc(siSearch)}" aria-label="Search sign-ins">
+      </div>
+      <div class="card table-wrap"><table class="stack"><thead><tr><th>When</th><th>Person</th><th>What happened</th><th>Device</th></tr></thead>
+        <tbody id="siRows"></tbody></table></div>
+      ${pagerHtml("Pages of sign-ins", siPer)}`;
+    const matches = (e) => { const q = siSearch.trim().toLowerCase(); return !q || `${e.name || ""} ${e.email || ""}`.toLowerCase().includes(q); };
+    const person = (e) => !e.email ? '<span class="sub">Unknown account</span>'
+      : e.name ? `${agentLink(e.email, e.name)}<div class="sub">${esc(e.email)}</div>` : agentLink(e.email);
+    const what = (e) => { const [label, cls, why] = SIGNIN[e.result] || [e.result, "", ""]; return `<span class="pill ${cls}">${esc(label)}</span>${why ? `<div class="sub">${esc(why)}</div>` : ""}`; };
+    const where = (e) => e.page && e.result !== "signed_out" ? `<div class="sub">On ${esc(SIGNIN_PAGE[e.page] || e.page)}</div>` : "";
+    // Each cell's lines sit in one block, so on phones (where a row stacks into label: value lines) they stay one under another.
+    const row = (e) => `<tr>
+        <td data-l="When">${esc(fmtWhen(e.at))}</td>
+        <td data-l="Person"><div>${person(e)}</div></td>
+        <td data-l="What happened"><div>${what(e)}</div></td>
+        <td data-l="Device"><div>${esc(e.device)}${where(e)}</div></td></tr>`;
+    const fill = () => {
+      const found = all.filter(matches), shown = found.filter(SIGNIN_SHOW[siShow][1]);
+      view.querySelectorAll("[data-show]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b.dataset.show === siShow));
+        b.textContent = `${SIGNIN_SHOW[b.dataset.show][0]} (${found.filter(SIGNIN_SHOW[b.dataset.show][1]).length})`;
+      });
+      const pg = paintPager(shown.length, siPage, siPer); siPage = pg.page;
+      const empty = !all.length ? "No sign-ins yet. Each one shows up here from now on." : "No sign-ins match.";
+      $("siRows").innerHTML = shown.length ? shown.slice(pg.first, pg.last).map(row).join("") : `<tr><td colspan="4" class="empty">${empty}</td></tr>`;
+    };
+    const refill = () => { siPage = 1; fill(); };
+    $("siShow").onclick = (e) => { const b = e.target.closest("[data-show]"); if (b) { siShow = b.dataset.show; refill(); } };
+    $("siSearch").oninput = (e) => { siSearch = e.target.value; refill(); };
+    $("per").onchange = (e) => { const n = Number(e.target.value); siPage = resizedPage(siPage, siPer, n); siPer = n; fill(); };
+    const turn = (n) => { siPage += n; fill(); $("siRows").closest(".card").scrollIntoView({ block: "start" }); };
+    $("prev").onclick = () => turn(-1);
+    $("next").onclick = () => turn(1);
+    fill();
+  }
+
   // ---- Settings ------------------------------------------------------------
   async function renderSettings() {
     const r = await api("GET", "/api/admin/settings");
@@ -1470,6 +1545,13 @@
         <h3 id="textsTitle">Texts</h3>
         <p class="fine" id="textsAbout">Loading…</p>
         <div id="textList"></div>
+      </section>
+      <section class="card panel logs" aria-labelledby="logsTitle">
+        <h3 id="logsTitle">View Logs</h3>
+        <p class="fine">Records the platform keeps of what happened.</p>
+        <a class="logrow" href="#signins"><span><span class="en">Sign-ins</span>
+          <span class="ew">Who signed in, who was turned away and who signed out, with the device they used. Kept for a year.</span></span>
+          <span class="ev" aria-hidden="true"></span></a>
       </section>`;
     renderEmails();
     renderTexts();

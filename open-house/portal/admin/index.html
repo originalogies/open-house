@@ -334,6 +334,13 @@ details.email[open]>summary{border-bottom:1px solid var(--line)}
 .txt .bubble{margin:10px 0 2px;max-width:34em;padding:10px 13px;border-radius:16px 16px 16px 4px;background:var(--accent-soft);font-size:.92rem;line-height:1.4;overflow-wrap:anywhere}
 .ttest{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin-top:14px}
 @media (max-width:720px){.ttest .btn{min-height:44px}}
+/* Settings > View Logs: one row per log, like an email's row, opening the log's page. */
+a.logrow{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;min-height:44px;margin-top:8px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-decoration:none}
+a.logrow:hover .en{color:var(--accent)}
+a.logrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+a.logrow .en{display:block;font-weight:600}
+a.logrow .ew{display:block;font-size:.85rem;color:var(--muted);margin-top:2px}
+a.logrow .ev{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);margin-right:4px}
 /* Agents page: each agent's listing limit, typed in place and saved when the field is left. */
 label.limit{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
 label.limit .field{width:130px;padding:7px 10px;font-size:16px;color:var(--ink)} /* 16px: iPhones don't zoom into the field */

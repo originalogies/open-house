@@ -47,6 +47,8 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Google sign-in. Access is deny-by-default: a person can sign in only if their email address, or their email domain, is on the allowlist (or they are an admin).
 - Admins manage the list at `/admin/`. Removing someone ends their access immediately (the list is re-checked on every request).
 - Subdomains and look-alike domains do not match an allowed domain.
+- A sign-in lasts 90 days on that phone or computer, and starts over at 90 days whenever they come back (`/api/me` renews the cookie at most once a day; `renewedSession` in shared.mjs). Sign-ins from before Nov 19, 2026 lasted 7 days and are renewed on the next visit. Private browsing tabs forget the sign-in when they close.
+- **Sign-ins** (admins; Settings > View Logs opens it at `/admin/#signins`, which has no link in the top bar): each time someone signs in, is turned away (not on the access list, or Google hasn't verified the email), fails Google's token check, or signs out, newest first, with the device and browser ("iPhone · Safari", read from the user agent) and the page they were on. Filter by what happened and search by name or email. One blob per event in `open-house-signins` (`signin/<ms>-<random>`), kept a year (`/api/admin/signins`, signins.mjs). An error on Google's own page never reaches the site, so it can't be listed.
 
 **Support and Referral Agreement (DocuSeal)**
 - Agents sign the George & Noonan Support and Referral Agreement once before they can use the portal. Until they do, every agent page shows only the agreement step, and the agent API (`/api/listings`, `/api/requests`, `/api/requests/cancel-request`) answers 403 `agreement_required`. The team (admins and `TEAM_EMAILS`) doesn't sign.
@@ -92,7 +94,7 @@ Live site: https://open-house.synergyrealtors.com/ (Netlify, deploys automatical
 - Four listings are built in as a fallback (2006 Nighthawk Court, 6900 Rockingham Court, 69 Cortes Drive, 441 Watermere Drive) and always appear in the inventory list. Live Repliers data replaces them when it returns the same MLS number.
 
 **Design**
-- Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My Requests and (for the team) Admin Console; the Admin Console shows Requests, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
+- Top navigation bar on every signed-in page (`nav.js`, `nav.css`): logo with "OPEN HOUSE PORTAL" or "ADMIN CONSOLE" beneath, page links with the current page underlined, the signed-in name and Sign out. Agents see This weekend, My Requests and (for the team) Admin Console; the Admin Console shows Requests, Feedback, Listings, Agents and Settings (the last two for admins) and Agent portal. Below 760px the links fold into a hamburger menu that slides open and closed. A white logo variant is used in dark mode.
 - Mobile responsive; admin settings autosave with toast confirmations.
 - Confirmations and questions (cancel, remove, link, a cancellation reason) open the site's own dialog (`dialog.js`, `dialog.css`) instead of the browser's boxes.
 - Addresses read street and city everywhere ("200 Murano Place, Southlake"), including email subjects and the calendar event title.

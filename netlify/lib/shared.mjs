@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import { agreementOn, getAgreement } from "./agreement.mjs";
 
 const COOKIE = "oh_session";
-const SESSION_SECONDS = 7 * 24 * 60 * 60;
+// A sign-in lasts 90 days on that phone or computer, and starts over at 90 days whenever they come back
+// (renewedSession), so someone who uses the site keeps their sign-in.
+const SESSION_SECONDS = 90 * 24 * 60 * 60;
+const RENEW_AFTER = 24 * 60 * 60; // renewed at most once a day, on the first visit after a day has passed
 
 export const json = (status, body, headers = {}) =>
   new Response(JSON.stringify(body), {
@@ -93,6 +96,14 @@ const secureFlag = (req) => (new URL(req.url).protocol === "https:" ? "; Secure"
 export const sessionCookie = (value, req) =>
   `${COOKIE}=${value}; Path=/; HttpOnly${secureFlag(req)}; SameSite=Lax; Max-Age=${SESSION_SECONDS}`;
 export const clearCookie = (req) => `${COOKIE}=; Path=/; HttpOnly${secureFlag(req)}; SameSite=Lax; Max-Age=0`;
+
+// A fresh 90-day cookie for a valid sign-in that's a day old or more (sign-ins from before Nov 19, 2026 lasted
+// 7 days, so they're renewed on the next visit too). Null when there's no valid sign-in or it's newer than that.
+export function renewedSession(req, now = Date.now()) {
+  const s = readSession(req);
+  if (!s || s.exp - now / 1000 > SESSION_SECONDS - RENEW_AFTER) return null;
+  return sessionCookie(makeSession({ email: s.email, name: s.name }), req);
+}
 
 // Current signed-in user, re-checked against the live allowlist on every call so
 // removing someone takes effect immediately.
