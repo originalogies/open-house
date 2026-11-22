@@ -33,7 +33,7 @@ globalThis.fetch = async (url, init = {}) => {
   assert.equal(u, "https://api.quo.com/v1/messages");
   if (new Headers(init.headers).get("authorization") !== "quo-key") return Response.json({ error: { message: "Unauthorized", key: "Unauthorized" } }, { status: 401 });
   const b = JSON.parse(init.body);
-  if (quo.optedOut.has(b.to[0])) return Response.json({ message: "User opted out", code: "0201400", status: 400, title: "User Opted Out" }, { status: 400 });
+  if (b.to.some((t) => quo.optedOut.has(t))) return Response.json({ message: "User opted out", code: "0201400", status: 400, title: "User Opted Out" }, { status: 400 });
   quo.posts.push(b);
   return Response.json({ data: { id: "AC1", to: b.to, from: b.from, text: b.content, status: "queued" } }, { status: 202 });
 };
@@ -237,7 +237,7 @@ test("the team can text an agent a feedback reminder from a home's page", async 
   } finally { delete process.env.QUO_API_KEY; }
 });
 
-test("sent feedback is texted to London and Lucy, after it's saved, and a failed text doesn't stop it", async () => {
+test("sent feedback is group-texted to the agent, Troy, Lucy and London, after it's saved, and a failed text doesn't stop it", async () => {
   const feedback = (await import("../netlify/functions/feedback.mjs")).default;
   const ORIGIN = "http://localhost:8888";
   const send = (r, body) => feedback(new Request(`${ORIGIN}/api/feedback`, { method: "POST",
@@ -258,16 +258,17 @@ test("sent feedback is texted to London and Lucy, after it's saved, and a failed
     const r = req({ id: "5".repeat(32), iso: yesterday });
     await saveRequest(r);
     assert.equal((await send(r, answers)).status, 200);
-    assert.deepEqual(quo.posts.map((p) => p.to[0]), ["+18179958080", "+18179133611"]);
+    // one group text: the hosting agent (from the roster) first, then the team
+    assert.deepEqual(quo.posts.map((p) => p.to), [["+18175550111", "+18173084170", "+18179133611", "+18179958080"]]);
     const body = quo.posts[0].content;
-    assert.equal(quo.posts[1].content, body);
     assert.match(body, /^George & Noonan: FLAGGED FOR BROKER\. Dana Sample sent feedback on the open house at 6900 Rockingham Court/);
     assert.match(body, /\(\w+ \w+ \d+\)\.\n\nGroups: 4\nInterest: Lots\nPrice: Too high\nLiked: /);
     assert.match(body, /\nLiked: The open kitchen\nTeam notes: Seller was home$/);
     assert.doesNotMatch(body, /Didn't like/);
-    assert.match((await listEvents(r.id)).map((e) => e.note).join("\n"), /Texted the feedback to Lucy Noonan at \(817\) 913-3611/);
+    assert.match((await listEvents(r.id)).map((e) => e.note).join("\n"), /Group-texted the feedback to Dana Sample, Troy George, Lucy Noonan and London George/);
 
-    // TEAM_TEXT_TO replaces them; a number that refuses is logged and the rest still go
+    // TEAM_TEXT_TO replaces the team. When the group text is refused (someone opted out), each is texted on their
+    // own; the one who refuses is logged and the rest still go. The agent is in the team list too: texted once.
     quo.posts.length = 0;
     process.env.TEAM_TEXT_TO = "817-555-0111, (817) 555-0122";
     quo.optedOut.add("+18175550111");
@@ -278,6 +279,6 @@ test("sent feedback is texted to London and Lucy, after it's saved, and a failed
     assert.ok((await getRequest(r2.id)).feedback);
     assert.match(quo.posts[0].content, /^George & Noonan: Dana Sample sent/);
     assert.match(quo.posts[0].content, /Liked: x{277}\.\.\.\n/);
-    assert.match((await listEvents(r2.id)).map((e) => e.note).join("\n"), /The feedback text to \(817\) 555-0111 at \(817\) 555-0111 didn't send/);
+    assert.match((await listEvents(r2.id)).map((e) => e.note).join("\n"), /The feedback group text didn't send \(Quo 400: User Opted Out\)[\s\S]*The feedback text to Dana Sample at \(817\) 555-0111 didn't send/);
   } finally { delete process.env.QUO_API_KEY; delete process.env.TEAM_TEXT_TO; quo.optedOut.clear(); }
 });

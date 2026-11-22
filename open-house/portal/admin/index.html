@@ -22,6 +22,8 @@ main{padding-bottom:64px}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 14px;font-size:.88rem;font-weight:600;cursor:pointer;color:var(--muted)}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .toolbar .field{max-width:280px}
+/* Every field in a toolbar (time frame, search, Group by, Homes) is the same height. */
+.toolbar .field,.toolbar summary.field{height:44px;box-sizing:border-box}
 .toolbar .spacer{flex:1}
 .toolbar .feed{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .btn.refresh{background:none;border-color:transparent;color:var(--muted);font-size:.85rem;font-weight:500;padding:6px 8px;gap:5px}
@@ -31,6 +33,10 @@ main{padding-bottom:64px}
 .refresh.busy svg{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.refresh.busy svg{animation:none}}
+/* Icon buttons: Export CSV and Print. */
+.btn.icon{width:40px;height:40px;padding:0;flex:none}
+.btn.icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:720px){.btn.icon{width:44px;height:44px}}
 h2.section{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:28px 0 12px}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 
@@ -50,6 +56,21 @@ h2.section{font-family:var(--serif);font-weight:500;font-size:1.3rem;margin:28px
 .tf-dates[hidden]{display:none}
 .tf-label{color:var(--muted);font-size:.92rem;padding-bottom:11px}
 .stat.wait b{color:var(--brass)}
+/* The time frame, group and sort pickers sit in the toolbar, in line with the chips, search and Export CSV. */
+.toolbar .field.tf-inline{width:auto;min-width:150px;color:var(--ink)}
+.toolbar .tf-dates .field{width:auto;max-width:none;color:var(--ink)}
+.tb-pick{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.tb-pick .field{width:auto;color:var(--ink)}
+.chip .n{font-weight:500;opacity:.7;margin-left:2px}
+.chip[aria-pressed="true"] .n{opacity:.85}
+.sort-m{display:none}
+/* Sortable column headings */
+th button.sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit}
+th button.sort:hover{color:var(--ink)}
+th button.sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+th[aria-sort="ascending"],th[aria-sort="descending"]{color:var(--ink)}
+.sort-i{font-size:.65rem}
+@media (max-width:720px){.sort-m{display:inline-flex}.tb-pick{flex:1 1 100%}.tb-pick span{min-width:64px}.tb-pick .field{flex:1;max-width:none;min-height:44px}.toolbar .field.tf-inline{flex:1 1 100%;max-width:none;min-height:44px}.toolbar .tf-dates{width:100%}.toolbar .tf-dates .field{flex:1}}
 
 /* Requests list: waiting rows pinned at the top, then the time frame's requests. A row opens its request. */
 tr.group th{background:var(--bg);text-transform:none;letter-spacing:0;font-size:.85rem;color:var(--ink)}
@@ -180,7 +201,7 @@ dl.fb{display:grid;grid-template-columns:auto auto auto 1fr;gap:10px 28px;margin
 dl.fb dt{font-size:.78rem;font-weight:700;color:var(--muted)}dl.fb dd{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
 dl.fb .wide{grid-column:1/-1}
 .fbphotos{display:flex;gap:8px;flex-wrap:wrap}
-.fbphotos img{width:96px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--photo)}
+.fbphotos img{width:160px;height:120px;object-fit:cover;border-radius:8px;display:block;background:var(--photo)}
 .fbq{display:grid;gap:12px}
 /* Feedback tab: open houses still waiting on feedback */
 .fbwaitbox{padding:14px 16px;margin:0 0 18px;border-color:var(--brass)}
@@ -309,6 +330,68 @@ label.opt:has(input:disabled) b{color:var(--muted)}
 .ar-foot{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 @media (max-width:720px){.ar-foot .btn{flex:1 1 100%;min-height:48px}#addReqBtn{min-height:44px;padding:10px 18px}}
 
+/* Reporting: a report by home or by week. It prints (or saves as a PDF) under a George & Noonan header, without
+   the menus and controls. */
+.rp-tools{margin-top:14px}
+.toolbar .field.rp-home{max-width:420px;min-width:260px;color:var(--ink)}
+.rp-head{margin:8px 0 16px}
+.rp-brand{display:none}
+.rp-kind{margin:0 0 2px;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.rp-head h2{font-family:var(--serif);font-weight:500;font-size:1.6rem;margin:0}
+.rp-head .sub{margin:4px 0 0}
+.rp-meta{display:flex;flex-wrap:wrap;gap:4px 28px;margin:10px 0 0;font-size:.9rem}
+.rp-meta div{display:flex;gap:8px}
+.rp-meta dt{color:var(--muted)}
+.rp-meta dd{margin:0;font-weight:600}
+.stat .fine{font-size:.78rem}
+.rp-sent{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap;padding:14px 16px;margin-bottom:6px}
+.rp-sent b{font-family:var(--serif);font-weight:500;font-size:1.25rem}
+.rp-chart{position:relative;padding:14px 16px 6px;margin-bottom:14px}
+.rp-chart svg{display:block;width:100%;height:auto}
+.rp-legend{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:.85rem;font-weight:600;margin-bottom:6px}
+.rp-legend span{display:inline-flex;align-items:center;gap:7px}
+.rp-legend .sw{display:inline-block}
+.rp-legend .sw.bar{width:12px;height:12px;border-radius:2px;background:var(--accent)}
+.rp-legend .sw.line{width:18px;height:3px;border-radius:2px;background:var(--brass);position:relative}
+.rp-legend .sw.line::after{content:"";position:absolute;left:5px;top:-3.5px;width:8px;height:8px;border-radius:50%;background:var(--brass)}
+.rp-grid{stroke:var(--line);stroke-width:1}
+.rp-axis{fill:var(--muted);font-size:11px;font-family:var(--sans)}
+.rp-bar{fill:var(--accent)}
+.rp-line{fill:none;stroke:var(--brass);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.rp-dot{fill:var(--brass);stroke:var(--surface);stroke-width:1.5}
+.rp-hit{fill:transparent;cursor:pointer}
+.rp-hit:hover{fill:var(--ink);fill-opacity:.06}
+.rp-tip{position:absolute;z-index:20;max-width:min(300px,80vw);padding:9px 12px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:.82rem;line-height:1.4;box-shadow:0 6px 18px rgba(0,0,0,.2);pointer-events:none}
+.rp-tip ul{margin:6px 0 0;padding:0 0 0 16px}
+.rp-tip li span{opacity:.7}
+.rp-tip[hidden]{display:none}
+/* The Homes picker looks like the selects beside it. */
+.rp-homes{position:relative}
+.rp-homes summary.field{list-style:none;display:flex;align-items:center;width:auto;height:44px;padding-right:40px;cursor:pointer;color:var(--ink);white-space:nowrap;position:relative}
+.rp-homes summary::-webkit-details-marker{display:none}
+.rp-homes summary::after{content:"";position:absolute;right:16px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:rotate(45deg)}
+.rp-homes-list{position:absolute;z-index:30;top:calc(100% + 6px);left:0;width:min(360px,85vw);max-height:360px;overflow:auto;padding:8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.rp-homes-list label{display:flex;gap:10px;align-items:center;min-height:36px;font-size:.9rem;cursor:pointer}
+.rp-homes-list input{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.rp-homes-acts{display:flex;flex-wrap:wrap;gap:6px 16px;padding:4px 0 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.rp-homes-h{margin:10px 0 2px;font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chips a.chip{text-decoration:none}
+@media (max-width:720px){.toolbar .field.rp-home{min-width:0;max-width:none;flex:1 1 100%}.rp-homes{flex:1 1 100%}.rp-homes summary.field{width:100%}.rp-homes-list label{min-height:44px}}
+@media print{
+  @page{margin:14mm}
+  .topnav,.noprint,#toast,.pager{display:none!important}
+  :root{color-scheme:light}
+  body{background:#fff}
+  main{padding:0}
+  .card{box-shadow:none}
+  .stat,.rp-sent,.rp-chart,.fbcard,tr{break-inside:avoid}
+  .table-wrap{overflow:visible}
+  .rp-brand{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:12px;margin-bottom:18px;border-bottom:2px solid var(--accent)}
+  .rp-brand img{height:46px;width:auto}
+  .rp-brand span{font-family:var(--serif);font-size:1.15rem;color:var(--accent)}
+  .rp-head{margin-top:0}
+  h2.section{break-after:avoid}
+}
 /* Agents and settings */
 .panel{padding:18px 20px;margin-bottom:16px}
 .panel h3{margin:0 0 4px;font-size:1.02rem}

@@ -1,4 +1,4 @@
-// Admin Console: one page, five views (Requests, Feedback, Listings, Agents, Settings) chosen by the URL hash, plus
+// Admin Console: one page, six views (Requests, Feedback, Listings, Reporting, Agents, Settings) chosen by the URL hash, plus
 // the sign-in log (#signins), opened from Settings > View Logs.
 // The server checks roles on every API call; hiding tabs here is only for a tidy UI.
 (function () {
@@ -79,6 +79,13 @@
   const fbCsv = (f) => !f ? FB_HEAD.map(() => "") : [f.visitors, INTEREST[f.interest] || "", PRICE[f.price] || "", f.liked ?? f.happened, f.disliked || "",
     f.forSeller || "", f.teamNotes, (f.photos || []).map((u) => location.origin + u).join(" "), f.brokerFlag ? "Yes" : "No"];
 
+  // Icon buttons (Export CSV, Print): the name shows on hover and is read out by screen readers.
+  const ICONS = {
+    download: '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/>',
+    print: '<path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><path d="M7 14h10v6H7z"/>',
+  };
+  const iconBtn = (id, label, icon) => `<button class="btn ghost icon" id="${id}" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[icon]}</svg></button>`;
+
   let me = null;
   let requests = [];
 
@@ -128,18 +135,20 @@
       { key: "requests", href: "#requests", label: "Requests", count: "pendingCount" },
       { key: "feedback", href: "#feedback", label: "Feedback", count: "fbWaitCount" },
       { key: "listings", href: "#listings", label: "Listings" },
+      { key: "reporting", href: "#reporting", label: "Reporting" },
       ...(me.admin ? [{ key: "agents", href: "#agents", label: "Agents" }, { key: "settings", href: "#settings", label: "Settings" }] : []),
     ];
     OHNav.mount({ user: me, links: [...sections, { key: "portal", href: "/", label: "Agent portal" }] });
   }
 
-  const VIEWS = { requests: renderRequests, feedback: renderFeedback, listings: renderListings, agents: renderAgents, signins: renderSignins, settings: renderSettings };
+  const VIEWS = { requests: renderRequests, feedback: renderFeedback, listings: renderListings, reporting: renderReporting, agents: renderAgents, signins: renderSignins, settings: renderSettings };
   const ADMIN_VIEWS = ["agents", "signins", "settings"];
   const NAV_OF = { signins: "settings" }; // views without a link of their own mark the section they're opened from
   // Links to one agent's history look like #agent/name@example.com.
   const agentLink = (email, label) => `<a href="#agent/${encodeURIComponent(email)}">${esc(label || email)}</a>`;
 
   function route() {
+    document.title = BASE_TITLE; // a report names the page after itself (renderReporting)
     flushSaves(); // finish any listing edits still waiting to autosave
     const [hashName, arg, sub] = location.hash.slice(1).split("/");
     let name = hashName || "requests";
@@ -222,11 +231,17 @@
   }
   // A new page size keeps the first row of the current page in view.
   const resizedPage = (page, per, newPer) => Math.floor(((page - 1) * per) / newPer) + 1;
-  let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1;
-  try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1 } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
+  // Group by: Day (default), Home, Agent or None. Sort: a column (date, home, agent, status) and a direction.
+  const GROUPS = { day: "Day", home: "Home", agent: "Agent", none: "None" };
+  const SORTS = { date: "Open house", home: "Home", agent: "Agent", status: "Status" };
+  let reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1, reqGroup = "day", reqSort = "date", reqDir = "desc";
+  try { ({ reqFilter = "all", reqSearch = "", reqRange = "week", reqFrom = "", reqTo = "", reqPer = 25, reqPage = 1, reqGroup = "day", reqSort = "date", reqDir = "desc" } = JSON.parse(sessionStorage.getItem("oh.requests") || "{}")); } catch {}
   if (!RANGES[reqRange]) reqRange = "week";
   if (!PAGE_SIZES.includes(reqPer)) reqPer = 25;
-  const saveFilters = () => { try { sessionStorage.setItem("oh.requests", JSON.stringify({ reqFilter, reqSearch, reqRange, reqFrom, reqTo, reqPer, reqPage })); } catch {} };
+  if (!GROUPS[reqGroup]) reqGroup = "day";
+  if (!SORTS[reqSort]) reqSort = "date";
+  if (reqDir !== "asc") reqDir = "desc";
+  const saveFilters = () => { try { sessionStorage.setItem("oh.requests", JSON.stringify({ reqFilter, reqSearch, reqRange, reqFrom, reqTo, reqPer, reqPage, reqGroup, reqSort, reqDir })); } catch {} };
   const waits = (r) => r.status === "pending" || asksToCancel(r);
 
   // The time frame as [first, last] open house dates ("" = open-ended). Weeks run Monday to Sunday,
@@ -249,34 +264,33 @@
     return a ? `From ${fmtIso(a)}` : b ? `Through ${fmtIso(b)}` : all;
   }
 
+  const CHIPS = ["all", "pending", "approved", "declined", "expired", "cancelled"];
   async function renderRequests() {
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
+    const th = (k, label) => `<th aria-sort="none"><button class="sort" data-sort="${k}">${label}<span class="sort-i" aria-hidden="true"></span></button></th>`;
     view.innerHTML = `
-      <section class="intro"><div><h1>Open house requests</h1>
-        <p class="sub">Requests from Synergy agents. Anything waiting for a decision, including an agent's cancellation request, stays at the top; Review opens it to approve or decline. The first approval locks the time.</p></div>
+      <section class="intro"><div><h1>Open house requests</h1></div>
         <div class="intro-actions"><button class="btn small" id="addReqBtn" aria-expanded="false" aria-controls="addReq">Add a request</button></div></section>
       <div id="addReq" hidden></div>
-      <div class="timeframe">
-        <label class="tf-pick"><span>Time frame</span><select class="field" id="range">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === reqRange ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-        <span class="tf-dates" id="custom" ${reqRange === "custom" ? "" : "hidden"}>
-          <label><span>From</span><input class="field" type="date" id="from" value="${esc(reqFrom)}"></label>
-          <label><span>To</span><input class="field" type="date" id="to" value="${esc(reqTo)}"></label>
-        </span>
-        <span class="tf-label" id="rangeLabel"></span>
-      </div>
-      <div class="stats" id="stats"></div>
-      <h2 class="section">Requests</h2>
       <div class="toolbar">
-        <div class="chips" id="chips">${["all", "pending", "approved", "declined", "expired", "cancelled"].map((s) =>
-          `<button class="chip" data-s="${s}" aria-pressed="${s === reqFilter}">${s === "all" ? "All" : STATUS[s]}</button>`).join("")}</div>
+        <select class="field tf-inline" id="range" aria-label="Time frame (by open house date)">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === reqRange ? "selected" : ""}>${v}</option>`).join("")}</select>
+        <span class="tf-dates" id="custom" ${reqRange === "custom" ? "" : "hidden"}>
+          <input class="field" type="date" id="from" value="${esc(reqFrom)}" aria-label="From">
+          <input class="field" type="date" id="to" value="${esc(reqTo)}" aria-label="To">
+        </span>
+        <div class="chips" id="chips">${CHIPS.map((s) =>
+          `<button class="chip" data-s="${s}" aria-pressed="${s === reqFilter}">${s === "all" ? "All" : STATUS[s]} <span class="n" data-n="${s}"></span></button>`).join("")}</div>
         <input class="field" id="search" type="search" placeholder="Search agent or address" value="${esc(reqSearch)}" aria-label="Search requests">
         <span class="spacer"></span>
-        <button class="btn ghost small" id="csv">Export CSV</button>
+        <label class="tb-pick"><span>Group by</span><select class="field" id="group">${Object.entries(GROUPS).map(([k, v]) => `<option value="${k}" ${k === reqGroup ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+        <label class="tb-pick sort-m"><span>Sort</span><select class="field" id="sortM">${Object.entries(SORTS).flatMap(([k, v]) => ["desc", "asc"].map((d) =>
+          `<option value="${k}:${d}" ${k === reqSort && d === reqDir ? "selected" : ""}>${v} ${k === "date" ? (d === "desc" ? "(newest)" : "(oldest)") : d === "asc" ? "(A–Z)" : "(Z–A)"}</option>`)).join("")}</select></label>
+        ${iconBtn("csv", "Export CSV", "download")}
       </div>
-      <div class="card table-wrap"><table class="stack reqs"><thead><tr><th>Open house</th><th>Home</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="card table-wrap"><table class="stack reqs"><thead><tr>${th("date", "Open house")}${th("home", "Home")}${th("agent", "Agent")}${th("status", "Status")}<th></th></tr></thead><tbody id="rows"></tbody></table></div>
       ${pagerHtml("Pages of requests", reqPer)}`;
 
-    const refresh =() => { reqPage = 1; saveFilters(); $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); };
+    const refresh = () => { reqPage = 1; saveFilters(); fillRows(); };
     $("range").onchange = (e) => {
       if (e.target.value === "custom" && !reqFrom && !reqTo) [reqFrom, reqTo] = rangeBounds(); // start from the range picked before
       reqRange = e.target.value;
@@ -286,49 +300,79 @@
     };
     $("from").onchange = (e) => { reqFrom = e.target.value; refresh(); };
     $("to").onchange = (e) => { reqTo = e.target.value; refresh(); };
-    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; reqPage = 1; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); saveFilters(); fillRows(); };
-    $("search").oninput = (e) => { reqSearch = e.target.value; reqPage = 1; saveFilters(); fillRows(); };
+    $("chips").onclick = (e) => { const b = e.target.closest(".chip"); if (!b) return; reqFilter = b.dataset.s; $("chips").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", c === b)); refresh(); };
+    $("search").oninput = (e) => { reqSearch = e.target.value; refresh(); };
+    $("group").onchange = (e) => { reqGroup = e.target.value; refresh(); };
+    // A column heading sorts by it; clicking it again turns the order around. Dates start newest first, the rest A–Z.
+    view.querySelector("thead").onclick = (e) => {
+      const b = e.target.closest("[data-sort]"); if (!b) return;
+      if (reqSort === b.dataset.sort) reqDir = reqDir === "asc" ? "desc" : "asc";
+      else { reqSort = b.dataset.sort; reqDir = reqSort === "date" ? "desc" : "asc"; }
+      refresh();
+    };
+    $("sortM").onchange = (e) => { [reqSort, reqDir] = e.target.value.split(":"); refresh(); };
     $("per").onchange = (e) => { const per = Number(e.target.value); reqPage = resizedPage(reqPage, reqPer, per); reqPer = per; saveFilters(); fillRows(); };
     const turn = (n) => { reqPage += n; saveFilters(); fillRows(); $("rows").closest(".card").scrollIntoView({ block: "start" }); };
     $("prev").onclick = () => turn(-1);
     $("next").onclick = () => turn(1);
     $("csv").onclick = () => exportCsv();
     $("addReqBtn").onclick = () => ($("addReq").hidden ? addRequest() : closeAddRequest());
-    $("rangeLabel").textContent = rangeLabel(); fillStats(); fillRows(); // keeps the saved page, unlike refresh()
+    fillRows(); // keeps the saved page, unlike refresh()
   }
 
-  // Stat cards: waiting counts everything pinned at the top; the rest count the time frame.
-  function fillStats() {
-    const frame = requests.filter((r) => inRange(r, rangeBounds()));
-    $("stats").innerHTML = `
-      <div class="card stat"><b>${frame.length}</b><span>Requests</span></div>
-      <div class="card stat wait"><b>${requests.filter(waits).length}</b><span>Waiting for a decision</span></div>
-      <div class="card stat"><b>${frame.filter((r) => r.status === "approved").length}</b><span>Approved</span></div>
-      <div class="card stat"><b>${new Set(frame.map((r) => r.agent.email.toLowerCase())).size}</b><span>Agents</span></div>`;
-  }
-
-  // Waiting requests (soonest first, any date), then the time frame's others (newest open house first).
-  // The "Waiting" chip shows everything that needs a decision.
-  function listParts() {
+  // Waiting requests (any date) are pinned at the top; the rest are the time frame's. Both follow the chosen sort.
+  // The "Waiting" chip shows everything that needs a decision. `filter` lets the chips count what they'd show.
+  const STATUS_ORDER = ["pending", "approved", "declined", "expired", "cancelled"];
+  const byDate = (a, b) => a.iso.localeCompare(b.iso) || a.from - b.from;
+  const SORT_FN = {
+    date: byDate,
+    home: (a, b) => place(a).localeCompare(place(b)) || byDate(a, b),
+    agent: (a, b) => a.agent.name.localeCompare(b.agent.name) || byDate(a, b),
+    status: (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || byDate(a, b),
+  };
+  const sorter = () => { const f = SORT_FN[reqSort], d = reqDir === "asc" ? 1 : -1; return (a, b) => d * f(a, b); };
+  function listParts(filter = reqFilter) {
     const s = reqSearch.trim().toLowerCase(), bounds = rangeBounds();
-    const match = (r) => (reqFilter === "all" || (reqFilter === "pending" ? waits(r) : r.status === reqFilter))
+    const match = (r) => (filter === "all" || (filter === "pending" ? waits(r) : r.status === filter))
       && (!s || [r.agent.name, r.agent.email, r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s));
     return {
-      waiting: requests.filter((r) => waits(r) && match(r)).sort((a, b) => a.iso.localeCompare(b.iso) || a.from - b.from),
-      rest: requests.filter((r) => !waits(r) && inRange(r, bounds) && match(r)).sort((a, b) => b.iso.localeCompare(a.iso) || a.from - b.from),
+      waiting: requests.filter((r) => waits(r) && match(r)).sort(reqSort === "date" ? byDate : sorter()), // soonest first by default
+      rest: filter === "pending" ? [] : requests.filter((r) => !waits(r) && inRange(r, bounds) && match(r)).sort(sorter()),
     };
   }
   const filtered = () => { const { waiting, rest } = listParts(); return [...waiting, ...rest]; };
 
-  // One page of the list. A group's heading (with the group's full count) shows on each page that
-  // has rows from it; the time frame's "nothing here" row shows on the last page.
+  // The group a request falls in: [key, heading]. Days run newest first (oldest first when the date sort is
+  // turned around); homes and agents A–Z (Z–A when that column's sort is). Rows inside a group follow the sort.
+  const groupOf = (r) => reqGroup === "day" ? [r.iso, `${r.day}, ${r.date}${r.iso.slice(0, 4) !== todayIso().slice(0, 4) ? `, ${r.iso.slice(0, 4)}` : ""}`]
+    : reqGroup === "home" ? [r.mls || place(r), place(r)]
+    : reqGroup === "agent" ? [r.agent.email.toLowerCase(), r.agent.name]
+    : ["", `${RANGES[reqRange]} · ${rangeLabel()}`];
+  function grouped(list) {
+    const groups = new Map();
+    for (const r of list) { const [k, label] = groupOf(r); if (!groups.has(k)) groups.set(k, { label, rows: [] }); groups.get(k).rows.push(r); }
+    const flip = reqSort === reqGroup || (reqGroup === "day" && reqSort === "date") ? reqDir === "asc" ? 1 : -1 : reqGroup === "day" ? -1 : 1;
+    return [...groups.entries()].sort(([ka, a], [kb, b]) => flip * (reqGroup === "day" ? ka.localeCompare(kb) : a.label.localeCompare(b.label))).map(([, g]) => g);
+  }
+
+  // One page of the list. A group's heading (with the group's full count) shows on each page that has rows from it.
   function fillRows() {
     const { waiting, rest } = listParts();
-    const showRest = reqFilter !== "pending"; // the Waiting chip has nothing below
-    const total = waiting.length + (showRest ? rest.length : 0);
-    let pages, first, last;
-    ({ page: reqPage, pages, first, last } = paintPager(total, reqPage, reqPer));
-    const pageWaiting = waiting.slice(first, last), pageRest = showRest ? rest.slice(Math.max(0, first - waiting.length), last - waiting.length) : [];
+    // Counts on the chips: what each would show, in this time frame and with this search.
+    CHIPS.forEach((c) => { const p = listParts(c); $("chips").querySelector(`[data-n="${c}"]`).textContent = p.waiting.length + p.rest.length; });
+    // Column headings show which one sorts the list.
+    view.querySelectorAll("thead [data-sort]").forEach((b) => {
+      const on = b.dataset.sort === reqSort;
+      b.closest("th").setAttribute("aria-sort", on ? (reqDir === "asc" ? "ascending" : "descending") : "none");
+      b.querySelector(".sort-i").textContent = on ? (reqDir === "asc" ? "▲" : "▼") : "";
+    });
+    $("sortM").value = `${reqSort}:${reqDir}`;
+    const items = [
+      ...(waiting.length ? waiting.map((r) => ({ r, wait: true, g: "wait", label: "Waiting for a decision", n: waiting.length })) : []),
+      ...grouped(rest).flatMap((g, i) => g.rows.map((r) => ({ r, wait: false, g: `g${i}`, label: g.label, n: g.rows.length }))),
+    ];
+    let first, last;
+    ({ page: reqPage, first, last } = paintPager(items.length, reqPage, reqPer));
     const group = (label, n) => `<tr class="group"><th colspan="5">${esc(label)} <span>${n}</span></th></tr>`;
     // On phones each row is three short lines: when and status, the home (photo beside it), the agent and the action.
     // The address (and the whole row) opens the request's page.
@@ -340,10 +384,12 @@
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
           : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
-    $("rows").innerHTML = !waiting.length && !rest.length ? '<tr><td colspan="5" class="empty">No requests match.</td></tr>'
-      : (pageWaiting.length ? group("Waiting for a decision", waiting.length) + pageWaiting.map((r) => row(r, true)).join("") : "")
-        + (!showRest || (!pageRest.length && (rest.length || reqPage < pages)) ? "" : group(`${RANGES[reqRange]} · ${rangeLabel()}`, rest.length)
-          + (pageRest.length ? pageRest.map((r) => row(r, false)).join("") : '<tr><td colspan="5" class="empty">No other requests in this time frame.</td></tr>'));
+    let html = "", at = null;
+    for (const it of items.slice(first, last)) {
+      if (it.g !== at) { html += group(it.label, it.n); at = it.g; }
+      html += row(it.r, it.wait);
+    }
+    $("rows").innerHTML = html || `<tr><td colspan="5" class="empty">${reqFilter === "pending" ? "Nothing is waiting for a decision." : "No requests match in this time frame."}</td></tr>`;
     // A tap anywhere else on a row opens it (links, buttons and selecting text keep working).
     $("rows").onclick = (e) => {
       const tr = e.target.closest("tr[data-open]");
@@ -660,7 +706,7 @@
       ${mine.length ? `<div class="toolbar">
         <input class="field" id="search" type="search" placeholder="Search address or MLS#" aria-label="Search ${esc(name)}'s open houses by address">
         <span class="spacer"></span>
-        <button class="btn ghost small" id="csv">Export CSV</button>
+        ${iconBtn("csv", "Export CSV", "download")}
       </div>` : ""}
       <div class="card table-wrap"><table class="stack hist"><thead><tr><th>Open house</th><th colspan="2">Home</th><th>Status</th><th>Decided</th></tr></thead><tbody id="rows"></tbody></table></div>
       ${pagerHtml("Pages of open houses", per)}`;
@@ -765,24 +811,20 @@
     const all = homes.flatMap((h) => h.openHouses.filter((o) => o.feedback).map((o) => ({ h, o, iso: dayOf(o.feedback.at) })))
       .sort((a, b) => b.o.feedback.at - a.o.feedback.at);
     view.innerHTML = `
-      <section class="intro"><div><h1>Feedback</h1>
-        <p class="sub">What agents said after hosting, newest first. Each home's name opens its full history. The history stays here after a home sells or is relisted.</p></div></section>
+      <section class="intro"><div><h1>Feedback</h1></div></section>
       <section class="card fbwaitbox" id="fbWait" aria-live="polite" hidden></section>
-      <div class="timeframe">
-        <label class="tf-pick"><span>Received</span><select class="field" id="fbRange">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === fbRange ? "selected" : ""}>${k === "all" ? "Any time" : v}</option>`).join("")}</select></label>
-        <span class="tf-dates" id="fbCustom" ${fbRange === "custom" ? "" : "hidden"}>
-          <label><span>From</span><input class="field" type="date" id="fbFrom" value="${esc(fbFrom)}"></label>
-          <label><span>To</span><input class="field" type="date" id="fbTo" value="${esc(fbTo)}"></label>
-        </span>
-        <span class="tf-label" id="fbRangeLabel"></span>
-      </div>
       <div class="toolbar">
+        <select class="field tf-inline" id="fbRange" aria-label="Received">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === fbRange ? "selected" : ""}>${k === "all" ? "Received any time" : `Received ${v.toLowerCase()}`}</option>`).join("")}</select>
+        <span class="tf-dates" id="fbCustom" ${fbRange === "custom" ? "" : "hidden"}>
+          <input class="field" type="date" id="fbFrom" value="${esc(fbFrom)}" aria-label="From">
+          <input class="field" type="date" id="fbTo" value="${esc(fbTo)}" aria-label="To">
+        </span>
         ${statusKnown ? `<div class="chips" id="fbStatus" role="group" aria-label="Homes">${Object.entries(HOME_STATUS).map(([k, [label]]) =>
           `<button class="chip" data-status="${k}">${label}</button>`).join("")}</div>`
           : '<p class="fine" style="margin:0">Repliers couldn\'t be reached, so active and past homes can\'t be told apart right now. Showing all homes.</p>'}
         <input class="field" id="fbSearch" type="search" placeholder="Search address, city or agent" value="${esc(fbSearch)}" aria-label="Search feedback">
         <span class="spacer"></span>
-        ${all.length ? '<button class="btn ghost small" id="csv">Export CSV</button>' : ""}
+        ${all.length ? iconBtn("csv", "Export CSV", "download") : ""}
       </div>
       <div class="fbq" id="fbList"></div>
       ${pagerHtml("Pages of feedback", fbPer)}`;
@@ -820,7 +862,6 @@
       const bounds = rangeBounds(fbRange, fbFrom, fbTo);
       const inFrame = all.filter((e) => inRange(e, bounds) && matches(e));
       shown = inFrame.filter((e) => HOME_STATUS[status()][1](e.h));
-      $("fbRangeLabel").textContent = rangeLabel(bounds, "");
       view.querySelectorAll("[data-status]").forEach((b) => {
         b.setAttribute("aria-pressed", String(b.dataset.status === status()));
         if (b.classList.contains("chip")) b.textContent = `${HOME_STATUS[b.dataset.status][0]} (${inFrame.filter((e) => HOME_STATUS[b.dataset.status][1](e.h)).length})`;
@@ -864,7 +905,7 @@
     view.innerHTML = `${back}
       <section class="intro" style="padding-top:12px"><div><h1>${esc(h.addr)}</h1>
         <p class="sub">${esc(h.city)}, TX ${esc(h.zip)} · ${h.mls.map((m) => /^\d+$/.test(m) ? `MLS# ${esc(m)}` : "Added by the team").join(", ")}</p></div>
-        <button class="btn ghost small" id="csv">Export CSV</button></section>
+        ${iconBtn("csv", "Export CSV", "download")}</section>
       <div class="stats">
         <div class="card stat"><b>${h.hosted}</b><span>Open houses hosted</span></div>
         <div class="card stat"><b>${h.withFeedback ? h.visitors : "—"}</b><span>Groups reported${h.flags ? ` · <b class="flagged">⚠ ${h.flags} flagged</b>` : ""}</span></div>
@@ -1026,14 +1067,270 @@
   }
 
   // One row per open house ({ h: home, o: open house }), with when its feedback came in.
-  function exportFeedbackCsv(list, name) {
-    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  // `named`: the name is the whole file name (a report's title), rather than a prefix for today's date.
+  function exportFeedbackCsv(list, name, named) {
     const head = ["Address", "City", "ZIP", "MLS", "Date", "Day", "Time", "Agent", "Agent email", "Feedback received", ...FB_HEAD];
     const rows = list.map(({ h, o }) => [h.addr, h.city, h.zip, o.mls, o.iso, o.day, o.time, o.agent.name, o.agent.email,
       o.feedback?.at ? new Date(o.feedback.at).toISOString() : "", ...fbCsv(o.feedback)]);
+    downloadCsv(head, rows, named ? name : `${name}-${todayIso()}`);
+  }
+  function downloadCsv(head, rows, name) {
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}.csv`; a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  // ---- Reporting -----------------------------------------------------------
+  // Two reports, built from the hosted open houses (approved and ended) and their feedback (GET /api/team/feedback):
+  // By home (#reporting/home/<key>): one home's open houses in a time frame, the groups that came, the general
+  // sentiment, every open house and all the feedback. By week (#reporting/week): every home's open houses over time,
+  // by month, week or day, as a chart and a table, leaving out the homes picked (past homes, to start with).
+  // Each prints (or saves as a PDF) under a George & Noonan header, and the page's title names the report, the home
+  // and the time frame, so the saved PDF and the CSV export are named after them.
+  let rpRange = "all", rpFrom = "", rpTo = "", rpBy = "week", rpLeftOut = null;
+  // How keen guests were, on average: Lots 2, Some 1, Little 0.
+  const INTEREST_SCORE = { lots: 2, some: 1, little: 0 };
+  function sentiment(fbs) {
+    const rated = fbs.filter((f) => f.interest in INTEREST_SCORE);
+    const avg = rated.length ? rated.reduce((n, f) => n + INTEREST_SCORE[f.interest], 0) / rated.length : null;
+    const interest = avg == null ? "" : avg >= 1.5 ? "Strong interest" : avg >= 0.75 ? "Moderate interest" : "Low interest";
+    const priced = fbs.filter((f) => f.price && f.price !== "none");
+    const top = Object.keys(PRICE).filter((k) => k !== "none").map((k) => [k, priced.filter((f) => f.price === k).length]).sort((a, b) => b[1] - a[1])[0];
+    const price = top && top[1] ? `${interest ? "price" : "Price"} ${PRICE[top[0]].toLowerCase()} (${top[1]} of ${priced.length})` : "";
+    return [interest, price].filter(Boolean).join(" · ") || "No feedback yet";
+  }
+  const tally = (fbs, key, labels) => Object.entries(labels).map(([k, v]) => [v, fbs.filter((f) => f[key] === k).length]).filter(([, n]) => n).map(([v, n]) => `${v} ${n}`).join(" · ") || "—";
+  const rpFrame = () => rangeBounds(rpRange, rpFrom, rpTo);
+  // The time frame in words, with its dates: "This month (Nov 1, 2026 – Nov 30, 2026)". All time gives the dates of
+  // the first and last open house in the report.
+  function frameText(isos) {
+    const [a, b] = rpFrame(), sorted = [...isos].sort();
+    const dates = a && b ? `${fmtIso(a)} – ${fmtIso(b)}` : a ? `from ${fmtIso(a)}` : b ? `through ${fmtIso(b)}` : sorted.length ? `${fmtIso(sorted[0])} – ${fmtIso(sorted.at(-1))}` : "";
+    return rpRange === "custom" ? dates || "All time" : `${RANGES[rpRange]}${dates ? ` (${dates})` : ""}`;
+  }
+  const BASE_TITLE = document.title;
+  const fileSafe = (s) => s.replace(/[\/\\:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
+  // The page's title while a report shows: browsers name a printed PDF after it. "Open House Report - 200 Murano Place - All time".
+  const reportTitle = (...parts) => fileSafe(["Open House Report", ...parts].join(" - "));
+  // The header on screen and on paper: the George & Noonan logo (in print), the report, its subject and time frame.
+  const reportHead = (kind, title, sub, frame) => `
+        <header class="rp-head">
+          <div class="rp-brand"><img src="/gn-logo.png" alt="George &amp; Noonan Real Estate Group"><span>Open House Report</span></div>
+          <p class="rp-kind">${esc(kind)}</p>
+          <h2>${esc(title)}</h2>
+          ${sub ? `<p class="sub">${sub}</p>` : ""}
+          <dl class="rp-meta"><div><dt>Time frame</dt><dd>${esc(frame)}</dd></div><div><dt>Prepared</dt><dd>${esc(fmtIso(todayIso()))}</dd></div></dl>
+        </header>`;
+  const timeframePicker = () => `<select class="field tf-inline" id="rpRange" aria-label="Time frame (by open house date)">${Object.entries(RANGES).map(([k, v]) => `<option value="${k}" ${k === rpRange ? "selected" : ""}>${v}</option>`).join("")}</select>
+        <span class="tf-dates" id="rpCustom" ${rpRange === "custom" ? "" : "hidden"}>
+          <input class="field" type="date" id="rpFrom" value="${esc(rpFrom)}" aria-label="From">
+          <input class="field" type="date" id="rpTo" value="${esc(rpTo)}" aria-label="To">
+        </span>`;
+  function wireTimeframe(paint) {
+    $("rpRange").onchange = (e) => {
+      if (e.target.value === "custom" && !rpFrom && !rpTo) [rpFrom, rpTo] = rpFrame();
+      rpRange = e.target.value;
+      $("rpCustom").hidden = rpRange !== "custom";
+      $("rpFrom").value = rpFrom; $("rpTo").value = rpTo;
+      paint();
+    };
+    $("rpFrom").onchange = (e) => { rpFrom = e.target.value; paint(); };
+    $("rpTo").onchange = (e) => { rpTo = e.target.value; paint(); };
+  }
+  // Homes in a picker: on the market first, then past ones (sold, expired or withdrawn), each A–Z.
+  const homeGroups = (homes, statusKnown) => {
+    const az = (list) => [...list].sort((a, b) => place(a).localeCompare(place(b)));
+    return statusKnown ? [["On the market", az(homes.filter((h) => h.active))], ["Past homes", az(homes.filter((h) => !h.active))]].filter(([, l]) => l.length)
+      : [["", az(homes)]];
+  };
+
+  async function renderReporting() {
+    const [, kind = "home", key = ""] = location.hash.slice(1).split("/");
+    const d = await loadHomes(true);
+    if (!d) { view.innerHTML = '<p class="empty">Could not load the open houses.</p>'; return; }
+    view.innerHTML = `
+      <section class="intro noprint"><div><h1>Reporting</h1></div>
+        <div class="intro-actions">${iconBtn("rpCsv", "Export CSV", "download")}${iconBtn("rpPrint", "Print or save as PDF", "print")}</div></section>
+      <div class="chips noprint" role="group" aria-label="Report">
+        <a class="chip" href="#reporting/home${key && kind === "home" ? `/${esc(key)}` : ""}" aria-pressed="${kind !== "week"}">Report by Home</a>
+        <a class="chip" href="#reporting/week" aria-pressed="${kind === "week"}">Report by Week</a>
+      </div>
+      <div id="report"></div>`;
+    $("rpPrint").onclick = () => window.print();
+    if (kind === "week") reportByWeek(d); else reportByHome(d, decodeURIComponent(key));
+  }
+
+  // ---- Report by Home
+  function reportByHome({ homes, statusKnown }, key) {
+    const h = homes.find((x) => x.key === key);
+    $("report").innerHTML = `
+      <div class="toolbar noprint rp-tools">
+        <select class="field rp-home" id="rpHome" aria-label="Home"><option value="">Choose a home…</option>${homeGroups(homes, statusKnown).map(([label, list]) => {
+          const opts = list.map((x) => `<option value="${esc(x.key)}" ${x.key === key ? "selected" : ""}>${esc(place(x))}</option>`).join("");
+          return label ? `<optgroup label="${label}">${opts}</optgroup>` : opts; }).join("")}</select>
+        ${h ? timeframePicker() : ""}
+      </div>
+      <div id="rpBody">${h ? "" : `<p class="empty">${homes.length ? "Choose a home to see its report." : "No open houses have been hosted yet."}</p>`}</div>`;
+    $("rpHome").onchange = (e) => { location.hash = e.target.value ? `#reporting/home/${encodeURIComponent(e.target.value)}` : "#reporting/home"; };
+    $("rpCsv").hidden = !h;
+    if (!h) { document.title = reportTitle("Report by Home"); return; }
+    const paint = () => {
+      const ohs = h.openHouses.filter((o) => inRange(o, rpFrame())); // newest first
+      const fbs = ohs.filter((o) => o.feedback).map((o) => o.feedback);
+      const groups = fbs.reduce((n, f) => n + (Number(f.visitors) || 0), 0);
+      const flags = fbs.filter((f) => f.brokerFlag).length;
+      const frame = frameText(ohs.map((o) => o.iso));
+      document.title = reportTitle(place(h), frame);
+      $("rpCsv").onclick = () => exportFeedbackCsv(ohs.map((o) => ({ h, o })), document.title, true);
+      $("rpBody").innerHTML = `
+        ${reportHead("Report by Home", h.addr, `${esc(h.city)}, TX ${esc(h.zip)} · ${h.mls.map((m) => /^\d+$/.test(m) ? `MLS# ${esc(m)}` : "Added by the team").join(", ")}`, frame)}
+        <div class="stats">
+          <div class="card stat"><b>${ohs.length}</b><span>Open houses</span></div>
+          <div class="card stat"><b>${fbs.length ? groups : "—"}</b><span>Groups attended${fbs.length < ohs.length ? ` <span class="fine">(${fbs.length} of ${ohs.length} reported)</span>` : ""}</span></div>
+          <div class="card stat"><b class="words">${esc(tally(fbs, "interest", INTEREST))}</b><span>Level of Interest</span></div>
+          <div class="card stat"><b class="words">${esc(tally(fbs, "price", PRICE))}</b><span>What guests thought of the price</span></div>
+        </div>
+        <div class="card rp-sent"><span class="fine">General sentiment</span><b>${esc(sentiment(fbs))}</b>${flags ? `<span class="flagged">⚠ ${flags} flagged for the broker</span>` : ""}</div>
+        <h2 class="section">Open houses</h2>
+        <div class="card table-wrap rp-flow"><table class="stack rp-table"><thead><tr><th>Date</th><th>Time</th><th>Hosted by</th><th>Groups</th><th>Interest</th><th>Price</th></tr></thead><tbody>
+          ${ohs.map((o) => `<tr><td data-l="Date"><b>${esc(withYear(o))}</b></td><td data-l="Time">${esc(o.time)}</td><td data-l="Hosted by">${esc(o.agent.name)}</td>
+            ${o.feedback ? `<td data-l="Groups">${o.feedback.visitors}</td><td data-l="Interest">${esc(INTEREST[o.feedback.interest] || "—")}</td><td data-l="Price">${esc(PRICE[o.feedback.price] || "—")}</td>`
+              : '<td colspan="3" class="sub" data-l="Feedback">No feedback</td>'}</tr>`).join("") || '<tr><td colspan="6" class="empty">No open houses in this time frame.</td></tr>'}
+        </tbody></table></div>
+        <h2 class="section">Feedback</h2>
+        <div class="fbq">${ohs.filter((o) => o.feedback).map((o) => `<article class="card fbcard${o.feedback.brokerFlag ? " flag" : ""}">
+            <h3>${esc(withYear(o))} · ${esc(o.time)}</h3><div class="meta">Hosted by ${esc(o.agent.name)}</div>${fbText(o.feedback)}</article>`).join("")
+          || '<p class="empty">No feedback in this time frame.</p>'}</div>`;
+    };
+    wireTimeframe(paint);
+    paint();
+  }
+
+  // ---- Report by Week
+  // Periods: months, weeks (Monday to Sunday, like "This week") or days. Months and weeks run without gaps from the
+  // first open house to the last, so quiet weeks show as zero; days list only the days with open houses.
+  const monday = (iso) => shiftIso(iso, -((new Date(`${iso}T12:00:00Z`).getUTCDay() + 6) % 7));
+  const BY = {
+    month: { label: "Month", key: (iso) => iso.slice(0, 7), next: (k) => { const [y, m] = k.split("-").map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; },
+      name: (k) => new Date(`${k}-15T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", year: "numeric" }) },
+    week: { label: "Week", key: monday, next: (k) => shiftIso(k, 7),
+      name: (k) => `Week of ${new Date(`${k}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}` },
+    day: { label: "Day", key: (iso) => iso, next: null,
+      name: (k) => new Date(`${k}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" }) },
+  };
+  function reportByWeek({ homes, statusKnown }) {
+    // Past homes (sold, expired or withdrawn) are left out to start with; the choice is kept while the console is open.
+    if (!rpLeftOut) rpLeftOut = new Set(statusKnown ? homes.filter((h) => !h.active).map((h) => h.key) : []);
+    $("report").innerHTML = `
+      <div class="toolbar noprint rp-tools">
+        ${timeframePicker()}
+        <label class="tb-pick"><span>Group by</span><select class="field" id="rpBy">${Object.entries(BY).map(([k, v]) => `<option value="${k}" ${k === rpBy ? "selected" : ""}>${v.label}</option>`).join("")}</select></label>
+        <details class="rp-homes"><summary class="field" id="rpHomesBtn"></summary>
+          <div class="card rp-homes-list">
+            <div class="rp-homes-acts"><button class="link" data-pick="all">Include all</button>${statusKnown ? '<button class="link" data-pick="active">On the market only</button>' : ""}<button class="link" data-pick="none">Leave all out</button></div>
+            ${homeGroups(homes, statusKnown).map(([label, list]) => `${label ? `<p class="rp-homes-h">${label}</p>` : ""}${list.map((h) =>
+              `<label><input type="checkbox" value="${esc(h.key)}" ${rpLeftOut.has(h.key) ? "" : "checked"}> ${esc(place(h))}</label>`).join("")}`).join("")}
+          </div></details>
+      </div>
+      <div id="rpBody"></div>`;
+    let rows = [];
+    const paint = () => {
+      const by = BY[rpBy], in_ = homes.filter((h) => !rpLeftOut.has(h.key));
+      const homesText = rpLeftOut.size ? `${in_.length} of ${homes.length} homes` : `All ${homes.length} homes`;
+      $("rpHomesBtn").textContent = `Homes: ${rpLeftOut.size ? `${in_.length} of ${homes.length}` : "all"}`;
+      const ohs = in_.flatMap((h) => h.openHouses.filter((o) => inRange(o, rpFrame())).map((o) => ({ h, o })));
+      const periods = new Map();
+      if (ohs.length) {
+        // Months and weeks fill the time frame (up to today), or run from the first open house to the last for All time.
+        const keys = ohs.map(({ o }) => by.key(o.iso)).sort(), [a, z] = rpFrame(), end = z && z < todayIso() ? z : todayIso();
+        const first = a ? by.key(a) : keys[0], last = [keys.at(-1), z || a ? by.key(end) : ""].sort().at(-1);
+        if (by.next) for (let k = first; k <= last; k = by.next(k)) periods.set(k, []);
+        for (const e of ohs) { const k = by.key(e.o.iso); if (!periods.has(k)) periods.set(k, []); periods.get(k).push(e); }
+      }
+      rows = [...periods.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, list]) => {
+        const fbs = list.filter((e) => e.o.feedback).map((e) => e.o.feedback);
+        const byHome = new Map();
+        for (const e of list) byHome.set(e.h.key, { h: e.h, n: (byHome.get(e.h.key)?.n || 0) + 1 });
+        return { k, name: by.name(k), oh: list.length, homes: [...byHome.values()].sort((a, b) => b.n - a.n || place(a.h).localeCompare(place(b.h))),
+          fb: fbs.length, groups: fbs.reduce((n, f) => n + (Number(f.visitors) || 0), 0) };
+      });
+      const total = (f) => rows.reduce((n, r) => n + r[f], 0);
+      const reported = total("fb"), frame = frameText(ohs.map((e) => e.o.iso));
+      document.title = reportTitle(`By ${by.label}`, frame);
+      $("rpCsv").onclick = () => downloadCsv([by.label, "Open houses", "Homes", "Groups attended", "Open houses with feedback", "Addresses"],
+        rows.map((r) => [r.name, r.oh, r.homes.length, r.fb ? r.groups : "", r.fb, r.homes.map((x) => `${place(x.h)}${x.n > 1 ? ` (${x.n})` : ""}`).join("; ")]), document.title);
+      $("rpBody").innerHTML = `
+        ${reportHead("Report by Week", `Open houses by ${by.label.toLowerCase()}`, esc(homesText), frame)}
+        <div class="stats">
+          <div class="card stat"><b>${total("oh")}</b><span>Open houses</span></div>
+          <div class="card stat"><b>${new Set(ohs.map((e) => e.h.key)).size}</b><span>Homes</span></div>
+          <div class="card stat"><b>${reported ? total("groups") : "—"}</b><span>Groups attended${reported < total("oh") ? ` <span class="fine">(${reported} of ${total("oh")} reported)</span>` : ""}</span></div>
+          <div class="card stat"><b>${reported ? (total("groups") / reported).toFixed(1) : "—"}</b><span>Groups per open house</span></div>
+        </div>
+        ${rows.length ? `<div class="card rp-chart" id="rpChart">${comboChart(rows)}<div class="rp-tip" id="rpTip" role="tooltip" hidden></div></div>` : ""}
+        <div class="card table-wrap rp-flow"><table class="stack rp-table"><thead><tr><th>${by.label}</th><th>Open houses</th><th>Homes</th><th>Groups attended</th><th>With feedback</th></tr></thead><tbody>
+          ${[...rows].reverse().map((r) => `<tr><td data-l="${by.label}"><b>${esc(r.name)}</b></td><td data-l="Open houses">${r.oh}</td><td data-l="Homes">${r.homes.length}</td>
+            <td data-l="Groups attended">${r.fb ? r.groups : "—"}</td><td data-l="With feedback">${r.oh ? `${r.fb} of ${r.oh}` : "—"}</td></tr>`).join("")
+            || '<tr><td colspan="5" class="empty">No open houses in this time frame.</td></tr>'}
+        </tbody></table></div>`;
+      wireTip();
+    };
+    // Hovering a period (or tapping it on a phone) shows its numbers and which homes held its open houses.
+    function wireTip() {
+      const chart = $("rpChart"); if (!chart) return;
+      const tip = $("rpTip");
+      const show = (e) => {
+        const hit = e.target.closest("[data-i]"); if (!hit) { tip.hidden = true; return; }
+        const r = rows[Number(hit.dataset.i)];
+        tip.innerHTML = `<b>${esc(r.name)}</b><div>${r.oh} open house${r.oh === 1 ? "" : "s"}${r.fb ? ` · ${r.groups} group${r.groups === 1 ? "" : "s"} attended` : ""}</div>
+          ${r.homes.length ? `<ul>${r.homes.map((x) => `<li>${esc(place(x.h))}${x.n > 1 ? ` <span>×${x.n}</span>` : ""}</li>`).join("")}</ul>` : ""}`;
+        tip.hidden = false;
+        const box = chart.getBoundingClientRect(), bar = hit.getBoundingClientRect();
+        const x = bar.left - box.left + bar.width / 2, w = tip.offsetWidth;
+        tip.style.left = `${Math.max(8, Math.min(box.width - w - 8, x - w / 2))}px`;
+        tip.style.top = `${Math.max(8, bar.top - box.top + 24)}px`;
+      };
+      chart.onmousemove = chart.onclick = show;
+      chart.onmouseleave = () => { tip.hidden = true; };
+    }
+    $("rpBy").onchange = (e) => { rpBy = e.target.value; paint(); };
+    const list = view.querySelector(".rp-homes-list");
+    list.onchange = (e) => { const c = e.target; if (c.type !== "checkbox") return; if (c.checked) rpLeftOut.delete(c.value); else rpLeftOut.add(c.value); paint(); };
+    list.onclick = (e) => {
+      const b = e.target.closest("[data-pick]"); if (!b) return;
+      const keep = (h) => b.dataset.pick === "all" || (b.dataset.pick === "active" && h.active);
+      rpLeftOut = new Set(homes.filter((h) => !keep(h)).map((h) => h.key));
+      list.querySelectorAll("input").forEach((c) => { c.checked = !rpLeftOut.has(c.value); });
+      paint();
+    };
+    wireTimeframe(paint);
+    paint();
+  }
+
+  // One chart for both measures, on one scale (both are counts): open houses as bars, groups attended as a line
+  // through the periods that have feedback. Drawn at the width it shows at, so the labels stay readable on a phone.
+  function comboChart(rows) {
+    const W = Math.max(300, Math.min(1100, ($("report")?.clientWidth || 792) - 32)), H = W < 500 ? 200 : 240, L = 34, B = 34, T = 14;
+    const max = Math.max(1, ...rows.map((r) => Math.max(r.oh, r.fb ? r.groups : 0)));
+    const step = max <= 5 ? 1 : Math.ceil(max / 4 / 5) * 5 || 1, top = Math.ceil(max / step) * step;
+    // Bars are at most 56px wide, so a short time frame doesn't draw one slab across the chart.
+    const bw = (W - L) / rows.length, y = (v) => T + (H - T - B) * (1 - v / top), pad = Math.max(Math.min(4, bw * 0.15), (bw - 56) / 2);
+    const cx = (i) => L + i * bw + bw / 2;
+    const every = Math.ceil(rows.length / Math.max(3, Math.floor((W - L) / 64)));
+    // Short labels under the bars: "Nov ’26" for a month, "Nov 16" for a week or a day.
+    const short = (r) => rpBy === "month" ? r.name.replace(/ \d{2}(\d{2})$/, " ’$1") : r.name.replace(/^Week of /, "").replace(/, \d{4}$/, "").replace(/^\w{3}, /, "");
+    let g = "";
+    for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" class="rp-grid"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" class="rp-axis">${v}</text>`;
+    const bars = rows.map((r, i) => `<rect x="${L + i * bw + pad}" y="${y(r.oh)}" width="${Math.max(1, bw - 2 * pad)}" height="${Math.max(0, y(0) - y(r.oh))}" rx="2" class="rp-bar"/>
+      ${i % every === 0 ? `<text x="${cx(i)}" y="${H - B + 16}" text-anchor="middle" class="rp-axis">${esc(short(r))}</text>` : ""}`).join("");
+    const pts = rows.map((r, i) => (r.fb ? [cx(i), y(r.groups)] : null)).filter(Boolean);
+    const line = pts.length > 1 ? `<polyline points="${pts.map((p) => p.join(",")).join(" ")}" class="rp-line"/>` : "";
+    const dots = pts.map(([x, yy]) => `<circle cx="${x}" cy="${yy}" r="${bw < 8 ? 3 : 5}" class="rp-dot"/>`).join("");
+    // A see-through column over each period catches the hover.
+    const hits = rows.map((r, i) => `<rect data-i="${i}" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" class="rp-hit"/>`).join("");
+    return `<div class="rp-legend"><span><i class="sw bar"></i>Open houses</span><span><i class="sw line"></i>Groups attended (from feedback)</span></div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Open houses and groups attended by ${esc(BY[rpBy].label.toLowerCase())}">${g}${bars}${line}${dots}${hits}</svg>`;
   }
 
   // ---- Listings ------------------------------------------------------------
@@ -1118,7 +1415,7 @@
     const feedLine = [d.checkedAt && `Checked at ${clock(d.checkedAt)}`, updated && `Repliers has MLS changes up to ${timed ? clock(d.feedUpdatedAt) : updated}`].filter(Boolean).join(" · ");
     view.innerHTML = `
       <section class="intro"><div><h1>Publish this week's homes</h1>
-        <p class="sub">Week of ${esc(d.week.label)}. Requests close ${esc(d.closesLabel)}. Publish the homes agents can request; changes save as you make them. Publishing and Priority reset each week; days, Vacant, instructions and access details stay with the home.</p></div>
+        <p class="sub">Week of ${esc(d.week.label)} · Requests close ${esc(d.closesLabel)}</p></div>
         ${me.admin ? '<div class="intro-actions"><button class="btn small" id="addHomeBtn">Add a home</button></div>' : ""}</section>
       ${me.admin ? `<div class="card panel" id="addHome" hidden>
         <h3>Add a home that isn't on the MLS yet</h3>
@@ -1390,9 +1687,7 @@
       const people = [...roster.values()].sort((x, y) => (y.last - x.last) || x.email.localeCompare(y.email));
 
       view.innerHTML = `
-        <section class="intro"><div><h1>Agents and access</h1>
-          <p class="sub">Who can sign in to the Open House Portal. Removing someone ends their access right away. <a href="#signins">Sign-ins</a> shows who has signed in and who was turned away.${ag ? " Agents sign the Support and Referral Agreement the first time they sign in; the team doesn't." : ""}
-            A listing limit is the highest list price an agent can book: homes over it show grayed out on the portal, with a note to ask the team for access. Leave it blank for no limit.</p></div></section>
+        <section class="intro"><div><h1>Agents and access</h1></div></section>
         <div class="card panel">
           <h3>Add an agent</h3>
           <p class="fine">For agents who sign in with an address outside an allowed domain, like a personal Gmail.</p>
@@ -1479,10 +1774,7 @@
     const all = r.data.signins;
     view.innerHTML = `
       <p style="margin:22px 0 0"><a href="#settings">← Settings</a></p>
-      <section class="intro"><div><h1>Sign-ins</h1>
-        <p class="sub">Each time someone signs in to the portal or the Admin Console, is turned away, or signs out, newest first. Kept for a year.
-          A sign-in lasts 90 days on that phone or computer and starts over each time they come back. Private browsing tabs forget it when they close.
-          If Google's own page shows an error, the sign-in never reaches the site, so it isn't listed here.</p></div></section>
+      <section class="intro"><div><h1>Sign-ins</h1></div></section>
       <div class="toolbar">
         <div class="chips" id="siShow" role="group" aria-label="Show">${Object.entries(SIGNIN_SHOW).map(([k, [label]]) => `<button class="chip" data-show="${k}">${label}</button>`).join("")}</div>
         <input class="field" id="siSearch" type="search" placeholder="Search name or email" value="${esc(siSearch)}" aria-label="Search sign-ins">
@@ -1526,7 +1818,7 @@
     const r = await api("GET", "/api/admin/settings");
     if (!r.ok) { view.innerHTML = '<p class="empty">Only administrators can change settings.</p>'; return; }
     view.innerHTML = `
-      <section class="intro"><div><h1>Settings</h1><p class="sub">Changes save as soon as you make them.</p></div></section>
+      <section class="intro"><div><h1>Settings</h1></div></section>
       <div class="card panel">
         <label class="switch"><input type="checkbox" id="cOn" role="switch"><span><b>Close requests each week</b><br><span class="fine" id="cState"></span></span></label>
         <div id="cMore">

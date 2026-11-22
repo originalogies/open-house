@@ -13,8 +13,8 @@ import { textTeamFeedback } from "../lib/texts.mjs";
 // POST /api/feedback { id, visitors, interest, price, liked, disliked, forSeller, teamNotes, brokerFlag }
 // POST /api/feedback { id, action: "photo", data }      add a JPEG or PNG to the form -> { photos }
 // POST /api/feedback { id, action: "unphoto", photo }   take one off again           -> { photos }
-// Only the agent who hosted can see or send it, once, after the open house ends. The team is emailed, and London
-// and Lucy get it by text (texts.mjs).
+// Only the agent who hosted can see or send it, once, after the open house ends. The team is emailed, and it goes out as a
+// group text to the agent, Troy, Lucy and London (texts.mjs).
 export default async (req) => {
   const user = await currentUser(req);
   if (!user) return json(401, { error: "signed_out" });
@@ -61,7 +61,7 @@ export default async (req) => {
   r.feedback = feedback;
   delete r.feedbackPhotos;
   await saveRequest(r);
-  await textTeamFeedback(r); // London and Lucy, by text; never throws
+  await textTeamFeedback(r); // a group text to the agent, Troy, Lucy and London; never throws
   try { await sendFeedbackToTeam(r); }
   catch (e) {
     console.error("feedback email failed", r.id, e.message);

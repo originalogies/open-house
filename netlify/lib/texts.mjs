@@ -65,7 +65,8 @@ export const TEXTS = {
   },
 };
 
-// Sends one text through Quo. Inside capture() (previews) it's kept instead of sent. Throws with Quo's reason.
+// Sends one text through Quo: to one number, or to several as a group text (one shared thread where everyone sees
+// the others and every reply). Inside capture() (previews) it's kept instead of sent. Throws with Quo's reason.
 export async function sendText(to, content) {
   const box = previewBox();
   if (box) { box.sent.push({ text: true, to, content }); return null; }
@@ -74,7 +75,7 @@ export async function sendText(to, content) {
   const res = await fetch(QUO_URL, {
     method: "POST",
     headers: { authorization: key, "content-type": "application/json" },
-    body: JSON.stringify({ content, from: QUO_FROM, to: [to] }),
+    body: JSON.stringify({ content, from: QUO_FROM, to: Array.isArray(to) ? to : [to] }),
   });
   if (!res.ok) {
     // Quo answers {"error": {"message": ...}} (a wrong key) or {"title", "message", "code"} (an opted-out number).
@@ -105,13 +106,16 @@ export async function textAgent(r, kind) {
 }
 
 // ---- feedback to the team -----------------------------------------------------------------------------------
-// When an agent sends feedback, London and Lucy get it by text too (the full version, with photos, is in the team
-// email). TEAM_TEXT_TO in Netlify (numbers, comma-separated) replaces them.
-export const TEAM_TEXT_DEFAULT = [{ name: "London George", phone: "+18179958080" }, { name: "Lucy Noonan", phone: "+18179133611" }];
+// When an agent sends feedback, it goes out as one group text to that agent (when the roster has their number) and
+// the team: Troy, Lucy and London (the full version, with photos, is in the team email). TEAM_TEXT_TO in Netlify
+// (numbers, comma-separated) replaces the team.
+export const TEAM_TEXT_DEFAULT = [{ name: "Troy George", phone: "+18173084170" }, { name: "Lucy Noonan", phone: "+18179133611" },
+  { name: "London George", phone: "+18179958080" }];
 export const teamTextTo = () => {
   const env = String(process.env.TEAM_TEXT_TO || "").split(",").map(toE164).filter(Boolean);
   return env.length ? env.map((phone) => ({ name: fmtPhone(phone), phone })) : TEAM_TEXT_DEFAULT;
 };
+const names = (list) => { const n = list.map((w) => w.name); return n.length < 3 ? n.join(" and ") : `${n.slice(0, -1).join(", ")} and ${n.at(-1)}`; };
 const clip = (s, n) => { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? `${s.slice(0, n - 3).trimEnd()}...` : s; };
 export function feedbackText(r) {
   const f = r.feedback, d = dayMeta(r.iso), photos = (f.photos || []).length;
@@ -121,18 +125,33 @@ export function feedbackText(r) {
     + line("Liked", f.liked) + line("Didn't like", f.disliked) + line("Additional", f.forSeller) + line("Team notes", f.teamNotes)
     + `${photos ? `\n${photos} photo${photos === 1 ? "" : "s"} in the email.` : ""}`;
 }
-// Texts the feedback to the team. Never throws: each text that fails is written to the request's history.
+// Texts the feedback to the hosting agent and the team, as one group text. If Quo won't send the group text (one of
+// them has opted out, say), each gets it on their own instead. Never throws: each text that fails is written to the
+// request's history. Returns "sent" or "failed" for each text tried.
 export async function textTeamFeedback(r) {
   if (!textsOn()) return [];
   const body = feedbackText(r), out = [];
-  for (const who of teamTextTo()) {
+  const agentPhone = await phoneFor(r.agent).catch(() => null);
+  const who = [...(agentPhone ? [{ name: r.agent.name, phone: agentPhone }] : []), ...teamTextTo()]
+    .filter((w, i, all) => all.findIndex((x) => x.phone === w.phone) === i);
+  if (who.length > 1) {
     try {
-      await sendText(who.phone, body);
-      await logEvent(r.id, "text_sent", { note: `Texted the feedback to ${who.name} at ${fmtPhone(who.phone)}` });
+      await sendText(who.map((w) => w.phone), body);
+      await logEvent(r.id, "text_sent", { note: `Group-texted the feedback to ${names(who)}` });
+      return ["sent"];
+    } catch (e) {
+      console.error("feedback group text failed", r.id, e.message);
+      await logEvent(r.id, "text_failed", { note: `The feedback group text didn't send (${e.message}), so each person was texted on their own` });
+    }
+  }
+  for (const w of who) {
+    try {
+      await sendText(w.phone, body);
+      await logEvent(r.id, "text_sent", { note: `Texted the feedback to ${w.name} at ${fmtPhone(w.phone)}` });
       out.push("sent");
     } catch (e) {
-      console.error("feedback text failed", r.id, who.phone, e.message);
-      await logEvent(r.id, "text_failed", { note: `The feedback text to ${who.name} at ${fmtPhone(who.phone)} didn't send (${e.message})` });
+      console.error("feedback text failed", r.id, w.phone, e.message);
+      await logEvent(r.id, "text_failed", { note: `The feedback text to ${w.name} at ${fmtPhone(w.phone)} didn't send (${e.message})` });
       out.push("failed");
     }
   }

@@ -28,6 +28,8 @@
 .topnav-signout:hover{border-color:var(--muted)}
 .topnav-toggle{display:none}
 
+/* Just above the menu's breakpoint the Admin Console's links sit closer together, so they all fit on one line. */
+@media (min-width:901px) and (max-width:1100px){.topnav-links a{padding:0 7px}.topnav-menu-inner{gap:14px}}
 @media (max-width:900px){
   .topnav-bar{min-height:64px;gap:0}
   .topnav-brand img{width:140px}
