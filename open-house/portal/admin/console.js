@@ -8,7 +8,11 @@
   const money = (n) => "$" + Number(n || 0).toLocaleString("en-US");
   const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
   const fmtDate = (ms) => ms ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-  const STATUS = { pending: "Waiting", approved: "Approved", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
+  const STATUS = { pending: "Waiting", approved: "Approved", completed: "Completed", declined: "Declined", expired: "Expired", cancelled: "Cancelled" };
+  // An approved open house that has ended shows as Completed (its stored status stays "approved").
+  const chicagoHour = () => Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()));
+  const ended = (r) => r.iso < todayIso() || (r.iso === todayIso() && chicagoHour() >= r.to);
+  const shownStatus = (r) => (r.status === "approved" && ended(r) ? "completed" : r.status);
   // The Requests list shows the MLS only when it needs the team (the request's page has the full MLS status).
   // A request being approved with the AI agent waits until it's on the MLS; a dry run never gets it there.
   const MLS_ALERT = { failed: "MLS update failed", needs_login: "MLS sign-in needed" };
@@ -27,6 +31,7 @@
   // placeholder when a home has no photo or it fails to load.
   const thumb = (r) => `<span class="thumb">${r.img ? `<img src="${esc(photo(r.img))}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
   const pill = (s) => `<span class="pill ${esc(s)}">${esc(STATUS[s] || s)}</span>`;
+  const statusPill = (r) => pill(shownStatus(r));
   // A home's street and city, the way every address on the site reads: "200 Murano Place, Southlake".
   const place = (x) => [x.addr, x.city].filter(Boolean).join(", ");
   // Open houses imported from the G&N calendar may have no MLS number, and nobody decided them here.
@@ -264,7 +269,7 @@
     return a ? `From ${fmtIso(a)}` : b ? `Through ${fmtIso(b)}` : all;
   }
 
-  const CHIPS = ["all", "pending", "approved", "declined", "expired", "cancelled"];
+  const CHIPS = ["all", "pending", "approved", "completed", "declined", "expired", "cancelled"];
   async function renderRequests() {
     if (!(await loadRequests())) { view.innerHTML = '<p class="empty">Could not load requests.</p>'; return; }
     const th = (k, label) => `<th aria-sort="none"><button class="sort" data-sort="${k}">${label}<span class="sort-i" aria-hidden="true"></span></button></th>`;
@@ -322,18 +327,18 @@
 
   // Waiting requests (any date) are pinned at the top; the rest are the time frame's. Both follow the chosen sort.
   // The "Waiting" chip shows everything that needs a decision. `filter` lets the chips count what they'd show.
-  const STATUS_ORDER = ["pending", "approved", "declined", "expired", "cancelled"];
+  const STATUS_ORDER = ["pending", "approved", "completed", "declined", "expired", "cancelled"];
   const byDate = (a, b) => a.iso.localeCompare(b.iso) || a.from - b.from;
   const SORT_FN = {
     date: byDate,
     home: (a, b) => place(a).localeCompare(place(b)) || byDate(a, b),
     agent: (a, b) => a.agent.name.localeCompare(b.agent.name) || byDate(a, b),
-    status: (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || byDate(a, b),
+    status: (a, b) => STATUS_ORDER.indexOf(shownStatus(a)) - STATUS_ORDER.indexOf(shownStatus(b)) || byDate(a, b),
   };
   const sorter = () => { const f = SORT_FN[reqSort], d = reqDir === "asc" ? 1 : -1; return (a, b) => d * f(a, b); };
   function listParts(filter = reqFilter) {
     const s = reqSearch.trim().toLowerCase(), bounds = rangeBounds();
-    const match = (r) => (filter === "all" || (filter === "pending" ? waits(r) : r.status === filter))
+    const match = (r) => (filter === "all" || (filter === "pending" ? waits(r) : shownStatus(r) === filter))
       && (!s || [r.agent.name, r.agent.email, r.addr, r.city, r.mls].join(" ").toLowerCase().includes(s));
     return {
       waiting: requests.filter((r) => waits(r) && match(r)).sort(reqSort === "date" ? byDate : sorter()), // soonest first by default
@@ -376,13 +381,14 @@
     const group = (label, n) => `<tr class="group"><th colspan="5">${esc(label)} <span>${n}</span></th></tr>`;
     // On phones each row is three short lines: when and status, the home (photo beside it), the agent and the action.
     // The address (and the whole row) opens the request's page.
-    const row = (r, wait) => `<tr class="req${wait ? " wait" : ""}" data-open="${esc(requestPage(r))}">
+    const row = (r, wait) => `<tr class="req${wait ? " wait" : ""}${r.status === "declined" ? " declined" : ""}" data-open="${esc(requestPage(r))}">
         <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
         <td class="home" data-l="Home"><div class="homecell">${thumb(r)}<div><a href="${esc(requestPage(r))}">${esc(place(r))}</a><div class="sub">${mlsNo(r)}</div></div></div></td>
         <td class="agent" data-l="Agent">${agentLink(r.agent.email, r.agent.name)}</td>
-        <td class="status" data-l="Status">${pill(r.status)}${r.addedBy ? `<div class="sub">Added by ${esc(r.addedBy)}${r.status === "pending" && r.holds ? " · hours held" : ""}</div>` : ""}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${fbNote(r)}</td>
+        <td class="status" data-l="Status">${statusPill(r)}${r.addedBy ? `<div class="sub">Added by ${esc(r.addedBy)}${r.status === "pending" && r.holds ? " · hours held" : ""}</div>` : ""}${r.cancelRequest ? '<div class="sub">Agent asked to cancel</div>' : ""}${r.cancelledBy ? `<div class="sub">by ${esc(r.cancelledBy)}</div>` : ""}${mlsNote(r)}${!r.feedback && r.feedbackDue ? '<div class="sub">Waiting on feedback</div>' : ""}</td>
         <td class="act" data-l="">${wait ? `<a class="btn small" href="${esc(requestPage(r))}">Review</a>`
-          : r.status === "approved" && r.iso >= todayIso() ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
+          : r.feedback ? `${r.feedback.brokerFlag ? '<b class="flagged" title="Flagged for the broker">⚠</b> ' : ""}<a class="link" href="${esc(requestPage(r))}">View feedback</a>`
+          : r.status === "approved" && !ended(r) ? `<button class="link" data-cancel="${esc(r.id)}">Cancel</button>` : ""}</td>
       </tr>`;
     let html = "", at = null;
     for (const it of items.slice(first, last)) {
@@ -666,7 +672,7 @@
   function exportCsv(list = filtered(), name = "open-house-requests") {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const head = ["Date", "Day", "Time", "Address", "City", "MLS", "Agent", "Agent email", "Phone", "Status", "Decided by", "Decided at", "Requested at", "Notes", ...FB_HEAD];
-    const rows = list.map((r) => [r.iso, r.day, r.time, r.addr, r.city, r.mls, r.agent.name, r.agent.email, r.phone, STATUS[r.status] || r.status,
+    const rows = list.map((r) => [r.iso, r.day, r.time, r.addr, r.city, r.mls, r.agent.name, r.agent.email, r.phone, STATUS[shownStatus(r)] || r.status,
       r.decidedBy, r.decidedAt ? new Date(r.decidedAt).toISOString() : "", new Date(r.createdAt).toISOString(), r.notes, ...fbCsv(r.feedback)]);
     const blob = new Blob([[head, ...rows].map((row) => row.map(cell).join(",")).join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}-${todayIso()}.csv`; a.click();
@@ -723,7 +729,7 @@
           <td class="when" data-l="Open house"><b>${dayDate(r)}</b><div class="sub">${esc(hours(r))}</div></td>
           <td class="pic">${thumb(r)}</td>
           <td class="home" data-l="Home">${esc(place(r))}<div class="sub">${mlsNo(r)}</div></td>
-          <td class="status" data-l="Status">${pill(r.status)}${fbNote(r)}</td>
+          <td class="status" data-l="Status">${statusPill(r)}${fbNote(r)}</td>
           <td class="decided${r.decidedBy || r.imported ? "" : " none"}" data-l="Decided">${decided(r)}</td>
         </tr>`).join("") || `<tr><td colspan="5" class="empty">${mine.length ? "No open houses match that address." : "No open house requests yet."}</td></tr>`;
     };
