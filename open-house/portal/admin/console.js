@@ -701,7 +701,7 @@
     view.innerHTML = `
       <p style="margin:22px 0 0"><a href="${me.admin ? "#agents" : "#requests"}">← ${me.admin ? "All agents" : "All requests"}</a></p>
       <section class="intro" style="padding-top:12px"><div><h1>${esc(name)}</h1>
-        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""}</p>
+        <p class="sub"><a href="mailto:${esc(email)}">${esc(email)}</a>${phone ? ` · ${esc(phone)}` : ""} · <a href="#reporting/agent/${encodeURIComponent(email)}">Open house report</a></p>
         ${signed ? `<p class="sub" style="margin-top:4px">${signed}</p>` : ""}</div></section>
       <div class="stats">
         <div class="card stat"><b>${hosted.length}</b><span>Open houses hosted</span></div>
@@ -1088,10 +1088,11 @@
   }
 
   // ---- Reporting -----------------------------------------------------------
-  // Two reports, built from the hosted open houses (approved and ended) and their feedback (GET /api/team/feedback):
+  // Three reports, built from the hosted open houses (approved and ended) and their feedback (GET /api/team/feedback):
   // By home (#reporting/home/<key>): one home's open houses in a time frame, the groups that came, the general
   // sentiment, every open house and all the feedback. By week (#reporting/week): every home's open houses over time,
-  // by month, week or day, as a chart and a table, leaving out the homes picked (past homes, to start with).
+  // by month, week or day, as a chart and a table, leaving out the homes picked (past homes, to start with). By agent
+  // (#reporting/agent/<emails>): one or more agents' open houses and feedback (reportByAgent).
   // Each prints (or saves as a PDF) under a George & Noonan header, and the page's title names the report, the home
   // and the time frame, so the saved PDF and the CSV export are named after them.
   let rpRange = "all", rpFrom = "", rpTo = "", rpBy = "week", rpLeftOut = null;
@@ -1153,18 +1154,20 @@
 
   async function renderReporting() {
     const [, kind = "home", key = ""] = location.hash.slice(1).split("/");
+    const tab = (k, label, href) => `<a class="chip" href="${href}" aria-pressed="${k === (["week", "agent"].includes(kind) ? kind : "home")}">${label}</a>`;
     const d = await loadHomes(true);
     if (!d) { view.innerHTML = '<p class="empty">Could not load the open houses.</p>'; return; }
     view.innerHTML = `
       <section class="intro noprint"><div><h1>Reporting</h1></div>
         <div class="intro-actions">${iconBtn("rpCsv", "Export CSV", "download")}${iconBtn("rpPrint", "Print or save as PDF", "print")}</div></section>
       <div class="chips noprint" role="group" aria-label="Report">
-        <a class="chip" href="#reporting/home${key && kind === "home" ? `/${esc(key)}` : ""}" aria-pressed="${kind !== "week"}">Report by Home</a>
-        <a class="chip" href="#reporting/week" aria-pressed="${kind === "week"}">Report by Week</a>
+        ${tab("home", "Report by Home", `#reporting/home${key && kind === "home" ? `/${esc(key)}` : ""}`)}
+        ${tab("week", "Report by Week", "#reporting/week")}
+        ${tab("agent", "Report by Agent", `#reporting/agent${rpAgents.size ? `/${encodeURIComponent([...rpAgents].join(","))}` : ""}`)}
       </div>
       <div id="report"></div>`;
     $("rpPrint").onclick = () => window.print();
-    if (kind === "week") reportByWeek(d); else reportByHome(d, decodeURIComponent(key));
+    if (kind === "week") reportByWeek(d); else if (kind === "agent") reportByAgent(d, key); else reportByHome(d, decodeURIComponent(key));
   }
 
   // ---- Report by Home
@@ -1225,42 +1228,86 @@
     day: { label: "Day", key: (iso) => iso, next: null,
       name: (k) => new Date(`${k}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" }) },
   };
+  // The chart's periods for a list of open houses ({ h: home, o: open house }), oldest first: each with its open
+  // houses, homes (and how many at each), agents, how many have feedback and the groups they reported. Months and
+  // weeks fill the time frame (up to today), or run from the first open house to the last for All time.
+  function periodRows(ohs, by) {
+    const periods = new Map();
+    if (ohs.length) {
+      const keys = ohs.map(({ o }) => by.key(o.iso)).sort(), [a, z] = rpFrame(), end = z && z < todayIso() ? z : todayIso();
+      const first = a ? by.key(a) : keys[0], last = [keys.at(-1), z || a ? by.key(end) : ""].sort().at(-1);
+      if (by.next) for (let k = first; k <= last; k = by.next(k)) periods.set(k, []);
+      for (const e of ohs) { const k = by.key(e.o.iso); if (!periods.has(k)) periods.set(k, []); periods.get(k).push(e); }
+    }
+    return [...periods.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, list]) => {
+      const fbs = list.filter((e) => e.o.feedback).map((e) => e.o.feedback);
+      const byHome = new Map();
+      for (const e of list) byHome.set(e.h.key, { h: e.h, n: (byHome.get(e.h.key)?.n || 0) + 1 });
+      return { k, name: by.name(k), oh: list.length, homes: [...byHome.values()].sort((a, b) => b.n - a.n || place(a.h).localeCompare(place(b.h))),
+        agents: [...new Set(list.map((e) => e.o.agent.name))].sort(), fb: fbs.length, groups: fbs.reduce((n, f) => n + (Number(f.visitors) || 0), 0) };
+    });
+  }
+  // The chart in its card, with the box that shows a period's details.
+  const chartCard = (rows) => (rows.length ? `<div class="card rp-chart" id="rpChart">${comboChart(rows)}<div class="rp-tip" id="rpTip" role="tooltip" hidden></div></div>` : "");
+  // Hovering a period (or tapping it on a phone) shows its numbers and which homes held its open houses; with
+  // `agents`, who hosted them too.
+  function wireTip(rows, agents) {
+    const chart = $("rpChart"); if (!chart) return;
+    const tip = $("rpTip");
+    const show = (e) => {
+      const hit = e.target.closest("[data-i]"); if (!hit) { tip.hidden = true; return; }
+      const r = rows[Number(hit.dataset.i)];
+      tip.innerHTML = `<b>${esc(r.name)}</b><div>${r.oh} open house${r.oh === 1 ? "" : "s"}${r.fb ? ` · ${r.groups} group${r.groups === 1 ? "" : "s"} attended` : ""}</div>
+        ${r.homes.length ? `<ul>${r.homes.map((x) => `<li>${esc(place(x.h))}${x.n > 1 ? ` <span>×${x.n}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${agents && r.agents.length ? `<div class="rp-tip-who">Hosted by ${esc(r.agents.join(", "))}</div>` : ""}`;
+      tip.hidden = false;
+      const box = chart.getBoundingClientRect(), bar = hit.getBoundingClientRect();
+      const x = bar.left - box.left + bar.width / 2, w = tip.offsetWidth;
+      tip.style.left = `${Math.max(8, Math.min(box.width - w - 8, x - w / 2))}px`;
+      tip.style.top = `${Math.max(8, bar.top - box.top + 24)}px`;
+    };
+    chart.onmousemove = chart.onclick = show;
+    chart.onmouseleave = () => { tip.hidden = true; };
+  }
+  const groupByPicker = () => `<label class="tb-pick"><span>Group by</span><select class="field" id="rpBy">${Object.entries(BY).map(([k, v]) => `<option value="${k}" ${k === rpBy ? "selected" : ""}>${v.label}</option>`).join("")}</select></label>`;
+
+  // A dropdown of checkboxes (homes, agents) that looks like the selects beside it. groups: [[heading, [{ v, t }]]];
+  // acts: shortcut links [[key, label]].
+  const pickerHtml = (id, groups, acts) => `<details class="rp-homes" id="${id}"><summary class="field"></summary>
+          <div class="card rp-homes-list">
+            <div class="rp-homes-acts">${acts.map(([k, l]) => `<button class="link" data-pick="${k}">${l}</button>`).join("")}</div>
+            ${groups.map(([label, list]) => `${label ? `<p class="rp-homes-h">${label}</p>` : ""}${list.map((x) =>
+              `<label><input type="checkbox" value="${esc(x.v)}"> ${esc(x.t)}</label>`).join("")}`).join("")}
+          </div></details>`;
+  // isOn(v) / set(v, on): whether a value is ticked, and change it. presets[key](v): whether a shortcut ticks it.
+  // summary(): the button's text.
+  function wirePicker(id, { isOn, set, presets, summary }, paint) {
+    const d = $(id), boxes = () => d.querySelectorAll("input");
+    const sync = () => { boxes().forEach((c) => { c.checked = isOn(c.value); }); d.querySelector("summary").textContent = summary(); };
+    d.onchange = (e) => { const c = e.target; if (c.type !== "checkbox") return; set(c.value, c.checked); sync(); paint(); };
+    d.onclick = (e) => { const b = e.target.closest("[data-pick]"); if (!b) return; boxes().forEach((c) => set(c.value, presets[b.dataset.pick](c.value))); sync(); paint(); };
+    sync();
+    return sync;
+  }
+  // A picker closes when you click anywhere else.
+  document.addEventListener("click", (e) => document.querySelectorAll("details.rp-homes[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
+  const homeItems = (homes, statusKnown) => homeGroups(homes, statusKnown).map(([label, list]) => [label, list.map((h) => ({ v: h.key, t: place(h) }))]);
+
   function reportByWeek({ homes, statusKnown }) {
     // Past homes (sold, expired or withdrawn) are left out to start with; the choice is kept while the console is open.
     if (!rpLeftOut) rpLeftOut = new Set(statusKnown ? homes.filter((h) => !h.active).map((h) => h.key) : []);
     $("report").innerHTML = `
       <div class="toolbar noprint rp-tools">
         ${timeframePicker()}
-        <label class="tb-pick"><span>Group by</span><select class="field" id="rpBy">${Object.entries(BY).map(([k, v]) => `<option value="${k}" ${k === rpBy ? "selected" : ""}>${v.label}</option>`).join("")}</select></label>
-        <details class="rp-homes"><summary class="field" id="rpHomesBtn"></summary>
-          <div class="card rp-homes-list">
-            <div class="rp-homes-acts"><button class="link" data-pick="all">Include all</button>${statusKnown ? '<button class="link" data-pick="active">On the market only</button>' : ""}<button class="link" data-pick="none">Leave all out</button></div>
-            ${homeGroups(homes, statusKnown).map(([label, list]) => `${label ? `<p class="rp-homes-h">${label}</p>` : ""}${list.map((h) =>
-              `<label><input type="checkbox" value="${esc(h.key)}" ${rpLeftOut.has(h.key) ? "" : "checked"}> ${esc(place(h))}</label>`).join("")}`).join("")}
-          </div></details>
+        ${groupByPicker()}
+        ${pickerHtml("rpHomes", homeItems(homes, statusKnown), [["all", "Include all"], ...(statusKnown ? [["active", "On the market only"]] : []), ["none", "Leave all out"]])}
       </div>
       <div id="rpBody"></div>`;
-    let rows = [];
     const paint = () => {
       const by = BY[rpBy], in_ = homes.filter((h) => !rpLeftOut.has(h.key));
       const homesText = rpLeftOut.size ? `${in_.length} of ${homes.length} homes` : `All ${homes.length} homes`;
-      $("rpHomesBtn").textContent = `Homes: ${rpLeftOut.size ? `${in_.length} of ${homes.length}` : "all"}`;
       const ohs = in_.flatMap((h) => h.openHouses.filter((o) => inRange(o, rpFrame())).map((o) => ({ h, o })));
-      const periods = new Map();
-      if (ohs.length) {
-        // Months and weeks fill the time frame (up to today), or run from the first open house to the last for All time.
-        const keys = ohs.map(({ o }) => by.key(o.iso)).sort(), [a, z] = rpFrame(), end = z && z < todayIso() ? z : todayIso();
-        const first = a ? by.key(a) : keys[0], last = [keys.at(-1), z || a ? by.key(end) : ""].sort().at(-1);
-        if (by.next) for (let k = first; k <= last; k = by.next(k)) periods.set(k, []);
-        for (const e of ohs) { const k = by.key(e.o.iso); if (!periods.has(k)) periods.set(k, []); periods.get(k).push(e); }
-      }
-      rows = [...periods.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, list]) => {
-        const fbs = list.filter((e) => e.o.feedback).map((e) => e.o.feedback);
-        const byHome = new Map();
-        for (const e of list) byHome.set(e.h.key, { h: e.h, n: (byHome.get(e.h.key)?.n || 0) + 1 });
-        return { k, name: by.name(k), oh: list.length, homes: [...byHome.values()].sort((a, b) => b.n - a.n || place(a.h).localeCompare(place(b.h))),
-          fb: fbs.length, groups: fbs.reduce((n, f) => n + (Number(f.visitors) || 0), 0) };
-      });
+      const rows = periodRows(ohs, by);
       const total = (f) => rows.reduce((n, r) => n + r[f], 0);
       const reported = total("fb"), frame = frameText(ohs.map((e) => e.o.iso));
       document.title = reportTitle(`By ${by.label}`, frame);
@@ -1274,42 +1321,109 @@
           <div class="card stat"><b>${reported ? total("groups") : "—"}</b><span>Groups attended${reported < total("oh") ? ` <span class="fine">(${reported} of ${total("oh")} reported)</span>` : ""}</span></div>
           <div class="card stat"><b>${reported ? (total("groups") / reported).toFixed(1) : "—"}</b><span>Groups per open house</span></div>
         </div>
-        ${rows.length ? `<div class="card rp-chart" id="rpChart">${comboChart(rows)}<div class="rp-tip" id="rpTip" role="tooltip" hidden></div></div>` : ""}
+        ${chartCard(rows)}
         <div class="card table-wrap rp-flow"><table class="stack rp-table"><thead><tr><th>${by.label}</th><th>Open houses</th><th>Homes</th><th>Groups attended</th><th>With feedback</th></tr></thead><tbody>
           ${[...rows].reverse().map((r) => `<tr><td data-l="${by.label}"><b>${esc(r.name)}</b></td><td data-l="Open houses">${r.oh}</td><td data-l="Homes">${r.homes.length}</td>
             <td data-l="Groups attended">${r.fb ? r.groups : "—"}</td><td data-l="With feedback">${r.oh ? `${r.fb} of ${r.oh}` : "—"}</td></tr>`).join("")
             || '<tr><td colspan="5" class="empty">No open houses in this time frame.</td></tr>'}
         </tbody></table></div>`;
-      wireTip();
+      wireTip(rows);
     };
-    // Hovering a period (or tapping it on a phone) shows its numbers and which homes held its open houses.
-    function wireTip() {
-      const chart = $("rpChart"); if (!chart) return;
-      const tip = $("rpTip");
-      const show = (e) => {
-        const hit = e.target.closest("[data-i]"); if (!hit) { tip.hidden = true; return; }
-        const r = rows[Number(hit.dataset.i)];
-        tip.innerHTML = `<b>${esc(r.name)}</b><div>${r.oh} open house${r.oh === 1 ? "" : "s"}${r.fb ? ` · ${r.groups} group${r.groups === 1 ? "" : "s"} attended` : ""}</div>
-          ${r.homes.length ? `<ul>${r.homes.map((x) => `<li>${esc(place(x.h))}${x.n > 1 ? ` <span>×${x.n}</span>` : ""}</li>`).join("")}</ul>` : ""}`;
-        tip.hidden = false;
-        const box = chart.getBoundingClientRect(), bar = hit.getBoundingClientRect();
-        const x = bar.left - box.left + bar.width / 2, w = tip.offsetWidth;
-        tip.style.left = `${Math.max(8, Math.min(box.width - w - 8, x - w / 2))}px`;
-        tip.style.top = `${Math.max(8, bar.top - box.top + 24)}px`;
-      };
-      chart.onmousemove = chart.onclick = show;
-      chart.onmouseleave = () => { tip.hidden = true; };
-    }
     $("rpBy").onchange = (e) => { rpBy = e.target.value; paint(); };
-    const list = view.querySelector(".rp-homes-list");
-    list.onchange = (e) => { const c = e.target; if (c.type !== "checkbox") return; if (c.checked) rpLeftOut.delete(c.value); else rpLeftOut.add(c.value); paint(); };
-    list.onclick = (e) => {
-      const b = e.target.closest("[data-pick]"); if (!b) return;
-      const keep = (h) => b.dataset.pick === "all" || (b.dataset.pick === "active" && h.active);
-      rpLeftOut = new Set(homes.filter((h) => !keep(h)).map((h) => h.key));
-      list.querySelectorAll("input").forEach((c) => { c.checked = !rpLeftOut.has(c.value); });
-      paint();
+    wirePicker("rpHomes", {
+      isOn: (v) => !rpLeftOut.has(v), set: (v, on) => (on ? rpLeftOut.delete(v) : rpLeftOut.add(v)),
+      presets: { all: () => true, none: () => false, active: (v) => !!homes.find((h) => h.key === v)?.active },
+      summary: () => `Homes: ${rpLeftOut.size ? `${homes.length - rpLeftOut.size} of ${homes.length}` : "all"}`,
+    }, paint);
+    wireTimeframe(paint);
+    paint();
+  }
+
+  // ---- Report by Agent
+  // One or more agents' open houses (#reporting/agent/<email>,<email>): how many, at which homes, the groups that came,
+  // a chart over time, every open house and all the feedback they left. Filters: the time frame and the homes.
+  let rpAgents = new Set(), rpAgentHomesOut = new Set();
+  function reportByAgent({ homes, statusKnown }, arg) {
+    // Everyone who has hosted, by email; the name on their newest open house; how many they've hosted.
+    const agents = new Map();
+    for (const h of homes) for (const o of h.openHouses) {
+      const e = o.agent.email.toLowerCase(), a = agents.get(e);
+      if (!a) agents.set(e, { email: e, name: o.agent.name, iso: o.iso, n: 1 });
+      else { a.n++; if (o.iso > a.iso) Object.assign(a, { name: o.agent.name, iso: o.iso }); }
+    }
+    const list = [...agents.values()].sort((a, b) => a.name.localeCompare(b.name));
+    if (arg) rpAgents = new Set(decodeURIComponent(arg).toLowerCase().split(",").filter((e) => agents.has(e)));
+    rpAgentHomesOut = new Set([...rpAgentHomesOut].filter((k) => homes.some((h) => h.key === k)));
+    $("report").innerHTML = `
+      <div class="toolbar noprint rp-tools">
+        ${pickerHtml("rpAgentPick", [["", list.map((a) => ({ v: a.email, t: `${a.name} (${a.n})` }))]], [["all", "Everyone"], ["none", "Clear"]])}
+        ${timeframePicker()}
+        ${pickerHtml("rpAgentHomes", homeItems(homes, statusKnown), [["all", "Include all"], ...(statusKnown ? [["active", "On the market only"]] : []), ["none", "Leave all out"]])}
+        ${groupByPicker()}
+      </div>
+      <div id="rpBody"></div>`;
+    const who = () => list.filter((a) => rpAgents.has(a.email));
+    const paint = () => {
+      // Keep the agents in the address, so the report can be bookmarked or shared with the team.
+      history.replaceState(null, "", `#reporting/agent${rpAgents.size ? `/${encodeURIComponent([...rpAgents].join(","))}` : ""}`);
+      const chosen = who();
+      $("rpCsv").hidden = !chosen.length;
+      if (!chosen.length) {
+        document.title = reportTitle("Report by Agent");
+        $("rpBody").innerHTML = `<p class="empty">${list.length ? "Choose one or more agents to see their report." : "No open houses have been hosted yet."}</p>`;
+        return;
+      }
+      const by = BY[rpBy], many = chosen.length > 1;
+      const ohs = homes.filter((h) => !rpAgentHomesOut.has(h.key)).flatMap((h) => h.openHouses
+        .filter((o) => rpAgents.has(o.agent.email.toLowerCase()) && inRange(o, rpFrame())).map((o) => ({ h, o })))
+        .sort((a, b) => b.o.iso.localeCompare(a.o.iso) || (b.o.from || 0) - (a.o.from || 0));
+      const rows = periodRows(ohs, by), fbs = ohs.filter((e) => e.o.feedback);
+      const groups = fbs.reduce((n, e) => n + (Number(e.o.feedback.visitors) || 0), 0);
+      const frame = frameText(ohs.map((e) => e.o.iso));
+      const names = chosen.length <= 3 ? chosen.map((a) => a.name).join(", ").replace(/, ([^,]*)$/, " and $1") : `${chosen.length} agents`;
+      const homesText = rpAgentHomesOut.size ? `${homes.length - rpAgentHomesOut.size} of ${homes.length} homes` : "All homes";
+      document.title = reportTitle(names, frame);
+      $("rpCsv").onclick = () => exportFeedbackCsv(ohs, document.title, true);
+      // With several agents, a line each: their open houses, homes, groups and how much feedback they left.
+      const perAgent = many ? chosen.map((a) => {
+        const mine = ohs.filter((e) => e.o.agent.email.toLowerCase() === a.email), f = mine.filter((e) => e.o.feedback);
+        return `<tr><td data-l="Agent"><b>${esc(a.name)}</b></td><td data-l="Open houses">${mine.length}</td><td data-l="Homes">${new Set(mine.map((e) => e.h.key)).size}</td>
+          <td data-l="Groups attended">${f.length ? f.reduce((n, e) => n + (Number(e.o.feedback.visitors) || 0), 0) : "—"}</td><td data-l="Feedback left">${mine.length ? `${f.length} of ${mine.length}` : "—"}</td></tr>`;
+      }).join("") : "";
+      $("rpBody").innerHTML = `
+        ${reportHead("Report by Agent", names, `${many ? `${esc(chosen.map((a) => a.name).join(", "))} · ` : `<a href="mailto:${esc(chosen[0].email)}">${esc(chosen[0].email)}</a> · `}${esc(homesText)}`, frame)}
+        <div class="stats">
+          <div class="card stat"><b>${ohs.length}</b><span>Open houses</span></div>
+          <div class="card stat"><b>${new Set(ohs.map((e) => e.h.key)).size}</b><span>Homes</span></div>
+          <div class="card stat"><b>${fbs.length ? groups : "—"}</b><span>Groups attended${fbs.length < ohs.length ? ` <span class="fine">(${fbs.length} of ${ohs.length} reported)</span>` : ""}</span></div>
+          <div class="card stat"><b>${ohs.length ? `${fbs.length} of ${ohs.length}` : "—"}</b><span>Feedback left</span></div>
+        </div>
+        ${chartCard(rows)}
+        ${many ? `<h2 class="section">By agent</h2>
+        <div class="card table-wrap rp-flow"><table class="stack rp-table"><thead><tr><th>Agent</th><th>Open houses</th><th>Homes</th><th>Groups attended</th><th>Feedback left</th></tr></thead><tbody>${perAgent}</tbody></table></div>` : ""}
+        <h2 class="section">Open houses</h2>
+        <div class="card table-wrap rp-flow"><table class="stack rp-table"><thead><tr><th>Date</th><th>Time</th><th>Home</th>${many ? "<th>Hosted by</th>" : ""}<th>Groups</th><th>Interest</th><th>Price</th></tr></thead><tbody>
+          ${ohs.map(({ h, o }) => `<tr><td data-l="Date"><b>${esc(withYear(o))}</b></td><td data-l="Time">${esc(o.time)}</td><td data-l="Home">${esc(place(h))}</td>${many ? `<td data-l="Hosted by">${esc(o.agent.name)}</td>` : ""}
+            ${o.feedback ? `<td data-l="Groups">${o.feedback.visitors}</td><td data-l="Interest">${esc(INTEREST[o.feedback.interest] || "—")}</td><td data-l="Price">${esc(PRICE[o.feedback.price] || "—")}</td>`
+              : '<td colspan="3" class="sub" data-l="Feedback">No feedback</td>'}</tr>`).join("") || `<tr><td colspan="${many ? 7 : 6}" class="empty">No open houses in this time frame.</td></tr>`}
+        </tbody></table></div>
+        <h2 class="section">Feedback</h2>
+        <div class="fbq">${fbs.map(({ h, o }) => `<article class="card fbcard${o.feedback.brokerFlag ? " flag" : ""}">
+            <h3>${esc(place(h))}</h3><div class="meta">${esc(withYear(o))} · ${esc(o.time)} · Hosted by ${esc(o.agent.name)}</div>${fbText(o.feedback)}</article>`).join("")
+          || '<p class="empty">No feedback in this time frame.</p>'}</div>`;
+      wireTip(rows, many);
     };
+    $("rpBy").onchange = (e) => { rpBy = e.target.value; paint(); };
+    wirePicker("rpAgentPick", {
+      isOn: (v) => rpAgents.has(v), set: (v, on) => (on ? rpAgents.add(v) : rpAgents.delete(v)),
+      presets: { all: () => true, none: () => false },
+      summary: () => { const c = who(); return !c.length ? "Choose agents…" : c.length === 1 ? c[0].name : c.length === list.length ? "Agents: everyone" : `Agents: ${c.length}`; },
+    }, paint);
+    wirePicker("rpAgentHomes", {
+      isOn: (v) => !rpAgentHomesOut.has(v), set: (v, on) => (on ? rpAgentHomesOut.delete(v) : rpAgentHomesOut.add(v)),
+      presets: { all: () => true, none: () => false, active: (v) => !!homes.find((h) => h.key === v)?.active },
+      summary: () => `Homes: ${rpAgentHomesOut.size ? `${homes.length - rpAgentHomesOut.size} of ${homes.length}` : "all"}`,
+    }, paint);
     wireTimeframe(paint);
     paint();
   }
